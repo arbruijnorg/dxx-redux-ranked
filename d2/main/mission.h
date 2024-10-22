@@ -89,6 +89,17 @@ typedef struct {
 #endif
 } Mission;
 
+//mission list entry
+typedef struct mle {
+	char* filename;          // filename without extension
+	int     builtin_hogsize;    // if it's the built-in mission, used for determining the version
+	char    mission_name[MISSION_NAME_LEN + 1];
+	ubyte   descent_version;    // descent 1 or descent 2?
+	ubyte   anarchy_only_flag;  // if true, mission is anarchy only
+	char* path;				// relative file path
+	enum mle_loc	location;           // where the mission is
+} mle;
+
 extern Mission *Current_mission; // current mission
 
 #define Current_mission_longname	Current_mission->mission_name

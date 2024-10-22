@@ -732,7 +732,12 @@ void hud_show_score()
 	if ( (Game_mode & GM_MULTI) && !((Game_mode & GM_MULTI_COOP) || (Game_mode & GM_MULTI_ROBOTS)) ) {
 		sprintf(score_str, "%s: %5d", TXT_KILLS, Players[pnum].net_kills_total);
 	} else {
-		sprintf(score_str, "%s: %5d", TXT_SCORE, Players[pnum].score);
+		if (!(Newdemo_state == ND_STATE_NORMAL || Newdemo_state == ND_STATE_RECORDING) || (Game_mode & GM_MULTI) || Ranking.quickload == 1) {
+			sprintf(score_str, "%s: %5d", TXT_SCORE, Players[Player_num].score);
+		}
+		else {
+			sprintf(score_str, "%s: %5.0f", TXT_SCORE, Ranking.rankScore);
+		}
 	}
 
 	gr_get_string_size(score_str, &w, &h, &aw );
@@ -742,6 +747,38 @@ void hud_show_score()
 	gr_set_fontcolor(Color_0_31_0, -1);
 
 	gr_string(grd_curcanv->cv_bitmap.bm_w-w-FSPACX(1), FSPACY(1), score_str);
+}
+
+void hud_show_pointstonextlife()
+{
+	int pointstonextlife = 50000 - Players[Player_num].score % 50000;
+
+	int x = FSPACX(2);
+
+	if (HUD_toolong)
+		return;
+
+	grs_bitmap* bm;
+	PIGGY_PAGE_IN(Gauges[GAUGE_LIVES]);
+	bm = &GameBitmaps[Gauges[GAUGE_LIVES].index];
+	gr_set_curfont(GAME_FONT);
+	gr_set_fontcolor(BM_XRGB(0, 20, 0), -1);
+	gr_printf(HUD_SCALE_X_AR(bm->bm_w) + x, FSPACY(20), "1-up in %5d", pointstonextlife);
+}
+
+void hud_show_pointsleftinlevel()
+{
+	int pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
+
+	if (HUD_toolong)
+		return;
+
+	gr_set_curfont(GAME_FONT);
+
+	if (Color_0_31_0 == -1)
+		Color_0_31_0 = BM_XRGB(0, 31, 0);
+	gr_set_fontcolor(Color_0_31_0, -1);
+	gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%5d remains", pointsleftinlevel);
 }
 
 void hud_show_timer_count()
@@ -785,9 +822,6 @@ void hud_show_score_added()
 	if ( (Game_mode & GM_MULTI) && !((Game_mode & GM_MULTI_COOP) || (Game_mode & GM_MULTI_ROBOTS)) )
 		return;
 
-	if (score_display == 0)
-		return;
-
 	gr_set_curfont( GAME_FONT );
 
 	score_time -= FrameTime;
@@ -801,7 +835,7 @@ void hud_show_score_added()
 
 		if (cheats.enabled)
 			sprintf(score_str, "%s", TXT_CHEATER);
-		else
+		else if (score_display > 0)
 			sprintf(score_str, "%5d", score_display);
 
 		gr_get_string_size(score_str, &w, &h, &aw );
@@ -862,9 +896,6 @@ void sb_show_score_added()
 	if ( (Game_mode & GM_MULTI) && !((Game_mode & GM_MULTI_COOP) || (Game_mode & GM_MULTI_ROBOTS)) )
 		return;
 
-	if (score_display == 0)
-		return;
-
 	gr_set_curfont( GAME_FONT );
 
 	score_time -= FrameTime;
@@ -879,7 +910,7 @@ void sb_show_score_added()
 
 		if (cheats.enabled)
 			sprintf(score_str, "%s", TXT_CHEATER);
-		else
+		else if (score_display > 0)
 			sprintf(score_str, "%5d", score_display);
 
 		gr_get_string_size(score_str, &w, &h, &aw );
@@ -1349,14 +1380,16 @@ void sb_show_lives()
 	}
 }
 
-#ifndef RELEASE
-
 extern int Piggy_bitmap_cache_next;
 
 void show_time()
 {
-	int secs = f2i(Players[Player_num].time_level) % 60;
-	int mins = f2i(Players[Player_num].time_level) / 60;
+	int mins = f2i(Players[Player_num].time_level + Players[Player_num].hours_level * 3600) / 60;
+	double secs = (double)Players[Player_num].time_level / 65536 - mins * 60;
+	if (Ranking.level_time > 0) {
+		mins = Ranking.level_time / 60;
+		secs = Ranking.level_time - mins * 60;
+	}
 
 	gr_set_curfont( GAME_FONT );
 
@@ -1364,29 +1397,48 @@ void show_time()
 		Color_0_31_0 = BM_XRGB(0,31,0);
 	gr_set_fontcolor(Color_0_31_0, -1 );
 
-	gr_printf(SWIDTH-FSPACX(30),GHEIGHT-(LINE_SPACING*11),"%d:%02d", mins, secs);
+	if (secs < 10 || secs == 60)
+		gr_printf(SWIDTH-FSPACX(40),GHEIGHT-(LINE_SPACING*11),"%d:0%.03f", mins, secs);
+	else
+		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
+	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
+		mins = Ranking.parTime / 60;
+		secs = Ranking.parTime - mins * 60;
+		if (secs < 10 || secs == 60)
+			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
+		else
+			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:%.0f", mins, secs);
+	}
 }
-#endif
 
 #define EXTRA_SHIP_SCORE	50000		//get new ship every this many points
 
 void add_points_to_score(int points)
 {
-	int prev_score;
-
-	score_time += f1_0*2;
-	score_display += points;
-	if (score_time > f1_0*4) score_time = f1_0*4;
-
-	if (points == 0 || cheats.enabled)
+	if ((Game_mode & GM_MULTI) && !((Game_mode & GM_MULTI_COOP) || (Game_mode & GM_MULTI_ROBOTS)))
 		return;
-
-	if ((Game_mode & GM_MULTI) && !( (Game_mode & GM_MULTI_COOP) || (Game_mode & GM_MULTI_ROBOTS) ))
+	if (cheats.enabled && Ranking.quickload == 1) {
+		score_time += f1_0 * 2;
+		if (score_time > f1_0 * 4)
+			score_time = f1_0 * 4;
 		return;
-
-	prev_score=Players[Player_num].score;
-
+	}
+	int prev_score = Players[Player_num].score;
 	Players[Player_num].score += points;
+	if (!(Game_mode & GM_MULTI || Ranking.quickload == 1)) {
+		int prev_rankscore = Ranking.rankScore;
+		Ranking.rankScore = Players[Player_num].score - Players[Player_num].last_score - Ranking.excludePoints;
+		score_display += Ranking.rankScore - prev_rankscore;
+		if (Ranking.rankScore - prev_rankscore > 0 || cheats.enabled)
+			score_time += f1_0 * 2;
+	}
+	else {
+		score_display += Players[Player_num].score - prev_score;
+		if (Players[Player_num].score - prev_score > 0 || cheats.enabled)
+			score_time += f1_0 * 2;
+	}
+	if (score_time > f1_0 * 4)
+	score_time = f1_0 * 4;
 
 #ifndef SHAREWARE
 	if (Newdemo_state == ND_STATE_RECORDING)
@@ -4191,7 +4243,7 @@ void draw_hud()
 		// Show bomb countdown timers
 		observer_show_bomb_highlights();
 
-		if (can_draw_observer_cockpit()) {
+		if (is_observing_player() && PlayerCfg.ObsShowCockpit[get_observer_game_mode()] && !Obs_at_distance) {
 			if (PlayerCfg.CurrentCockpitMode==CM_STATUS_BAR || PlayerCfg.CurrentCockpitMode==CM_FULL_SCREEN)
 				hud_show_homing_warning();
 
@@ -4252,15 +4304,22 @@ void draw_hud()
 	}
 
 	//	Show score so long as not in rearview
-	if ( !Rear_view && PlayerCfg.CurrentCockpitMode!=CM_REAR_VIEW && PlayerCfg.CurrentCockpitMode!=CM_STATUS_BAR) {
+	if (!Rear_view && PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW && PlayerCfg.CurrentCockpitMode != CM_STATUS_BAR) {
 		hud_show_score();
 		if (score_time)
 			hud_show_score_added();
 	}
 
+	if (!((Game_mode & GM_MULTI) || !(Newdemo_state == ND_STATE_NORMAL || Newdemo_state == ND_STATE_RECORDING) || Ranking.quickload == 1)) {
+		hud_show_pointstonextlife();
+		if (Ranking.alreadyBeaten) // Only show points remaining if the level's been beaten before, so we don't spoil what's in a new level.
+			hud_show_pointsleftinlevel();
+		show_time();
+	}
+
 	if ( !Rear_view && PlayerCfg.CurrentCockpitMode!=CM_REAR_VIEW)
 		hud_show_timer_count();
-
+	
 	//	Show other stuff if not in rearview or letterbox.
 	if (!Rear_view && PlayerCfg.CurrentCockpitMode!=CM_REAR_VIEW)
 	{
@@ -4284,10 +4343,6 @@ void draw_hud()
 			}
 		}
 
-#ifndef RELEASE
-		if (!(Game_mode&GM_MULTI && Show_kill_list))
-			show_time();
-#endif
 		HUD_render_message_frame();
 
 		if (PlayerCfg.CurrentCockpitMode!=CM_STATUS_BAR)
@@ -4302,7 +4357,7 @@ void draw_hud()
 		{
 			int startY = GHEIGHT;
 
-			if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN || (is_observer() && !can_draw_observer_cockpit())) {
+			if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN || (is_observer() && (!is_observing_player() || Obs_at_distance || !PlayerCfg.ObsShowCockpit[get_observer_game_mode()]))) {
 				if ((Game_mode & GM_MULTI) || (Newdemo_state == ND_STATE_PLAYBACK && Newdemo_game_mode & GM_MULTI))
 					startY -= LINE_SPACING * 12;
 				else

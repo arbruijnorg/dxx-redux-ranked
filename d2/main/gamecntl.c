@@ -852,7 +852,7 @@ int HandleSystemKey(int key)
 		KEY_MAC(case KEY_COMMAND+KEY_3:)
 
 		case KEY_F3:
-			if ((!Player_is_dead && Viewer->type==OBJ_PLAYER) ||
+			if ((!Player_is_dead && Viewer->type == OBJ_PLAYER) ||
 				// Alternatively, we can also toggle the cockpit while observing in first-person mode.
 				(is_observer() && can_draw_observer_cockpit()))
 			{
@@ -947,6 +947,8 @@ int HandleSystemKey(int key)
 		KEY_MAC(case KEY_COMMAND+KEY_ALTED+KEY_3:)
 		case KEY_ALTED+KEY_F3:
 			if (!((Game_mode & GM_MULTI) && !(Game_mode & GM_MULTI_COOP)))
+				Ranking.quickload = 1;
+				Ranking.secretQuickload = 1;
 				state_restore_all(1, 0, NULL);
 			break;
 
@@ -1541,7 +1543,7 @@ char AcidCheatOn=0;
 char old_IntMethod;
 
 #define CHEAT_MAX_LEN 15
-#define NUM_CHEATS    28
+#define NUM_CHEATS    30
 
 typedef struct cheat_code
 {
@@ -1559,6 +1561,7 @@ cheat_code cheat_codes[NUM_CHEATS] = {
 	{ "joshuaakira", &cheats.lamer },
 	{ "whammazoom", &cheats.lamer },
 	{ "honestbob", &cheats.wowie },
+	{ "guile", &cheats.cloak },
 	{ "algroove", &cheats.allkeys },
 	{ "alifalafel", &cheats.accessory },
 	{ "almighty", &cheats.invul },
@@ -1578,6 +1581,7 @@ cheat_code cheat_codes[NUM_CHEATS] = {
 	{ "helpvishnu", &cheats.buddyclone },
 	{ "gowingnut", &cheats.buddyangry },
 	{ "bittersweet", &cheats.acid },
+	{ "bruin", &cheats.extralife },
 };
 
 int FinalCheats(int key)
@@ -1599,8 +1603,9 @@ int FinalCheats(int key)
 		{
 			*cheat_codes[i].stateptr = !*cheat_codes[i].stateptr;
 			cheats.enabled = 1;
+			if (Newdemo_state == ND_STATE_PLAYBACK || (Game_mode & GM_MULTI_COOP) || (Ranking.quickload == 1 && Current_level_num > 0) || (Ranking.secretQuickload == 1 && Current_level_num < 0))
+				Players[Player_num].score = 0;
 			digi_play_sample( SOUND_CHEATER, F1_0);
-			Players[Player_num].score = 0;
 			gotcha = i;
 			break;
 		}
@@ -1666,6 +1671,26 @@ int FinalCheats(int key)
 		HUD_init_message_literal(HM_DEFAULT, "Accessories!!");
 	}
 
+	if (cheat_codes[gotcha].stateptr == &cheats.cloak)
+	{
+		Players[Player_num].flags ^= PLAYER_FLAGS_CLOAKED;
+		HUD_init_message(HM_DEFAULT, "%s %s!", TXT_CLOAK, (Players[Player_num].flags & PLAYER_FLAGS_CLOAKED) ? TXT_ON : TXT_OFF);
+		if (Players[Player_num].flags & PLAYER_FLAGS_CLOAKED)
+		{
+			ai_do_cloak_stuff();
+			Players[Player_num].cloak_time = GameTime64;
+		}
+	}
+
+	if (cheat_codes[gotcha].stateptr == &cheats.extralife)
+	{
+		if (Players[Player_num].lives < 50)
+		{
+			Players[Player_num].lives++;
+			HUD_init_message_literal(HM_DEFAULT, "Extra life!");
+		}
+	}
+	
 	if (cheat_codes[gotcha].stateptr == &cheats.invul)
 	{
 		Players[Player_num].flags ^= PLAYER_FLAGS_INVULNERABLE;
@@ -1790,7 +1815,7 @@ void do_cheat_menu()
 	newmenu_item mm[16];
 	char score_text[21];
 
-	sprintf( score_text, "%d", Players[Player_num].score );
+	sprintf( score_text, "%f", Players[Player_num].score );
 
 	mm[0].type=NM_TYPE_CHECK; mm[0].value=Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE; mm[0].text="Invulnerability";
 	mm[1].type=NM_TYPE_CHECK; mm[1].value=Players[Player_num].flags & PLAYER_FLAGS_CLOAKED; mm[1].text="Cloaked";

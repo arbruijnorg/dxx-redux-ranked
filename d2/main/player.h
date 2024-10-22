@@ -133,6 +133,38 @@ typedef struct player {
 	sbyte   hours_total;            // Hours played (since time_total can only go up to 9 hours)
 } __pack__ player;
 
+typedef struct ranking { // This struct contains variables for the ranking system mod. Most of them don't have to be doubles. It's either for math compatibility or consistency.
+	double  deathCount;              // Number of times the player died during the level.
+	double  rankScore;               // The version of score used for this mod, as to not disturb the vanilla score system.
+	double  excludePoints;           // Number of points gotten from sources we want to not count toward rank calculation, but still contribute to vanilla score.
+	double  maxScore;				 // The current level's S-rank score.
+	double  level_time;              // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
+	double  quickload;				 // Whether the player has quickloaded into the current level.
+	double  parTime;                 // The algorithmically-generated required time for the current level.
+	double  freezeTimer;             // Tells normal levels' in-game timer whether it should be frozen or not.
+	double  calculatedScore;		 // Stores the score determined in calculateRank.
+	int     rank;				     // Stores the rank determined in calculateRank.
+	double  missedRngDrops;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	int     alreadyBeaten;           // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
+	int     deleted;                 // Whether to tell the player their record file was deleted due to a level change.
+	int	    fromBestRanksButton;     // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
+	int     missionRanks[5000];      // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+
+	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
+	
+	double	secretRankScore;
+	double  secretExcludePoints;
+	double	secretMaxScore;
+	double	secretlevel_time;
+	double  secretlast_score;		  // Secret equivalent of Players[Player_num].last_score.
+	int		secret_hostages_on_board; // Since Players[Player_num].hostages_on_board carries over, and we don't want base level hostages' points counting for secret levels and vice versa.
+	double  secretDeathCount;         // We don't want starting a new base level to remove the secret level's death penalty, or vise versa, so increment this alongside deathCount, but only reset it upon starting a new secret level.
+	double  secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
+	double  secretParTime;
+	double  hostages_secret_level;    // Secret equivalent of Players[Player_num].hostages_level.
+	double  secretMissedRngDrops;
+} __pack__ ranking;
+
 // Same as above but structure how Savegames expect
 typedef struct player_rw {
 	// Who am I data
@@ -168,7 +200,7 @@ typedef struct player_rw {
 	int     score;                  // Current score.
 	fix     time_level;             // Level time played
 	fix     time_total;             // Game time played (high word = seconds)
-
+	
 	fix     cloak_time;             // Time cloaked
 	fix     invulnerable_time;      // Time invulnerable
 
@@ -205,6 +237,7 @@ extern int N_players;   // Number of players ( >1 means a net game, eh?)
 extern int Player_num;  // The player number who is on the console.
 
 extern player Players[MAX_PLAYERS+4];   // Misc player info
+extern ranking Ranking; // Ranking system mod variables.
 extern player_ship *Player_ship;
 
 // Probably should go in player struct, but I don't want to break savegames for this

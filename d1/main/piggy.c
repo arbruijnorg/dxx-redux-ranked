@@ -69,6 +69,7 @@ int Num_sound_files = 0;
 digi_sound GameSounds[MAX_SOUND_FILES];
 int SoundOffset[MAX_SOUND_FILES];
 grs_bitmap GameBitmaps[MAX_BITMAP_FILES];
+grs_bitmap* RankBitmaps[14]; // Where the mod's rank image data is stored.
 
 int Num_bitmap_files_new = 0;
 int Num_sound_files_new = 0;
@@ -1069,8 +1070,8 @@ char* piggy_game_bitmap_name(grs_bitmap *bmp)
 {
 	if (bmp >= GameBitmaps && bmp < &GameBitmaps[MAX_BITMAP_FILES])
 	{
-		int i = bmp-GameBitmaps; // i = (bmp - GameBitmaps) / sizeof(grs_bitmap);
-		Assert (bmp == &GameBitmaps[i] && i >= 0 && i < MAX_BITMAP_FILES);
+		int i = bmp - GameBitmaps; // i = (bmp - GameBitmaps) / sizeof(grs_bitmap);
+		Assert(bmp == &GameBitmaps[i] && i >= 0 && i < MAX_BITMAP_FILES);
 		return AllBitmaps[i].name;
 	}
 	return NULL;

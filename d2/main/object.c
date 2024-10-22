@@ -1641,9 +1641,8 @@ void dead_player_frame(void)
 		}
 		// end addition by WX
 
-		if (time_dead > DEATH_SEQUENCE_EXPLODE_TIME) {
+		if (time_dead > DEATH_SEQUENCE_EXPLODE_TIME) {	
 			if (!Player_exploded) {
-
 				if (Players[Player_num].hostages_on_board > 1)
 					HUD_init_message(HM_DEFAULT, TXT_SHIP_DESTROYED_2, Players[Player_num].hostages_on_board);
 				else if (Players[Player_num].hostages_on_board == 1)
@@ -1651,6 +1650,7 @@ void dead_player_frame(void)
 				else
 					HUD_init_message_literal(HM_DEFAULT, TXT_SHIP_DESTROYED_0);
 				Players[Player_num].hostages_on_board = 0;
+				Ranking.secret_hostages_on_board = 0;
 
 				Player_exploded = 1;
 #ifdef NETWORK
@@ -1731,8 +1731,11 @@ void dead_player_frame(void)
 }
 
 //	------------------------------------------------------------------------------------------------------------------
-void start_player_death_sequence(object *player)
+void start_player_death_sequence(object* player)
 {
+	Ranking.deathCount++;
+	if (!Control_center_destroyed || Current_level_num < 0)
+		Ranking.secretDeathCount++;
 	int	objnum;
 
 	Assert(player == ConsoleObject);

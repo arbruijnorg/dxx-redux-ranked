@@ -1423,7 +1423,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum)
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		if (Walls[wall_num].type == WALL_DOOR)
+		if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE)
 			return 1;
 	}
 

@@ -2169,11 +2169,11 @@ int newdemo_read_frame_information(int rewrite)
 				break;
 			}
 			if ((Newdemo_vcr_state == ND_STATE_PLAYBACK) || (Newdemo_vcr_state == ND_STATE_FASTFORWARD) || (Newdemo_vcr_state == ND_STATE_ONEFRAMEFORWARD)) {
-				Players[Player_num].afterburner_charge = afterburner<<9;
+				Players[Player_num].afterburner_charge = afterburner << 9;
 // 				if (Afterburner_charge < 0) Afterburner_charge=f1_0;
 			} else if ((Newdemo_vcr_state == ND_STATE_REWINDING) || (Newdemo_vcr_state == ND_STATE_ONEFRAMEBACKWARD)) {
 				if (!afterburner_updated && old_afterburner != 255) {
-					Players[Player_num].afterburner_charge = old_afterburner<<9;
+					Players[Player_num].afterburner_charge = old_afterburner << 9;
 					afterburner_updated = 1;
 				}
 			}
@@ -2880,7 +2880,7 @@ int newdemo_read_frame_information(int rewrite)
 		Rear_view = 0;
 		if (PlayerCfg.CurrentCockpitMode != CM_FULL_SCREEN || PlayerCfg.CurrentCockpitMode != CM_STATUS_BAR)
 		{
-			select_cockpit((PlayerCfg.PreferredCockpitMode == CM_FULL_SCREEN)?CM_FULL_SCREEN:CM_STATUS_BAR);
+			select_cockpit((PlayerCfg.PreferredCockpitMode == CM_FULL_SCREEN) ? CM_FULL_SCREEN : CM_STATUS_BAR);
 		}
 	}
 	else if (nd_playback_v_rear)
@@ -3701,6 +3701,8 @@ void newdemo_start_playback(char * filename)
 	newdemo_playback_one_frame();       // get all of the objects to renderb game
 	if (!Game_wind)
 		Game_wind = game_setup();							// create game environment
+	HUD_init_message_literal(HM_DEFAULT, "Ranking system mod disabled for demos!");
+	digi_play_sample(SOUND_BAD_SELECTION, F1_0);
 }
 
 void newdemo_stop_playback()

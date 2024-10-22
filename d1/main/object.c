@@ -783,6 +783,8 @@ void init_player_object()
 	ConsoleObject->type = OBJ_PLAYER;
 	ConsoleObject->id = 0;					//no sub-types for player
 
+	ConsoleObject->signature = 0;			//player has zero, others start at 1
+
 	ConsoleObject->size = Polygon_models[Player_ship->model_num].rad;
 
 	ConsoleObject->control_type = CT_SLEW;			//default is player slewing
@@ -1511,7 +1513,6 @@ void dead_player_frame(void)
 
 		if (time_dead > DEATH_SEQUENCE_EXPLODE_TIME) {
 			if (!Player_exploded) {
-
 				if (Players[Player_num].hostages_on_board > 1)
 					HUD_init_message(HM_DEFAULT, TXT_SHIP_DESTROYED_2, Players[Player_num].hostages_on_board);
 				else if (Players[Player_num].hostages_on_board == 1)
@@ -1596,8 +1597,9 @@ void dead_player_frame(void)
 }
 
 //	------------------------------------------------------------------------------------------------------------------
-void start_player_death_sequence(object *player)
+void start_player_death_sequence(object* player)
 {
+	Ranking.deathCount++;
 	int	objnum;
 
 	Assert(player == ConsoleObject);

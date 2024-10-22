@@ -638,7 +638,7 @@ void show_extra_views()
 			DemoDoingLeft=DemoDoLeft;
 
 			if (DemoDoLeft==3)
-				do_cockpit_window_view(0,get_player_view_object(),1,WBU_REAR,"REAR");
+				do_cockpit_window_view(0, get_player_view_object(), 1, WBU_REAR, "REAR");
 			else
 				do_cockpit_window_view(0,&DemoLeftExtra,DemoRearCheck[DemoDoLeft],DemoWBUType[DemoDoLeft],DemoExtraMessage[DemoDoLeft]);
 		}
@@ -650,7 +650,7 @@ void show_extra_views()
 			DemoDoingRight=DemoDoRight;
 			
 			if (DemoDoRight==3)
-				do_cockpit_window_view(1,get_player_view_object(),1,WBU_REAR,"REAR");
+				do_cockpit_window_view(1,ConsoleObject,1,WBU_REAR,"REAR");
 			else
 			{
 				do_cockpit_window_view(1,&DemoRightExtra,DemoRearCheck[DemoDoRight],DemoWBUType[DemoDoRight],DemoExtraMessage[DemoDoRight]);
@@ -719,11 +719,11 @@ void show_extra_views()
 			case CV_REAR:
 				if (Rear_view) {		//if big window is rear view, show front here
 					RenderingType=3+(w<<4);				
-					do_cockpit_window_view(w,get_player_view_object(),0,WBU_REAR,"FRONT");
+					do_cockpit_window_view(w, get_player_view_object(), 0, WBU_REAR, "FRONT");
 				}
 				else {					//show normal rear view
 					RenderingType=3+(w<<4);				
-					do_cockpit_window_view(w,get_player_view_object(),1,WBU_REAR,"REAR");
+					do_cockpit_window_view(w, get_player_view_object(), 1, WBU_REAR, "REAR");
 				}
 			 	break;
 			case CV_ESCORT: {
@@ -787,11 +787,11 @@ void game_render_frame_mono(int flip)
 	if (Guided_missile[Player_num] && Guided_missile[Player_num]->type==OBJ_WEAPON && Guided_missile[Player_num]->id==GUIDEDMISS_ID && Guided_missile[Player_num]->signature==Guided_missile_sig[Player_num] && PlayerCfg.GuidedInBigWindow) {
 		object *viewer_save = Viewer;
 
-		if (PlayerCfg.CurrentCockpitMode==CM_FULL_COCKPIT || PlayerCfg.CurrentCockpitMode==CM_REAR_VIEW)
+		if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT || PlayerCfg.CurrentCockpitMode == CM_REAR_VIEW)
 		{
 			 BigWindowSwitch=1;
 			 force_cockpit_redraw=1;
-			 PlayerCfg.CurrentCockpitMode=CM_STATUS_BAR;
+			 PlayerCfg.CurrentCockpitMode = CM_STATUS_BAR;	
 			 return;
 		}
 
@@ -821,7 +821,7 @@ void game_render_frame_mono(int flip)
 		if (BigWindowSwitch)
 		{
 			force_cockpit_redraw=1;
-			PlayerCfg.CurrentCockpitMode=(Rear_view?CM_REAR_VIEW:CM_FULL_COCKPIT);
+			PlayerCfg.CurrentCockpitMode = (Rear_view ? CM_REAR_VIEW : CM_FULL_COCKPIT);
 			BigWindowSwitch=0;
 			return;
 		}
@@ -901,9 +901,9 @@ void update_cockpits()
 	} else {
 		grs_bitmap *bm;
 
-		if (PlayerCfg.CurrentCockpitMode < N_COCKPIT_BITMAPS/2) {
-			PIGGY_PAGE_IN(cockpit_bitmap[PlayerCfg.CurrentCockpitMode+(HIRESMODE?(Num_cockpits/2):0)]);
-			bm=&GameBitmaps[cockpit_bitmap[PlayerCfg.CurrentCockpitMode+(HIRESMODE?(Num_cockpits/2):0)].index];
+		if (PlayerCfg.CurrentCockpitMode < N_COCKPIT_BITMAPS / 2) {
+			PIGGY_PAGE_IN(cockpit_bitmap[PlayerCfg.CurrentCockpitMode + (HIRESMODE ? (Num_cockpits / 2) : 0)]);
+			bm = &GameBitmaps[cockpit_bitmap[PlayerCfg.CurrentCockpitMode + (HIRESMODE ? (Num_cockpits / 2) : 0)].index];
 		}
 
 		switch (PlayerCfg.CurrentCockpitMode) {
@@ -955,7 +955,7 @@ void update_cockpits()
 		return;
 	}
 
-	if (PlayerCfg.CurrentCockpitMode==CM_FULL_COCKPIT || PlayerCfg.CurrentCockpitMode==CM_STATUS_BAR)
+	if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT || PlayerCfg.CurrentCockpitMode == CM_STATUS_BAR)
 		init_gauges();
 
 }

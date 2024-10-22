@@ -290,12 +290,14 @@ int endlevel_movie_played = MOVIE_NOT_PLAYED;
 
 void start_endlevel_sequence()
 {
+	Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
+	Ranking.freezeTimer = 1;
 	int	i;
 	
 
-	if (Player_is_dead || ConsoleObject->flags&OF_SHOULD_BE_DEAD)
+	if (Player_is_dead || ConsoleObject->flags & OF_SHOULD_BE_DEAD)
 		return;				//don't start if dead!
-
+	
 	reset_rear_view(); //turn off rear view if set - NOTE: make sure this happens before we pause demo recording!!
 
 	if (Newdemo_state == ND_STATE_RECORDING)		// stop demo recording

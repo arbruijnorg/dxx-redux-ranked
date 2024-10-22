@@ -86,6 +86,7 @@ enum MENUS
     MENU_GAME,
     MENU_EDITOR,
     MENU_VIEW_SCORES,
+	MENU_VIEW_RANKS,
     MENU_QUIT,
     MENU_LOAD_GAME,
     MENU_SAVE_GAME,
@@ -214,6 +215,32 @@ try_again:
 }
 
 void delete_player_saved_games(char * name);
+
+int ranks_menu_keycommand(listbox* lb, d_event* event)
+{
+	char** items = listbox_get_items(lb);
+	int citem = listbox_get_citem(lb);
+	int delete;
+	char filename[256];
+
+	switch (event_key_get(event))
+	{
+	case KEY_CTRLED + KEY_D:
+		delete = nm_messagebox(NULL, 2, TXT_YES, TXT_NO, "Delete record for this level?");
+		if (delete == 0)
+		{
+			sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+			if (citem >= Current_mission->last_level)
+				sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+			if (PHYSFS_exists(filename)) {
+				PHYSFS_delete(filename);
+				nm_messagebox(NULL, 1, "Ok", "Record deleted.\nRefresh level list to update.");
+			}
+		}
+	}
+
+	return 0;
+}
 
 int player_menu_keycommand( listbox *lb, d_event *event )
 {
@@ -508,6 +535,7 @@ void create_main_menu(newmenu_item *m, int *menu_choice, int *callers_num_option
 	ADD_ITEM(TXT_CHANGE_PILOTS,MENU_NEW_PLAYER,unused);
 	ADD_ITEM(TXT_VIEW_DEMO,MENU_DEMO_PLAY,0);
 	ADD_ITEM(TXT_VIEW_SCORES,MENU_VIEW_SCORES,KEY_V);
+	ADD_ITEM("Best ranks", MENU_VIEW_RANKS, 0);
 	if (PHYSFSX_exists("orderd2.pcx",1)) /* SHAREWARE */
 		ADD_ITEM(TXT_ORDERING_INFO,MENU_ORDER_INFO,-1);
 	ADD_ITEM(TXT_CREDITS,MENU_SHOW_CREDITS,-1);
@@ -555,6 +583,155 @@ int DoMenu()
 
 extern void show_order_form(void);	// John didn't want this in inferno.h so I just externed it.
 
+struct listbox
+{
+	window* wind;
+	char* title;
+	int nitems;
+	char** item;
+	int allow_abort_flag;
+	int (*listbox_callback)(listbox* lb, d_event* event, void* userdata);
+	int citem, first_item;
+	int marquee_maxchars, marquee_charpos, marquee_scrollback;
+	fix64 marquee_lasttime; // to scroll text if string does not fit in box
+	int box_w, height, box_x, box_y, title_height;
+	short swidth, sheight; float fntscalex, fntscaley; // with these we check if
+	int mouse_state;
+	void* userdata;
+};
+#define LB_ITEMS_ON_SCREEN 8
+
+int drawSmallRankImages(int* ranksList, listbox* lb)
+{
+	int rval = listbox_draw(lb->wind, lb);
+
+	for (int i = lb->first_item; i < lb->first_item + LB_ITEMS_ON_SCREEN && i < lb->nitems; i++) {
+		int rank = ranksList[i];
+		if (rank == 0)
+			continue;
+		grs_bitmap* bm = RankBitmaps[rank - 1];
+		int x = lb->box_x + lb->box_w - FSPACX(25); // align to right of listbox
+		int y = lb->box_y + (i - lb->first_item) * LINE_SPACING;
+		int h = LINE_SPACING * 0.7;
+		if (rank == 1)
+			h *= 1.0806; // Make the E-rank bigger to account for the tilt.
+		int w = h * 3;
+		ogl_ubitmapm_cs(x, y, w, h, bm, -1, F1_0);
+	}
+	return rval;
+}
+
+int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
+{
+	char** list = listbox_get_items(lb);
+	int citem = listbox_get_citem(lb);
+	int* ranks = (int*)userdata;
+
+	switch (event->type)
+	{
+	case EVENT_KEY_COMMAND:
+		return ranks_menu_keycommand(lb, event);
+		break;
+	case EVENT_NEWMENU_SELECTED:
+		Players[Player_num].lives = 3;
+		Difficulty_level = PlayerCfg.DefaultDifficulty;
+		if (!do_difficulty_menu())
+			return 1;
+		if (citem < Current_mission->last_level)
+			StartNewGame(citem + 1);
+		else
+			StartNewGame(Current_mission->last_level - citem - 1);
+		break;
+	case EVENT_WINDOW_CLOSE:
+		break;
+	case EVENT_WINDOW_DRAW:
+		return drawSmallRankImages(ranks, lb);
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+void do_best_ranks_menu()
+{
+	int numlines = Current_mission->last_level - Current_mission->last_secret_level;
+	char** list = (char**)malloc(sizeof(char*) * numlines);
+	char message[256];
+	sprintf(message, "%s's %s records\n<Ctrl-D> deletes", Players[Player_num].callsign, Current_mission->mission_name);
+	char filename[256];
+	char** items = (char**)malloc(sizeof(char*) * numlines);
+	int* ranks = (int*)malloc(sizeof(int) * numlines);
+	char** Rank = (char**)malloc(sizeof(char*) * 15);
+	Rank[0] = "N/A";
+	Rank[1] = "E";
+	Rank[2] = "D-";
+	Rank[3] = "D";
+	Rank[4] = "D+";
+	Rank[5] = "C-";
+	Rank[6] = "C";
+	Rank[7] = "C+";
+	Rank[8] = "B-";
+	Rank[9] = "B";
+	Rank[10] = "B+";
+	Rank[11] = "A-";
+	Rank[12] = "A";
+	Rank[13] = "A+";
+	Rank[14] = "S";
+	int i;
+	if (Current_mission->anarchy_only_flag == 1) {
+		list[i] = (char*)malloc(sizeof(char) * 64);
+		snprintf(list[i], 64, "Not a single player mission.");
+	}
+	else {
+		for (i = 0; i < numlines; i++)
+		{
+			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
+			if (i >= Current_mission->last_level)
+				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
+			PHYSFS_file* fp = PHYSFS_openRead(filename);
+			list[i] = (char*)malloc(sizeof(char) * 64);
+			if (fp == NULL) {
+				if (i < Current_mission->last_level)
+					snprintf(list[i], 64, "%i. ???\tN/A    ", i + 1);
+				else
+					snprintf(list[i], 64, "S%i. ???\tN/A    ", i - Current_mission->last_level + 1);
+				ranks[i] = 0;
+			}
+			else {
+				calculateRank(i + 1);
+				ranks[i] = Ranking.rank;
+				char level_name[36];
+				char buffer[LEVEL_NAME_LEN];
+				getLevelNameFromRankFile(i + 1, buffer);
+				snprintf(level_name, LEVEL_NAME_LEN, buffer);
+				if (Ranking.rank > 0) {
+					if (i < Current_mission->last_level)
+						snprintf(list[i], 64, "%i. %s\t%.0f    ", i + 1, level_name, Ranking.calculatedScore);
+					else
+						snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+				}
+				else {
+					if (i < Current_mission->last_level)
+						snprintf(list[i], 64, "%i. %s\tN/A    ", i + 1, level_name);
+					else
+						snprintf(list[i], 64, "S%i. %s\tN/A    ", i - Current_mission->last_level + 1, level_name);
+				}
+			}
+			PHYSFS_close(fp);
+		}
+	}
+	listbox* lb = newmenu_listbox1(message, numlines, list, 1, 0, (int (*)(listbox*, d_event*, void*))ranks_menu_handler, ranks);
+	window* wind = listbox_get_window(lb);
+	while (window_exists(wind))
+		event_process();
+	for (i = 0; i < numlines; i++)
+	{
+		free(list[i]);
+	}
+	free(list);
+}
+
 //returns flag, true means quit menu
 int do_option ( int select)
 {
@@ -568,6 +745,8 @@ int do_option ( int select)
 			select_demo();
 			break;
 		case MENU_LOAD_GAME:
+			Ranking.quickload = 1;
+			Ranking.secretQuickload = 1;
 			state_restore_all(0, 0, NULL);
 			break;
 		#ifdef EDITOR
@@ -584,6 +763,9 @@ int do_option ( int select)
 		#endif
 		case MENU_VIEW_SCORES:
 			scores_view(NULL, -1);
+			break;
+		case MENU_VIEW_RANKS:
+			select_mission(0, "Select mission", do_best_ranks_menu);
 			break;
 #if 1 //def SHAREWARE
 		case MENU_ORDER_INFO:
@@ -1058,7 +1240,7 @@ void input_config_sensitivity()
 	m[nitems].type = NM_TYPE_SLIDER; m[nitems].text = TXT_BANK_LR; m[nitems].value = PlayerCfg.MouseSens[4]; m[nitems].min_value = 0; m[nitems].max_value = 16; nitems++;
 	m[nitems].type = NM_TYPE_SLIDER; m[nitems].text = TXT_THROTTLE; m[nitems].value = PlayerCfg.MouseSens[5]; m[nitems].min_value = 0; m[nitems].max_value = 16; nitems++;
     m[nitems].type = NM_TYPE_TEXT; m[nitems].text = ""; nitems++;    
-    m[nitems].type = NM_TYPE_TEXT; m[nitems].text = "Mouse Oversteer Buffer:"; nitems++;
+	m[nitems].type = NM_TYPE_TEXT; m[nitems].text = "Mouse Oversteer Buffer:"; nitems++;
     mouseoverrun = nitems;
     m[nitems].type = NM_TYPE_SLIDER; m[nitems].text = TXT_TURN_LR; m[nitems].value = PlayerCfg.MouseOverrun[0]; m[nitems].min_value = 0; m[nitems].max_value = 16; nitems++;
     m[nitems].type = NM_TYPE_SLIDER; m[nitems].text = TXT_PITCH_UD; m[nitems].value = PlayerCfg.MouseOverrun[1]; m[nitems].min_value = 0; m[nitems].max_value = 16; nitems++;
@@ -2039,11 +2221,12 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[35];
+	newmenu_item m[36];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	do {
+		ADD_CHECK(35, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Missile view", PlayerCfg.MissileViewEnabled);
 		ADD_CHECK(2, "Headlight on when picked up", PlayerCfg.HeadlightActiveDefault );
@@ -2177,6 +2360,7 @@ void do_misc_menu()
 		PlayerCfg.NoChatSound = m[24].value;
 		PlayerCfg.ShowCustomColors = m[29].value;
 		PlayerCfg.PreferMyTeamColors = (PlayerCfg.MyTeamColor == 8 && PlayerCfg.OtherTeamColor == 8) ? 0 : m[34].value;
+		PlayerCfg.RankShowPlusMinus = m[35].value;
 
 	} while( i>-1 );
 
@@ -2404,7 +2588,7 @@ int menu_obs_options_handler ( newmenu *menu, d_event *event, void *userdata )
 
 		case EVENT_NEWMENU_SELECTED:
 			if (citem == 1) {
-				newmenu_listbox1("Select Game Mode", SDL_arraysize(Obs_mode_names), (char **)Obs_mode_names,
+				newmenu_listbox1("Select Game Mode", SDL_arraysize(Obs_mode_names), (char**)Obs_mode_names,
 					1, cmode, select_obs_game_mode_handler, obs_menu_data);
 				return 1;
 			}

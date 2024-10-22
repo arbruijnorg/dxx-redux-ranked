@@ -460,6 +460,7 @@ int check_trigger_sub(int trigger_num, int pnum,int shot)
 
 			EnterSecretLevel();
 			Control_center_destroyed = 0;
+			Ranking.freezeTimer = 0;
 			return 1;
 			break;
 

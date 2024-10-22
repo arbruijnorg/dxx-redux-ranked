@@ -36,6 +36,9 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "text.h"
 #include "u_mem.h"
 #include "ignorecase.h"
+#include "gamefont.h"
+#include "playsave.h"
+#include "menu.h"
 
 //values that describe where a mission is located
 enum mle_loc
@@ -43,17 +46,6 @@ enum mle_loc
 	ML_CURDIR = 0,
 	ML_MISSIONDIR = 1
 };
-
-//mission list entry
-typedef struct mle {
-	char    *filename;          // filename without extension
-	int     builtin_hogsize;    // if it's the built-in mission, used for determining the version
-	char    mission_name[MISSION_NAME_LEN+1];
-	ubyte   descent_version;    // descent 1 or descent 2?
-	ubyte   anarchy_only_flag;  // if true, mission is anarchy only
-	char	*path;				// relative file path
-	enum mle_loc	location;           // where the mission is
-} mle;
 
 static int num_missions = -1;
 
@@ -1025,73 +1017,120 @@ int load_mission_by_name(char *mission_name)
 	return found;
 }
 
+int load_mission_by_name_aggregate(mle* mission_list) // Version of load_mission_by_name used to generate aggregate ranks for missions. The original function works, but loads missions^2 MSN files, causing massive load times.
+{
+	int i;
+	bool found = 0;
+	int rankPoints;
+	int currentRank;
+	for (i = 0; i < num_missions; i++) {
+		//if (!d_stricmp(mission_name, mission_list[i].filename))
+		found = load_mission(mission_list + i);
+		rankPoints = 0;
+		for (int c = 1; c <= Current_mission->last_level - Current_mission->last_secret_level; c++) {
+			currentRank = calculateRank(c);
+			if (currentRank > 0)
+				rankPoints += currentRank;
+			else {
+				rankPoints = 0; // We found an N/A somewhere, don't return an aggregate rank.
+				continue;
+			}
+		}
+		// If all levels in the current mission are completed, an aggregate rank set here will show next to it.
+		if (PlayerCfg.RankShowPlusMinus)
+			Ranking.missionRanks[i] = rankPoints / (Current_mission->last_level - Current_mission->last_secret_level);
+		else
+			Ranking.missionRanks[i] = truncateRanks(rankPoints / (Current_mission->last_level - Current_mission->last_secret_level));
+	}
+	//free_mission_list(mission_list);
+	return found;
+}
+
 typedef struct mission_menu
 {
 	mle *mission_list;
 	int (*when_selected)(void);
 } mission_menu;
 
-int mission_menu_handler(listbox *lb, d_event *event, mission_menu *mm)
+struct listbox
 {
-	char **list = listbox_get_items(lb);
+	window* wind;
+	char* title;
+	int nitems;
+	char** item;
+	int allow_abort_flag;
+	int (*listbox_callback)(listbox* lb, d_event* event, void* userdata);
+	int citem, first_item;
+	int marquee_maxchars, marquee_charpos, marquee_scrollback;
+	fix64 marquee_lasttime; // to scroll text if string does not fit in box
+	int box_w, height, box_x, box_y, title_height;
+	short swidth, sheight; float fntscalex, fntscaley; // with these we check if
+	int mouse_state;
+	void* userdata;
+};
+
+int mission_menu_handler(listbox* lb, d_event* event, mission_menu* mm)
+{
+	char** list = listbox_get_items(lb);
 	int citem = listbox_get_citem(lb);
 
 	switch (event->type)
 	{
-		case EVENT_NEWMENU_SELECTED:
-			if (citem >= 0)
+	case EVENT_NEWMENU_SELECTED:
+		if (citem >= 0)
+		{
+			// Chose a mission
+			strcpy(GameCfg.LastMission, list[citem]);
+			if (!load_mission(mm->mission_list + citem))
 			{
-				// Chose a mission
-				strcpy(GameCfg.LastMission, list[citem]);
-				
-				if (!load_mission(mm->mission_list + citem))
-				{
-					nm_messagebox( NULL, 1, TXT_OK, TXT_MISSION_ERROR);
-					return 1;	// stay in listbox so user can select another one
-				}
+				nm_messagebox(NULL, 1, TXT_OK, TXT_MISSION_ERROR);
+				return 1;	// stay in listbox so user can select another one
 			}
-			return !(*mm->when_selected)();
-			break;
+		}
+		return !(*mm->when_selected)();
+		break;
 
-		case EVENT_WINDOW_CLOSE:
-			free_mission_list(mm->mission_list);
-			d_free(list);
-			d_free(mm);
-			break;
-			
-		default:
-			break;
+	case EVENT_WINDOW_CLOSE:
+		//free_mission_list(mm->mission_list); // I'm pretty sure these are supposed to be here, but I get "freeing non-malloced pointer" warnings when they are, and I don't know if or where I should be mallocing things after aggregates got added.
+		d_free(list);
+		d_free(mm);
+		break;
+
+	case EVENT_WINDOW_DRAW:
+		if (Ranking.fromBestRanksButton)
+			return drawSmallRankImages(Ranking.missionRanks, lb);
+	default:
+		break;
 	}
-	
+
 	return 0;
 }
 
-int select_mission(int anarchy_mode, char *message, int (*when_selected)(void))
+int select_mission(int anarchy_mode, char* message, int (*when_selected)(void))
 {
-    mle *mission_list = build_mission_list(anarchy_mode);
+	mle* mission_list = build_mission_list(anarchy_mode);
 	int new_mission_num;
-
-    if (num_missions <= 1)
+	char** paddedNames = malloc(num_missions * sizeof(char*));
+	if (num_missions <= 1)
 	{
-        new_mission_num = load_mission(mission_list) ? 0 : -1;
+		new_mission_num = load_mission(mission_list) ? 0 : -1;
 		free_mission_list(mission_list);
 		(*when_selected)();
-		
 		return (new_mission_num >= 0);
-    }
+	}
 	else
 	{
-		mission_menu *mm;
-        int i, default_mission;
-        char **m;
-		
-		MALLOC(m, char *, num_missions);
+		mission_menu* mm;
+		int i, default_mission;
+		char** m;
+
+		MALLOC(m, char*, num_missions);
 		if (!m)
 		{
 			free_mission_list(mission_list);
 			return 0;
 		}
-		
+
 		MALLOC(mm, mission_menu, 1);
 		if (!mm)
 		{
@@ -1102,18 +1141,31 @@ int select_mission(int anarchy_mode, char *message, int (*when_selected)(void))
 
 		mm->mission_list = mission_list;
 		mm->when_selected = when_selected;
-		
-        default_mission = 0;
-        for (i = 0; i < num_missions; i++) {
-            m[i] = mission_list[i].mission_name;
-            if ( !d_stricmp( m[i], GameCfg.LastMission ) )
-                default_mission = i;
-        }
+		default_mission = 0;
+		for (i = 0; i < num_missions; i++) {
+			if (Ranking.fromBestRanksButton) {
+				paddedNames[i] = malloc(strlen(mission_list[i].mission_name) + 5);
+				strcpy(paddedNames[i], mission_list[i].mission_name);
+				strcat(paddedNames[i], "    ");
+				m[i] = paddedNames[i];
+			}
+			else
+				m[i] = mission_list[i].mission_name;
+			if (!d_stricmp(m[i], GameCfg.LastMission))
+				default_mission = i;
+		}
+		newmenu_listbox1(message, num_missions, m, 1, default_mission, (int (*)(listbox*, d_event*, void*))mission_menu_handler, mm);
+	}
+	if (Ranking.fromBestRanksButton) {
+		load_mission_by_name_aggregate(mission_list); // Load the mission list so we can access how many levels they all have.
+		free_mission_list(mission_list);
+		for (int i = 0; i < num_missions; i++) {
+			free(paddedNames[i]);
+		}
+		free(paddedNames);
+	}
 
-        newmenu_listbox1( message, num_missions, m, 1, default_mission, (int (*)(listbox *, d_event *, void *))mission_menu_handler, mm );
-    }
-
-    return 1;	// presume success
+	return 1;	// presume success
 }
 
 #ifdef EDITOR

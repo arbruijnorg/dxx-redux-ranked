@@ -809,6 +809,11 @@ int automap_handler(window *wind, d_event *event, automap *am)
 		case EVENT_WINDOW_DRAW:
 			automap_apply_input(am);
 			draw_automap(am);
+			if (Current_level_num > 0) // Count time spent in automap toward level time. Players worthy of a par time should not rely on the automap to navigate a level.
+				Players[Player_num].time_level += FrameTime;
+			else
+				Ranking.secretlevel_time += FrameTime;
+			// Players[Player_num].time_total is not incremented, in order to keep the time displayed on the vanilla high scores menu accurate to how the base game works.
 			break;
 			
 		case EVENT_WINDOW_CLOSE:

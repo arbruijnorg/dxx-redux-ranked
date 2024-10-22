@@ -19,6 +19,7 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 
 #ifndef _MENU_H
 #define _MENU_H
+#include "newmenu.h"	
 
 extern int hide_menus(void);
 extern void show_menus(void);
@@ -46,5 +47,7 @@ extern int Escort_view_enabled;
 extern int Cockpit_rear_view;
 
 extern void get_color_name(char* color_name, int color_name_length, int color_value, int use_alternate_colors);
+
+extern int drawSmallRankImages(int* rankList, listbox* lb);
 
 #endif /* _MENU_H */

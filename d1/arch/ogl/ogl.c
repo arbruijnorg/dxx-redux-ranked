@@ -111,6 +111,7 @@ void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width
 void ogl_loadbmtexture(grs_bitmap *bm, int filter_blueship_wing);
 int ogl_loadtexture(unsigned char *data, int dxo, int dyo, ogl_texture *tex, int bm_flags, int data_format, int texfilt);
 void ogl_freetexture(ogl_texture *gltexture);
+extern void loadRankImages();
 
 #ifdef OGLES
 // Replacement for gluPerspective
@@ -1965,6 +1966,202 @@ void ogl_loadbmtexture_f(grs_bitmap *bm, int texfilt, int filter_blueship_wing)
 #endif
 }
 
+void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int filter_blueship_wing, int rank) // An alternate version of ogl_loadbmtexture_f that loads a rank image instead of a bitmap from the pig.
+{ // Is it a bit redundant copying this much? Yes, but that's fine.
+	unsigned char* buf;
+	char* rankFilenames[14] = {
+			"E",
+			"D-",
+			"D",
+			"D+",
+			"C-",
+			"C",
+			"C+",
+			"B-",
+			"B",
+			"B+",
+			"A-",
+			"A",
+			"A+",
+			"S"
+	};
+	const char* bitmapname = rankFilenames[rank];
+	while (bm->bm_parent)
+		bm = bm->bm_parent;
+	if (bm->gltexture && bm->gltexture->handle > 0)
+		return;
+	buf = bm->bm_data;
+#ifdef HAVE_LIBPNG
+	if (ogl_allow_png() && bitmapname)
+	{
+		char filename[64];
+		png_data pdata;
+
+		sprintf(filename, /*"textures/"*/ "%s.png", bitmapname);
+		con_printf(CON_NORMAL, "Loading %s\n", filename);
+		if (read_png(filename, &pdata))
+		{
+			con_printf(CON_DEBUG, "%s: %ux%ux%i p=%i(%i) c=%i a=%i chans=%i\n", filename, pdata.width, pdata.height, pdata.depth, pdata.paletted, pdata.num_palette, pdata.color, pdata.alpha, pdata.channels);
+			if (pdata.depth == 8 && pdata.color)
+			{
+				if (bm->gltexture == NULL)
+					ogl_init_texture(bm->gltexture = ogl_get_free_texture(), pdata.width, pdata.height, ((pdata.alpha || bm->bm_flags & BM_FLAG_TRANSPARENT) ? OGL_FLAG_ALPHA : 0));
+				ogl_loadtexture(pdata.data, 0, 0, bm->gltexture, bm->bm_flags, pdata.paletted ? 0 : pdata.channels, texfilt);
+#ifdef OGL_MERGE
+				if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT)
+					ogl_loadpngmask(&pdata, bm, texfilt);
+#endif
+				free(pdata.data);
+				if (pdata.palette)
+					free(pdata.palette);
+				bm->gltexture->is_png = 1;
+				return;
+			}
+			else
+			{
+				con_printf(CON_DEBUG, "%s: unsupported texture format: must be rgb, rgba, or paletted, and depth 8\n", filename);
+				free(pdata.data);
+				if (pdata.palette)
+					free(pdata.palette);
+			}
+		}
+		else
+			printf("Hey stupid, your rank images aren't working.\n");
+	}
+#endif
+	if (bm->gltexture == NULL) {
+		ogl_init_texture(bm->gltexture = ogl_get_free_texture(), bm->bm_w, bm->bm_h, ((bm->bm_flags & (BM_FLAG_TRANSPARENT | BM_FLAG_SUPER_TRANSPARENT)) ? OGL_FLAG_ALPHA : 0));
+	}
+	else {
+		if (bm->gltexture->handle > 0)
+			return;
+		if (bm->gltexture->w == 0) {
+			bm->gltexture->lw = bm->bm_w;
+			bm->gltexture->w = bm->bm_w;
+			bm->gltexture->h = bm->bm_h;
+		}
+	}
+
+	if (bm->bm_flags & BM_FLAG_RLE) {
+		unsigned char* dbits;
+		unsigned char* sbits;
+		int i, data_offset;
+
+		data_offset = 1;
+		if (bm->bm_flags & BM_FLAG_RLE_BIG)
+			data_offset = 2;
+
+		sbits = &bm->bm_data[4 + (bm->bm_h * data_offset)];
+		dbits = decodebuf;
+
+		for (i = 0; i < bm->bm_h; i++) {
+			//con_printf(CON_NORMAL, "RLE decoding bitmap %d\n", bm->bm_handle); 
+			gr_rle_decode(sbits, dbits);
+			if (bm->bm_flags & BM_FLAG_RLE_BIG)
+				sbits += (int)INTEL_SHORT(*((short*)&(bm->bm_data[4 + (i * data_offset)])));
+			else
+				sbits += (int)bm->bm_data[4 + i];
+			dbits += bm->bm_w;
+		}
+		buf = decodebuf;
+
+		if (Game_mode & GM_MULTI && Netgame.BlackAndWhitePyros) {
+			char is_purple_tex1 = bitmapname && !strcmp(bitmapname, "ship6-4");
+			char is_purple_tex2 = bitmapname && !strcmp(bitmapname, "ship6-5");
+
+			if (is_purple_tex1 || is_purple_tex2) {
+				for (i = 0; i < bm->bm_h * bm->bm_w; i++) {
+					ubyte r = gr_current_pal[buf[i] * 3];
+					ubyte g = gr_current_pal[buf[i] * 3 + 1];
+					ubyte b = gr_current_pal[buf[i] * 3 + 2];
+
+					ubyte max = r;
+					if (g > max) { max = g; }
+					if (b > max) { max = b; }
+
+					if (r > g && g > b) {
+						int replace = gr_find_closest_color(max / 4, max / 10, max / 3);
+						buf[i] = replace;
+					}
+				}
+			}
+
+			char is_white_tex1 = bitmapname && !strcmp(bitmapname, "ship7-4");
+			char is_white_tex2 = bitmapname && !strcmp(bitmapname, "ship7-5");
+
+			if (is_white_tex1 || is_white_tex2) {
+				for (i = 0; i < bm->bm_h * bm->bm_w; i++) {
+					ubyte r = gr_current_pal[buf[i] * 3];
+					ubyte g = gr_current_pal[buf[i] * 3 + 1];
+					ubyte b = gr_current_pal[buf[i] * 3 + 2];
+
+					ubyte max = r;
+					if (g > max) { max = g; }
+					if (b > max) { max = b; }
+
+					if (g > r && g > b) {
+						int replace = gr_find_closest_color(max, max, max);
+						buf[i] = replace;
+					}
+				}
+			}
+
+			int lower_bound[24] = { 28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8 }; //bos
+			int upper_bound[24] = { 57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23 }; // fos
+			if (filter_blueship_wing && bm->bm_h == 64 && bm->bm_w == 64) {
+				for (i = 0; i < bm->bm_h * bm->bm_w; i++) {
+					int r = i / bm->bm_w;
+					int c = i % bm->bm_w;
+
+					int in_filter_area_1 = 0;
+					int in_filter_area_2 = 0;
+
+					if (r >= 2 && r <= 6) {
+						in_filter_area_1 = 1;
+					}
+
+					if (r >= 36 && r <= 58) {
+						if (lower_bound[r - 36] <= c && c <= upper_bound[r - 36]) {
+							in_filter_area_2 = 1;
+						}
+					}
+
+					if (in_filter_area_1) {
+						ubyte b = gr_current_pal[buf[i] * 3 + 2];
+						int replace = gr_find_closest_color(b / 2, b / 2, b);
+						buf[i] = replace;
+					}
+
+					if (in_filter_area_2) {
+						ubyte b = gr_current_pal[buf[i] * 3 + 2];
+						int replace = gr_find_closest_color(b, b, b * 2);
+						buf[i] = replace;
+					}
+				}
+				filter_blueship_wing = 0;
+			}
+		}
+
+	}
+	ogl_loadtexture(buf, 0, 0, bm->gltexture, bm->bm_flags, 0, texfilt);
+
+#ifdef OGL_MERGE
+	if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT) {
+		unsigned char* mask;
+		int size = bm->bm_w * bm->bm_h;
+
+		if (bm->gltexture_mask == NULL)
+			ogl_init_texture(bm->gltexture_mask = ogl_get_free_texture(), bm->bm_w, bm->bm_h, OGL_FLAG_ALPHA);
+
+		MALLOC(mask, unsigned char, size);
+		for (int i = 0; i < size; i++)
+			mask[i] = buf[i] == 254 ? 255 : 0;
+		ogl_loadtexture(mask, 0, 0, bm->gltexture_mask, BM_FLAG_TRANSPARENT, 0, texfilt);
+		d_free(mask);
+	}
+#endif
+}
+
 void ogl_loadbmtexture(grs_bitmap *bm, int filter_blueship_wing)
 {
 	ogl_loadbmtexture_f(bm, GameCfg.TexFilt, filter_blueship_wing);
@@ -2111,5 +2308,13 @@ void ogl_update_window_clip()
 			Window_clip_right - Window_clip_left + 1,
 			Window_clip_bot - Window_clip_top + 1);
 		glEnable(GL_SCISSOR_TEST);
+	}
+}
+
+void loadRankImages()
+{
+	for (int i = 0; i < 14; i++) {
+		RankBitmaps[i] = gr_create_bitmap(144, 48);
+		ogl_loadranktexture(RankBitmaps[i], GameCfg.TexFilt, 0, i);
 	}
 }

@@ -1124,8 +1124,9 @@ int state_restore_all_sub(char *filename)
 	char id[5];
 	char org_callsign[CALLSIGN_LEN+16];
 	fix tmptime32 = 0;
-	player_rw *pl_rw;
+	player_rw* pl_rw;
 	int rebirth = 0;
+	Ranking.quickload = 1;
 
 	#ifndef NDEBUG
 	if (GameArg.SysUsePlayersDir && strncmp(filename, "Players/", 8))
@@ -1231,11 +1232,11 @@ int state_restore_all_sub(char *filename)
 //Read player info
 
 	StartNewLevelSub(current_level, 1, 0);//use page_in_textures here to fix OGL texture precashing crash -MPM
-	MALLOC(pl_rw, player_rw, 1);
-	PHYSFS_read(fp, pl_rw, sizeof(player_rw), 1);
-	player_rw_swap(pl_rw, swap);
-	state_player_rw_to_player(pl_rw, &Players[Player_num]);
-	d_free(pl_rw);
+		MALLOC(pl_rw, player_rw, 1);
+		PHYSFS_read(fp, pl_rw, sizeof(player_rw), 1);
+		player_rw_swap(pl_rw, swap);
+		state_player_rw_to_player(pl_rw, &Players[Player_num]);
+		d_free(pl_rw);
 	strcpy( Players[Player_num].callsign, org_callsign );
 	if (Game_mode & GM_MULTI_COOP)
 		Players[Player_num].objnum = coop_org_objnum;
@@ -1517,7 +1518,8 @@ RetryObjectLoading:
 		if (!window_is_visible(Game_wind))
 			window_set_visible(Game_wind, 1);
 	reset_time();
-
+	HUD_init_message_literal(HM_DEFAULT, "You quickloaded! Ranking system mod disabled for this level.");
+	digi_play_sample(SOUND_BAD_SELECTION, F1_0);
 	return 1;
 }
 

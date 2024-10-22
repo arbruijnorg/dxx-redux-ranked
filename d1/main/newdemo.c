@@ -3466,6 +3466,8 @@ void newdemo_start_playback(char * filename)
 	newdemo_playback_one_frame();       // get all of the objects to renderb game
 	if (!Game_wind)
 		Game_wind = game_setup();							// create game environment
+	HUD_init_message_literal(HM_DEFAULT, "Ranking system mod disabled for demos!");
+	digi_play_sample(SOUND_BAD_SELECTION, F1_0);
 }
 
 void newdemo_stop_playback()

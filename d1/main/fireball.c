@@ -55,6 +55,8 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 
 //--unused-- ubyte	Frame_processed[MAX_OBJECTS];
 
+int fireball_flag_hack;
+
 object *object_create_explosion_sub(object *objp, short segnum, vms_vector * position, fix size, int vclip_type, fix maxdamage, fix maxdistance, fix maxforce, int parent )
 {
 	int objnum;
@@ -130,8 +132,19 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 								}
 								if ( obj0p->shields >= 0 ) {
 									if (apply_damage_to_robot(obj0p, damage, parent))
-										if ((objp != NULL) && (parent == Players[Player_num].objnum))
-											add_points_to_score(Robot_info[obj0p->id].score_value);
+										if (objp != NULL) {
+											if (obj0p->matcen_creator != 0 || obj0p->flags & OF_ROBOT_DROPPED) {
+												Ranking.excludePoints += Robot_info[obj0p->id].score_value;
+												if (obj0p->flags & OF_ROBOT_DROPPED)
+													Ranking.missedRngDrops += Robot_info[obj0p->id].score_value;
+											}
+											if (!(parent == Players[Player_num].objnum)) {
+												Ranking.excludePoints -= Robot_info[obj0p->id].score_value;
+												add_points_to_score(0);
+											}
+											else
+												add_points_to_score(Robot_info[obj0p->id].score_value);
+										}
 								}
 								break;
 							case OBJ_CNTRLCEN:
@@ -957,6 +970,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 //				new_pos.z += (d_rand()-16384)*6;
 
 				objnum = obj_create(OBJ_ROBOT, id, segnum, &new_pos, &vmd_identity_matrix, Polygon_models[Robot_info[ObjId[type]].model_num].rad, CT_AI, MT_PHYSICS, RT_POLYOBJ);
+				if (fireball_flag_hack == 1)
+				Objects[objnum].flags |= OF_ROBOT_DROPPED;
 
 				if ( objnum < 0 ) {
 					Int3();
@@ -1218,6 +1233,8 @@ void do_explosion_sequence(object *obj)
 			//	If dropping a weapon that the player has, drop energy instead, unless it's vulcan, in which case drop vulcan ammo.
 			if (del_obj->contains_type == OBJ_POWERUP)
 				maybe_replace_powerup_with_energy(del_obj);
+			fireball_flag_hack = 0; // Fixed drops, so don't set the no score flag.
+			// Maybe address infinite robot drop loops here at some point, but the logistics for that make me wanna rip my hair out, so sorry for now U3AAH.
 			object_create_egg(del_obj);
 		} else if ((del_obj->type == OBJ_ROBOT) && !(Game_mode & GM_MULTI)) { // Multiplayer handled outside this code!!
 			robot_info	*robptr = &Robot_info[del_obj->id];
@@ -1226,7 +1243,10 @@ void do_explosion_sequence(object *obj)
 					del_obj->contains_count = ((d_rand() * robptr->contains_count) >> 15) + 1;
 					del_obj->contains_type = robptr->contains_type;
 					del_obj->contains_id = robptr->contains_id;
+					if (robptr->contains_type == OBJ_ROBOT)
+						Ranking.missedRngDrops -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 					maybe_replace_powerup_with_energy(del_obj);
+					fireball_flag_hack = 1; // Random drops, so set the no score flag.
 					object_create_egg(del_obj);
 				}
 			}

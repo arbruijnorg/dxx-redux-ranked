@@ -182,11 +182,11 @@ void xmodel_show(void *model, int mpcolor, g3s_lrgb *light) {
 	float color_alpha;
 	if (tmap_drawer_ptr == draw_tmap_flat) { // cloaked effect
 		OGL_DISABLE(TEXTURE_2D);
-		color_alpha = 1.0 - (grd_curcanv->cv_fade_level/(GLfloat)GR_FADE_LEVELS) * 0.9;
+		color_alpha = 1.0 - (grd_curcanv->cv_fade_level / (GLfloat)GR_FADE_LEVELS) * 0.9;
 		glColor4f(0, 0, 0, color_alpha);
 	} else {
 		OGL_ENABLE(TEXTURE_2D);
-		color_alpha = (grd_curcanv->cv_fade_level >= GR_FADE_OFF)?1.0:(1.0 - (float)grd_curcanv->cv_fade_level / ((float)GR_FADE_LEVELS - 1.0));
+		color_alpha = (grd_curcanv->cv_fade_level >= GR_FADE_OFF) ? 1.0 : (1.0 - (float)grd_curcanv->cv_fade_level / ((float)GR_FADE_LEVELS - 1.0));
 		glColor4f(f2fl(light->r), f2fl(light->g), f2fl(light->b), color_alpha);
 	}
 

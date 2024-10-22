@@ -266,6 +266,8 @@ typedef struct game_cheats
 	int buddyclone;
 	int buddyangry;
 	int acid;
+	int cloak;
+	int extralife;
 } __pack__ game_cheats;
 extern game_cheats cheats;
 void game_disable_cheats();

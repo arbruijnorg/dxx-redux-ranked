@@ -106,6 +106,8 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "segment.h"
 #include "gameseg.h"
 #include "multibot.h"
+#include "math.h"
+#include "object.h"
 
 
 void StartNewLevelSecret(int level_num, int page_in_textures);
@@ -114,6 +116,10 @@ void DoEndGame(void);
 void AdvanceLevel(int secret_flag);
 void StartLevel(int random);
 void filter_objects_from_level();
+
+
+
+
 
 //Current_level_num starts at 1 for the first level
 //-1,-2,-3 are secret levels
@@ -125,6 +131,7 @@ char	Current_level_name[LEVEL_NAME_LEN];
 int	N_players=1;	// Number of players ( >1 means a net game, eh?)
 int 	Player_num=0;	// The player number who is on the console.
 player	Players[MAX_PLAYERS+4];	// Misc player info
+ranking Ranking; // Ranking system mod variables.
 obj_position	Player_init[MAX_PLAYERS];
 
 // Global variables telling what sort of game we have
@@ -436,6 +443,7 @@ void init_player_stats_new_ship(ubyte pnum)
 			Dead_player_camera = 0;
 
 		Global_laser_firing_count=0;
+		Players[pnum].afterburner_charge = 0;
 		Controls.afterburner_state = 0;
 		Last_afterburner_state = 0;
 		Missile_viewer=NULL; //reset missile camera if out there
@@ -456,7 +464,6 @@ void init_player_stats_new_ship(ubyte pnum)
 	Players[pnum].secondary_ammo[0] = 2 + NDL - Difficulty_level;
 	Players[pnum].primary_weapon_flags = HAS_LASER_FLAG;
 	Players[pnum].secondary_weapon_flags = HAS_CONCUSSION_FLAG;
-	Players[pnum].afterburner_charge = 0;
 	Players[pnum].flags &= ~( PLAYER_FLAGS_QUAD_LASERS | PLAYER_FLAGS_AFTERBURNER | PLAYER_FLAGS_CLOAKED | PLAYER_FLAGS_INVULNERABLE | PLAYER_FLAGS_MAP_ALL | PLAYER_FLAGS_CONVERTER | PLAYER_FLAGS_AMMO_RACK | PLAYER_FLAGS_HEADLIGHT | PLAYER_FLAGS_HEADLIGHT_ON | PLAYER_FLAGS_FLAG);
 	Players[pnum].cloak_time = 0;
 	Players[pnum].invulnerable_time = 0;
@@ -468,7 +475,8 @@ void init_player_stats_new_ship(ubyte pnum)
 #ifdef NETWORK
 	if(Game_mode & GM_MULTI && Netgame.BornWithBurner && !is_observer()) {
 		Players[pnum].flags |= PLAYER_FLAGS_AFTERBURNER;
-		Players[pnum].afterburner_charge = f1_0;
+		if (pnum == Player_num)
+			Players[pnum].afterburner_charge = f1_0;
 	}
 #endif
 	digi_kill_sound_linked_to_object(Players[pnum].objnum);
@@ -534,6 +542,8 @@ void DoGameOver()
 void update_player_stats()
 {
 	Players[Player_num].time_level += FrameTime;	//the never-ending march of time...
+	if (Current_level_num < 0 && Ranking.freezeTimer == 0)
+		Ranking.secretlevel_time += FrameTime;
 	if ( Players[Player_num].time_level > i2f(3600) )	{
 		Players[Player_num].time_level -= i2f(3600);
 		Players[Player_num].hours_level++;
@@ -813,9 +823,197 @@ void InitPlayerObject()
 
 extern void init_seismic_disturbances(void);
 
+int truncateRanks(int rank)
+{
+	int newRank = rank;
+	if (rank == 2 || rank == 4)
+		newRank = 3;
+	if (rank == 5 || rank == 7)
+		newRank = 6;
+	if (rank == 8 || rank == 10)
+		newRank = 9;
+	if (rank == 11 || rank == 13)
+		newRank = 12;
+	return newRank;
+}
+
+int calculateRank(int level_num)
+{
+	int levelHostages = 0;
+	int levelPoints = 0;
+	double parTime = 0;
+	int playerPoints = 0;
+	double secondsTaken = 0;
+	int playerHostages = 0;
+	double hostagePoints = 0;
+	double difficulty = 0;
+	int deathCount = 0;
+	double missedRngDrops = 0;
+	double rankPoints2 = 0;
+	char buffer[256];
+	char filename[256];
+	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
+	if (level_num > Current_mission->last_level)
+		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num - Current_mission->last_level);
+	PHYSFS_file* fp = PHYSFS_openRead(filename);
+	if (fp == NULL)
+		rankPoints2 = -10; // If no data exists, just assume level never played and set rankPoints in the range that returns N/A.
+	else {
+		PHYSFSX_getsTerminated(fp, buffer); // Fetch level data starting here. If a parameter isn't present in the file, it'll default to 0 in calculation.
+		levelHostages = atoi(buffer);
+		if (levelHostages < 0) // If level is unplayed, we know because the first (and only) value in the file will be -1, which is impossible for the hostage count.
+			rankPoints2 = -10;
+		else {
+			PHYSFSX_getsTerminated(fp, buffer);
+			levelPoints = atoi(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			parTime = atof(buffer);
+			PHYSFSX_getsTerminated(fp, buffer); // Fetch player data starting here.
+			playerPoints = atoi(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			secondsTaken = atof(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			playerHostages = atoi(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			difficulty = atof(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			deathCount = atoi(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			missedRngDrops = atof(buffer);
+		}
+	}
+	PHYSFS_close(fp);
+	double maxScore = levelPoints * 3;
+	maxScore = (int)maxScore;
+	double skillPoints = playerPoints * (difficulty / 4);
+	skillPoints = (int)skillPoints;
+	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
+	if (secondsTaken < parTime)
+		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
+	timePoints = (int)timePoints;
+	hostagePoints = playerHostages * 2500 * ((difficulty + 8) / 12);
+	if (playerHostages == levelHostages)
+		hostagePoints *= 3;
+	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
+	double score = playerPoints + skillPoints + timePoints + missedRngDrops + hostagePoints;
+	maxScore += levelHostages * 7500;
+	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount));
+	deathPoints = (int)deathPoints;
+	score -= deathPoints;
+	if (rankPoints2 > -5) {
+		rankPoints2 = (score / maxScore) * 12;
+	}
+	if (rankPoints2 > -5 && maxScore == 0)
+		rankPoints2 = 12;
+	Ranking.calculatedScore = score;
+	if (rankPoints2 < -5)
+		Ranking.rank = 0;
+	if (rankPoints2 > -5)
+		Ranking.rank = 1;
+	if (rankPoints2 >= 0)
+		Ranking.rank = (int)rankPoints2 + 2;
+	if (!PlayerCfg.RankShowPlusMinus)
+		Ranking.rank = truncateRanks(Ranking.rank);
+	return Ranking.rank;
+}
+
+void getLevelNameFromRankFile(int level_num, char* buffer)
+{
+	char filename[256];
+	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
+	if (level_num > Current_mission->last_level)
+		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num - Current_mission->last_level);
+	PHYSFS_file* fp = PHYSFS_openRead(filename);
+	if (fp == NULL)
+		sprintf(buffer, "???");
+	else {
+		for (int i = 0; i < 10; i++)
+			PHYSFSX_getsTerminated(fp, buffer); // Get a line ten times because the tenth line has the level name.
+	}
+	PHYSFS_close(fp);
+}
+
+void maybeDeleteRankRecords(int level_num) // This function deletes record files if it detects a level has been altered (changes in number of points or hostages in a level).
+{ // Counting par time changes would make this much more effective, but that could change due to reasons unrelated to level, so let that slide.
+	Ranking.deleted = 0;
+	int levelHostages;
+	int levelPoints;
+	char buffer[256];
+	char filename[256];
+	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
+	if (level_num < 0)
+		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num * -1);
+	PHYSFS_file* fp = PHYSFS_openRead(filename);
+	if (fp == NULL) {
+		fp = PHYSFS_openWrite(filename); // File missing, make a new one.
+		PHYSFSX_printf(fp, "-1\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "\n");
+		PHYSFSX_printf(fp, "???");
+	}
+	else {
+		PHYSFSX_getsTerminated(fp, buffer); // Fetch level data starting here, but only the first two things, as that's what we need to ensure hasn't changed.
+		levelHostages = atoi(buffer);
+		PHYSFSX_getsTerminated(fp, buffer);
+		levelPoints = atoi(buffer);
+		if (levelHostages > -1) {
+			if ((level_num > 0 && (levelPoints != Ranking.maxScore / 3 || levelHostages != Players[Player_num].hostages_level)) || (level_num < 0 && (levelPoints != Ranking.secretMaxScore / 3 || levelHostages != Ranking.hostages_secret_level))) { // Don't waste time on an already blank records file, and delete if level data doesn't match.
+				PHYSFS_delete(filename);
+				fp = PHYSFS_openWrite(filename); // Now that we've deleted the record for the no-longer-existent level, make a new fresh file.
+				PHYSFSX_printf(fp, "-1\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "\n");
+				PHYSFSX_printf(fp, "???");
+				Ranking.deleted = 1; // Tell the player their records file has been deleted due to the level changing.
+			}
+		}
+	}
+	PHYSFS_close(fp);
+}
+
 //starts a new game on the given level
 void StartNewGame(int start_level)
 {
+	PHYSFS_file* fp;
+	char filename[256];
+	int i = 1;
+	char buffer[256];
+	sprintf(buffer, "ranks/%s/%s", Players[Player_num].callsign, Current_mission->filename);
+	PHYSFS_mkdir(buffer);
+	while (i <= Current_mission->last_level - Current_mission->last_secret_level) {
+		sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, i);
+		if (i > Current_mission->last_level)
+			sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level);
+		fp = PHYSFS_openRead(filename);
+		if (fp == NULL) { // If this level's rank data file doesn't exist, create it now so it can be written to on the rank screen.
+			fp = PHYSFS_openWrite(filename);
+			PHYSFSX_printf(fp, "-1\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "\n");
+			PHYSFSX_printf(fp, "???");
+		}
+		PHYSFS_close(fp);
+		i++;
+	}
+	
 	state_quick_item = -1;	// for first blind save, pick slot to save in
 
 	Game_mode = GM_NORMAL;
@@ -840,20 +1038,49 @@ void StartNewGame(int start_level)
 	init_seismic_disturbances();
 }
 
+int endlevel_current_rank;
+extern grs_bitmap nm_background1;
+grs_bitmap transparent;
+int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
+	if (!Ranking.quickload) {
+		switch (event->type) {
+		case EVENT_WINDOW_DRAW:
+			gr_palette_load(gr_palette);
+			show_fullscr(&nm_background1);
+			grs_bitmap* bm = RankBitmaps[endlevel_current_rank];
+			int x = grd_curscreen->sc_w * 0.4;
+			int y = grd_curscreen->sc_h * 0.725;
+			int h = grd_curscreen->sc_h * 0.1125; // This used to be LINE_SPACING * 4.5, but sometimes the image would randomly be extra large due to goofy font stuff.
+			if (!endlevel_current_rank)
+				h *= 1.0806; // Make E-rank bigger to compensate for the tilt.
+			int w = 3 * h;
+			ogl_ubitmapm_cs(x, y, w, h, bm, -1, F1_0);
+			grs_bitmap oldbackground = nm_background1;
+			nm_background1 = transparent;
+			int ret = newmenu_draw(newmenu_get_window(menu), menu);
+			nm_background1 = oldbackground;
+			return ret;
+		}
+	}
+	return 0;
+}
+
 //	-----------------------------------------------------------------------------
 //	Does the bonus scoring.
 //	Call with dead_flag = 1 if player died, but deserves some portion of bonus (only skill points), anyway.
 void DoEndLevelScoreGlitz(int network)
 {
-	int level_points, skill_points, energy_points, shield_points, hostage_points;
-	int	all_hostage_points;
-	int	endgame_points;
+	if (Ranking.level_time == 0)
+		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
+	
+	int level_points, skill_points, death_points, shield_points, energy_points, time_points, hostage_points, all_hostage_points, endgame_points;
+	double skill_points2, missed_rng_drops, hostage_points2;
 	char	all_hostage_text[64];
 	char	endgame_text[64];
-	#define N_GLITZITEMS 11
-	char				m_str[N_GLITZITEMS][30];
-	newmenu_item	m[N_GLITZITEMS+1];
-	int				i,c;
+#define N_GLITZITEMS 12
+	char				m_str[N_GLITZITEMS][31];
+	newmenu_item	m[N_GLITZITEMS + 1];
+	int				i, c;
 	char				title[128];
 	int				is_last_level;
 	int				mine_level;
@@ -861,82 +1088,363 @@ void DoEndLevelScoreGlitz(int network)
 	//	Compute level player is on, deal with secret levels (negative numbers)
 	mine_level = Players[Player_num].level;
 	if (mine_level < 0)
-		mine_level *= -(Last_level/N_secret_levels);
+		mine_level *= -(Last_level / N_secret_levels);
 
-	level_points = Players[Player_num].score-Players[Player_num].last_score;
+	level_points = Players[Player_num].score - Players[Player_num].last_score;
+	Ranking.rankScore = level_points - Ranking.excludePoints;
 
-	if (!cheats.enabled) {
-		if (Difficulty_level > 1) {
-			skill_points = level_points*(Difficulty_level)/4;
-			skill_points -= skill_points % 100;
-		} else
-			skill_points = 0;
-
-		shield_points = f2i(Players[Player_num].shields) * 5 * mine_level;
-		energy_points = f2i(Players[Player_num].energy) * 2 * mine_level;
-		hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level+1);
-
-		shield_points -= shield_points % 50;
-		energy_points -= energy_points % 50;
-	} else {
-		skill_points = 0;
-		shield_points = 0;
-		energy_points = 0;
-		hostage_points = 0;
+	skill_points = 0, skill_points2 = 0;
+	if (Difficulty_level == 1)
+		skill_points2 = Ranking.rankScore / 4;
+	if (Difficulty_level > 1) {
+		skill_points = level_points * (Difficulty_level / 4);
+		skill_points2 = Ranking.rankScore * ((double)Difficulty_level / 4);
 	}
+	skill_points -= skill_points % 100;
+	skill_points2 = (int)skill_points2;
+
+	shield_points = f2i(Players[Player_num].shields) * 5 * mine_level;
+	shield_points -= shield_points % 50;
+	energy_points = f2i(Players[Player_num].energy) * 2 * mine_level;
+	energy_points -= energy_points % 50;
+	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
+	if (Ranking.level_time < Ranking.parTime)
+		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
+	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
+	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
+	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
 
 	all_hostage_text[0] = 0;
 	endgame_text[0] = 0;
+	all_hostage_points = 0;
 
-	if (!cheats.enabled && (Players[Player_num].hostages_on_board == Players[Player_num].hostages_level)) {
-		all_hostage_points = Players[Player_num].hostages_on_board * 1000 * (Difficulty_level+1);
-		sprintf(all_hostage_text, "%s%i\n", TXT_FULL_RESCUE_BONUS, all_hostage_points);
-	} else
-		all_hostage_points = 0;
+	if (Players[Player_num].hostages_on_board == Players[Player_num].hostages_level)
+		all_hostage_points = Players[Player_num].hostages_on_board * 1000 * (Difficulty_level + 1);
 
 	if (!cheats.enabled && !(Game_mode & GM_MULTI) && (Players[Player_num].lives) && (Current_level_num == Last_level)) {		//player has finished the game!
 		endgame_points = Players[Player_num].lives * 10000;
-		sprintf(endgame_text, "%s%i\n", TXT_SHIP_BONUS, endgame_points);
-		is_last_level=1;
-	} else
+		is_last_level = 1;
+	}
+	else
 		endgame_points = is_last_level = 0;
+	if (!cheats.enabled)
+		add_bonus_points_to_score(shield_points + energy_points + skill_points + hostage_points + all_hostage_points + endgame_points);
+	if (Players[Player_num].hostages_on_board - Ranking.secret_hostages_on_board == Players[Player_num].hostages_level) // For mod score, we subtract the secret level's hostages to avoid the hostage overshoot bug that voids full rescue bonus.
+		hostage_points2 *= 3;
+	hostage_points2 = round(hostage_points2); // Round this because I got 24999 hostage bonus once.
+	death_points = (Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount))) * -1;
+	Ranking.missedRngDrops *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
+	missed_rng_drops = Ranking.missedRngDrops;
+	Ranking.rankScore += skill_points2 + time_points + hostage_points2 + death_points + missed_rng_drops;
 
-	add_bonus_points_to_score(skill_points + energy_points + shield_points + hostage_points + all_hostage_points + endgame_points);
-
+	int minutes = Ranking.level_time / 60;
+	double seconds = Ranking.level_time - minutes * 60;
+	int parMinutes = Ranking.parTime / 60;
+	double parSeconds = Ranking.parTime - parMinutes * 60;
+	char* diffname = 0;
+	char time[256];
+	char parTime[256];
 	c = 0;
-	sprintf(m_str[c++], "%s%i", TXT_SHIELD_BONUS, shield_points);		// Return at start to lower menu...
-	sprintf(m_str[c++], "%s%i", TXT_ENERGY_BONUS, energy_points);
-	sprintf(m_str[c++], "%s%i", TXT_HOSTAGE_BONUS, hostage_points);
-	sprintf(m_str[c++], "%s%i", TXT_SKILL_BONUS, skill_points);
+	if (Difficulty_level == 0)
+		diffname = "Trainee";
+	if (Difficulty_level == 1)
+		diffname = "Rookie";
+	if (Difficulty_level == 2)
+		diffname = "Hotshot";
+	if (Difficulty_level == 3)
+		diffname = "Ace";
+	if (Difficulty_level == 4)
+		diffname = "Insane";
+	if (Ranking.quickload == 0) { // Only print the modded result screen if the player didn't quickload. Print the vanilla one otherwise, because quickloading into a level causes missing crucial mod info.
+		if (seconds < 10 || seconds == 60)
+			sprintf(time, "%i:0%.3f", minutes, seconds);
+		else
+			sprintf(time, "%i:%.3f", minutes, seconds);
+		if (parSeconds < 10 || parSeconds == 60)
+			sprintf(parTime, "%i:0%.0f", parMinutes, parSeconds);
+		else
+			sprintf(parTime, "%i:%.0f", parMinutes, parSeconds);
+		sprintf(m_str[c++], "Level score:\t%.0f", level_points - Ranking.excludePoints);
+		sprintf(m_str[c++], "Time: %s/%s\t%i", time, parTime, time_points); // Add some spaces to ensure there's at least SOME distance between the stats and their points. This is the stuff that is most likely to overlap.
+		sprintf(m_str[c++], "Hostages: %i/%i\t%.0f", Players[Player_num].hostages_on_board, Players[Player_num].hostages_level, hostage_points2);
+		sprintf(m_str[c++], "Skill: %s\t%.0f", diffname, skill_points2);
+		sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.deathCount, death_points);
+		if (Ranking.missedRngDrops < 0)
+			sprintf(m_str[c++], "Missed RNG drops: \t%.0f\n", Ranking.missedRngDrops);
+		else
+			strcpy(m_str[c++], "\n");
+		sprintf(m_str[c++], "%s%0.0f", TXT_TOTAL_SCORE, Ranking.rankScore);
 
-	sprintf(m_str[c++], "%s", all_hostage_text);
-	if (!(Game_mode & GM_MULTI) && (Players[Player_num].lives) && (Current_level_num == Last_level))
-		sprintf(m_str[c++], "%s", endgame_text);
-
-	sprintf(m_str[c++], "%s%i\n", TXT_TOTAL_BONUS, shield_points+energy_points+hostage_points+skill_points+all_hostage_points+endgame_points);
-	sprintf(m_str[c++], "%s%i", TXT_TOTAL_SCORE, Players[Player_num].score);
-
-	for (i=0; i<c; i++) {
-		m[i].type = NM_TYPE_TEXT;
-		m[i].text = m_str[i];
+		double rankPoints = (Ranking.rankScore / Ranking.maxScore) * 12;
+		if (Ranking.maxScore == 0)
+			rankPoints = 12;
+		int rank = 0;
+		if (rankPoints >= 0)
+			rank = (int)rankPoints + 1;
+		if (!PlayerCfg.RankShowPlusMinus)
+			rank = truncateRanks(rank + 1) - 1;
+		endlevel_current_rank = rank;
+		if (cheats.enabled) {
+			strcpy(m_str[c++], "\n\n\n");
+			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
+		}
+		else {
+			PHYSFS_File* fp;
+			PHYSFS_File* temp;
+			char filename[256];
+			char temp_filename[256];
+			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num);
+			if (Current_level_num < 0)
+				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
+			fp = PHYSFS_openRead(filename);
+			if (fp != NULL) {
+				if (Current_level_num > 0) {
+					calculateRank(Current_level_num);
+				}
+				else {
+					calculateRank(Current_mission->last_level - Current_level_num);
+				}
+				if (Ranking.rankScore > Ranking.calculatedScore || Ranking.rank == 0) {
+					temp = PHYSFS_openWrite(temp_filename);
+					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
+					PHYSFSX_printf(temp, "%.0f\n", (Ranking.maxScore - Players[Player_num].hostages_level * 7500) / 3);
+					PHYSFSX_printf(temp, "%f\n", Ranking.parTime);
+					PHYSFSX_printf(temp, "%.0f\n", level_points - Ranking.excludePoints);
+					PHYSFSX_printf(temp, "%f\n", Ranking.level_time);
+					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_on_board);
+					PHYSFSX_printf(temp, "%i\n", Difficulty_level);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.deathCount);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.missedRngDrops);
+					PHYSFSX_printf(temp, "%s\n", Current_level_name);
+					PHYSFS_close(temp);
+					PHYSFS_close(fp);
+					PHYSFS_delete(filename);
+					PHYSFSX_rename(temp_filename, filename);
+					if (Ranking.rank > 0)
+						sprintf(m_str[c++], "New record!");
+				}
+				PHYSFS_close(fp);;
+				if (Ranking.rankScore > Ranking.calculatedScore && Ranking.rank > 0)
+					strcpy(m_str[c++], "\n\n");
+				else
+					strcpy(m_str[c++], "\n\n\n");
+			}
+			else {
+				sprintf(m_str[c++], "Saving error. Replay level.");
+				PHYSFS_close(fp);
+			}
+			sprintf(m_str[c++], "Vanilla score:\t      %i", Players[Player_num].score); // Show players' base game score at the end of each level, so they can still compete with it when using the mod.
+		}
+	}
+	else {
+		if (cheats.enabled) { // Zero out all the bonuses when cheating while the mod's off.
+			shield_points = 0;
+			energy_points = 0;
+			hostage_points = 0;
+			skill_points = 0;
+			all_hostage_points = 0;
+			endgame_points = 0;
+		}
+		sprintf(m_str[c++], "%s%i", TXT_SHIELD_BONUS, shield_points);
+		sprintf(m_str[c++], "%s%i", TXT_ENERGY_BONUS, energy_points);
+		sprintf(m_str[c++], "%s%i", TXT_HOSTAGE_BONUS, hostage_points);
+		sprintf(m_str[c++], "%s%i\n", TXT_SKILL_BONUS, skill_points);
+		if (!cheats.enabled && (Players[Player_num].hostages_on_board == Players[Player_num].hostages_level))
+			sprintf(all_hostage_text, "%s%i\n", TXT_FULL_RESCUE_BONUS, all_hostage_points);
+		if (!cheats.enabled && !(Game_mode & GM_MULTI) && (Players[Player_num].lives) && (Current_level_num == Last_level))		//player has finished the game!
+			sprintf(endgame_text, "%s%i\n", TXT_SHIP_BONUS, endgame_points);
+		sprintf(m_str[c++], "%s%i\n", TXT_TOTAL_BONUS, shield_points + energy_points + hostage_points + skill_points + all_hostage_points + endgame_points);
+		sprintf(m_str[c++], "%s%i", TXT_TOTAL_SCORE, Players[Player_num].score);
 	}
 
-	// m[c].type = NM_TYPE_MENU;	m[c++].text = "Ok";
+		for (i = 0; i < c; i++) {
+			m[i].type = NM_TYPE_TEXT;
+			m[i].text = m_str[i];
+		}
 
-	if (Current_level_num < 0)
-		sprintf(title,"%s%s %d %s\n %s %s",is_last_level?"\n\n\n":"\n",TXT_SECRET_LEVEL, -Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
-	else
-		sprintf(title,"%s%s %d %s\n%s %s",is_last_level?"\n\n\n":"\n",TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+		// m[c].type = NM_TYPE_MENU;	m[c++].text = "Ok";
 
-	Assert(c <= N_GLITZITEMS);
+		if (Current_level_num < 0)
+			sprintf(title, "%s%s %d %s\n %s %s", is_last_level ? "\n" : "\n", TXT_SECRET_LEVEL, -Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+		else
+			sprintf(title, "%s%s %d %s\n%s %s", is_last_level ? "\n" : "\n", TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+
+		Assert(c <= N_GLITZITEMS);
+
+		gr_init_bitmap_alloc(&transparent, BM_LINEAR, 0, 0, 1, 1, 1);
+		transparent.bm_data[0] = 255;
+		transparent.bm_flags |= BM_FLAG_TRANSPARENT;
 
 #ifdef NETWORK
-	if ( network && (Game_mode & GM_NETWORK) )
-		newmenu_do2(NULL, title, c, m, multi_endlevel_poll1, NULL, 0, STARS_BACKGROUND);
-	else
+		if (network && (Game_mode & GM_NETWORK))
+			newmenu_do2(NULL, title, c, m, multi_endlevel_poll1, NULL, 0, STARS_BACKGROUND);
+		else
 #endif
-		// NOTE LINK TO ABOVE!!!
-		newmenu_do2(NULL, title, c, m, NULL, NULL, 0, STARS_BACKGROUND);
+			// NOTE LINK TO ABOVE!!!
+			newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, Menu_pcx_name);
+		
+		gr_free_bitmap_data(&transparent);
+}
+
+void DoEndSecretLevelScoreGlitz(int network)
+{
+	int level_points, skill_points, death_points, time_points;
+	double missed_rng_drops, hostage_points;
+#define N_GLITZITEMS 12
+	char				m_str[N_GLITZITEMS][31];
+	newmenu_item	m[N_GLITZITEMS + 1];
+	int				i, c;
+	char				title[128];
+	int				is_last_level = 0;
+	Ranking.secretlevel_time = Ranking.secretlevel_time / 65536;
+
+	//	Compute level player is on, deal with secret levels (negative numbers)
+
+	level_points = Players[Player_num].score - Ranking.secretlast_score;
+	Ranking.secretRankScore = level_points - Ranking.secretExcludePoints;
+
+	skill_points = 0;
+	if (Difficulty_level == 1)
+		skill_points = Ranking.secretRankScore / 4;
+	if (Difficulty_level > 1)
+		skill_points = Ranking.secretRankScore * (Difficulty_level - 1) / 2;
+
+	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
+	if (Ranking.secretlevel_time < Ranking.secretParTime)
+		time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
+	Ranking.secretMaxScore += Ranking.hostages_secret_level * 7500;
+	hostage_points = Ranking.secret_hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
+	if (Ranking.secret_hostages_on_board == Ranking.hostages_secret_level)
+		hostage_points *= 3;
+	hostage_points = round(hostage_points); // Round this because I got 24999 hostage bonus once.
+	death_points = (Ranking.secretMaxScore * 0.4 - Ranking.secretMaxScore * (0.4 / pow(2, Ranking.secretDeathCount))) * -1;
+	Ranking.secretMissedRngDrops *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
+	missed_rng_drops = Ranking.secretMissedRngDrops;
+	Ranking.secretRankScore += skill_points + time_points + hostage_points + death_points + missed_rng_drops;
+
+	int minutes = Ranking.secretlevel_time / 60;
+	double seconds = Ranking.secretlevel_time - minutes * 60;
+	int parMinutes = Ranking.secretParTime / 60;
+	double parSeconds = Ranking.secretParTime - parMinutes * 60;
+	char* diffname = 0;
+	char time[256];
+	char parTime[256];
+	c = 0;
+	if (Difficulty_level == 0)
+		diffname = "Trainee";
+	if (Difficulty_level == 1)
+		diffname = "Rookie";
+	if (Difficulty_level == 2)
+		diffname = "Hotshot";
+	if (Difficulty_level == 3)
+		diffname = "Ace";
+	if (Difficulty_level == 4)
+		diffname = "Insane";
+	if (Ranking.secretQuickload == 0) { // Only print the modded result screen if the player didn't quickload. Print the vanilla one otherwise, because quickloading into a level causes missing crucial mod info.
+		if (seconds < 10 || seconds == 60)
+			sprintf(time, "%i:0%.3f", minutes, seconds);
+		else
+			sprintf(time, "%i:%.3f", minutes, seconds);
+		if (parSeconds < 10 || parSeconds == 60)
+			sprintf(parTime, "%i:0%.0f", parMinutes, parSeconds);
+		else
+			sprintf(parTime, "%i:%.0f", parMinutes, parSeconds);
+		sprintf(m_str[c++], "Level score:\t%.0f", level_points - Ranking.secretExcludePoints);
+		sprintf(m_str[c++], "Time: %s/%s\t%i", time, parTime, time_points); // Add some spaces to ensure there's at least SOME distance between the stats and their points. This is the stuff that is most likely to overlap.
+		sprintf(m_str[c++], "Hostages: %i/%.0f\t%.0f", Ranking.secret_hostages_on_board, Ranking.hostages_secret_level, hostage_points);
+		sprintf(m_str[c++], "Skill: %s\t%i", diffname, skill_points);
+		sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.secretDeathCount, death_points);
+		if (Ranking.secretMissedRngDrops > 0)
+			Ranking.secretMissedRngDrops = 0; // Let's hope this penalty isn't actually needed on a secret level with a thief, or it won't function correctly.
+		if (Ranking.secretMissedRngDrops < 0)
+			sprintf(m_str[c++], "Missed RNG drops: \t%.0f\n", Ranking.secretMissedRngDrops);
+		else
+			strcpy(m_str[c++], "\n");
+		sprintf(m_str[c++], "%s%0.0f", TXT_TOTAL_SCORE, Ranking.secretRankScore);
+
+		double rankPoints = (Ranking.secretRankScore / Ranking.secretMaxScore) * 12;
+		if (Ranking.secretMaxScore == 0)
+			rankPoints = 12;
+		int rank = 0;
+		if (rankPoints >= 0)
+			rank = (int)rankPoints + 1;
+		if (!PlayerCfg.RankShowPlusMinus)
+			rank = truncateRanks(rank + 1) - 1;
+		endlevel_current_rank = rank;
+		if (cheats.enabled) {
+			strcpy(m_str[c++], "\n\n\n");
+			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
+		}
+		else {
+			PHYSFS_File* fp;
+			PHYSFS_File* temp;
+			char filename[256];
+			char temp_filename[256];
+			sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
+			fp = PHYSFS_openRead(filename);
+			if (!fp == NULL) {
+				calculateRank(Current_mission->last_level - Current_level_num);
+				if (Ranking.secretRankScore > Ranking.calculatedScore && Ranking.rank == 0) {
+					temp = PHYSFS_openWrite(temp_filename);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.hostages_secret_level);
+					PHYSFSX_printf(temp, "%.0f\n", (Ranking.secretMaxScore - Ranking.hostages_secret_level * 7500) / 3);
+					PHYSFSX_printf(temp, "%f\n", Ranking.secretParTime);
+					PHYSFSX_printf(temp, "%.0f\n", level_points - Ranking.secretExcludePoints);
+					PHYSFSX_printf(temp, "%f\n", Ranking.secretlevel_time);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.secret_hostages_on_board);
+					PHYSFSX_printf(temp, "%i\n", Difficulty_level);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretDeathCount);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretMissedRngDrops);
+					PHYSFSX_printf(temp, "%s\n", Current_level_name);
+					PHYSFS_close(temp);
+					PHYSFS_close(fp);
+					PHYSFS_delete(filename);
+					PHYSFSX_rename(temp_filename, filename);
+					if (Ranking.rank > 0)
+						sprintf(m_str[c++], "New record!");
+				}
+				if (Ranking.rankScore > Ranking.calculatedScore && Ranking.rank > 0)
+					strcpy(m_str[c++], "\n\n");
+				else
+					strcpy(m_str[c++], "\n\n\n");
+			}
+			else {
+				sprintf(m_str[c++], "Saving error. Replay level.");
+				PHYSFS_close(fp);
+			}
+			sprintf(m_str[c++], "Vanilla score:\t      %i", Players[Player_num].score); // Show players' base game score at the end of each level, so they can still compete with it when using the mod.
+		}
+	}
+
+		for (i = 0; i < c; i++) {
+			m[i].type = NM_TYPE_TEXT;
+			m[i].text = m_str[i];
+		}
+
+		// m[c].type = NM_TYPE_MENU;	m[c++].text = "Ok";
+
+		if (Current_level_num < 0)
+			sprintf(title, "%s%s %d %s\n %s %s", is_last_level ? "\n" : "\n", TXT_SECRET_LEVEL, -Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+		else
+			sprintf(title, "%s%s %d %s\n%s %s", is_last_level ? "\n" : "\n", TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+
+		Assert(c <= N_GLITZITEMS);
+
+		gr_init_bitmap_alloc(&transparent, BM_LINEAR, 0, 0, 1, 1, 1);
+		transparent.bm_data[0] = 255;
+		transparent.bm_flags |= BM_FLAG_TRANSPARENT;
+
+#ifdef NETWORK
+		if (network && (Game_mode & GM_NETWORK))
+			newmenu_do2(NULL, title, c, m, multi_endlevel_poll1, NULL, 0, STARS_BACKGROUND);
+		else
+#endif
+			// NOTE LINK TO ABOVE!!!
+			newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, Menu_pcx_name);
+		
+		gr_free_bitmap_data(&transparent);
 }
 
 //	-----------------------------------------------------------------------------------------------------
@@ -1035,7 +1543,7 @@ void do_screen_message(char *fmt, ...)
 //	robots, powerups, walls, doors, etc.
 void StartNewLevelSecret(int level_num, int page_in_textures)
 {
-        ThisLevelTime=0;
+	ThisLevelTime=0;
 
 	last_drawn_cockpit = -1;
 
@@ -1078,6 +1586,7 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 	Game_suspended = 0;
 
 	Control_center_destroyed = 0;
+	Ranking.freezeTimer = 0;
 
 	init_cockpit();
 	reset_palette_add();
@@ -1120,6 +1629,60 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 	// Say player can use FLASH cheat to mark path to exit.
 	Last_level_path_created = -1;
 
+	if (First_secret_visit) {
+		Ranking.secretDeathCount = 0;
+
+		Ranking.secretlevel_time = 0;
+		
+		Ranking.secretExcludePoints = 0;
+
+		Ranking.secretRankScore = 0;
+
+		Ranking.secretMaxScore = 0;
+
+		Ranking.secretMissedRngDrops = 0;
+
+		Ranking.secretlast_score = Players[Player_num].score;
+
+		Ranking.secret_hostages_on_board = 0;
+
+		Ranking.secretQuickload = 0;
+
+		Ranking.hostages_secret_level = 0;
+		
+		int i;
+		for (i = 0; i <= Highest_object_index; i++) {
+			if (Objects[i].type == OBJ_ROBOT) {
+				Ranking.secretMaxScore += Robot_info[Objects[i].id].score_value;
+				if (Objects[i].contains_type == OBJ_ROBOT)
+					Ranking.secretMaxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+			}
+			if (Objects[i].type == OBJ_CNTRLCEN)
+				Ranking.secretMaxScore += CONTROL_CEN_SCORE;
+			if (Objects[i].type == OBJ_HOSTAGE) {
+				Ranking.secretMaxScore += HOSTAGE_SCORE;
+				Ranking.hostages_secret_level++;
+			}
+		}
+		Ranking.secretMaxScore *= 3;
+		Ranking.secretMaxScore = (int)Ranking.secretMaxScore;
+		//Ranking.secretParTime = calculateParTime();
+		maybeDeleteRankRecords(level_num);
+		Ranking.alreadyBeaten = 0;
+		if (level_num > 0) {
+			if (calculateRank(level_num) > 0)
+				Ranking.alreadyBeaten = 1;
+		}
+		else {
+			if (calculateRank(Current_mission->last_level - level_num) > 0)
+				Ranking.alreadyBeaten = 1;
+		}
+		if (Ranking.deleted) {
+			HUD_init_message_literal(HM_DEFAULT, "This level's changed! Your record for it has been wiped.");
+			digi_play_sample(SOUND_BAD_SELECTION, F1_0);
+		}
+	}
+
 	First_secret_visit = 0;
 }
 
@@ -1135,9 +1698,10 @@ void ExitSecretLevel(void)
 	if (Game_wind)
 		window_set_visible(Game_wind, 0);
 
-	if (!Control_center_destroyed) {
+	if (!Control_center_destroyed)
 		state_save_all(2, SECRETC_FILENAME, 0);
-	}
+	else if (Ranking.secretQuickload == 0) // Don't show quickloaders a result screen for secret levels, as that's not in the vanilla game, and quickloaded levels have this mod disabled.
+		DoEndSecretLevelScoreGlitz(0);
 
 	if (PHYSFSX_exists(SECRETB_FILENAME,0))
 	{
@@ -1162,6 +1726,7 @@ void ExitSecretLevel(void)
 	if (Game_wind)
 		window_set_visible(Game_wind, 1);
 	reset_time();
+	Ranking.rankScore = Players[Player_num].score - Players[Player_num].last_score - Ranking.excludePoints;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1201,8 +1766,11 @@ void EnterSecretLevel(void)
 	
 	Entered_from_level = Current_level_num;
 
-	if (Control_center_destroyed)
+	Ranking.level_time = (Players[Player_num].hours_level * 3600) + Players[Player_num].time_level;
+	if (Control_center_destroyed) {
+		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
 		DoEndLevelScoreGlitz(0);
+	}
 
 	if (Newdemo_state != ND_STATE_PLAYBACK)
 		state_save_all(1, NULL, 0);	//	Not between levels (ie, save all), IS a secret level, NO filename override
@@ -1235,6 +1803,10 @@ void EnterSecretLevel(void)
 	// do_cloak_invul_stuff();
 	if (Game_wind)
 		window_set_visible(Game_wind, 1);
+	if (Ranking.secretQuickload == 1) {
+		HUD_init_message_literal(HM_DEFAULT, "You quickloaded! Ranking system mod disabled for this level.");
+		digi_play_sample(SOUND_BAD_SELECTION, F1_0);
+	}
 	reset_time();
 }
 
@@ -1355,6 +1927,7 @@ void AdvanceLevel(int secret_flag)
 	}
 
 	Control_center_destroyed = 0;
+	Ranking.freezeTimer = 0;
 
 	#ifdef EDITOR
 	if (Current_level_num == 0)
@@ -1452,6 +2025,7 @@ void DoPlayerDead()
 
 		//clear out stuff so no bonus
 		Players[Player_num].hostages_on_board = 0;
+		Ranking.secret_hostages_on_board = 0;
 		Players[Player_num].energy = 0;
 		Players[Player_num].shields = 0;
 		Players[Player_num].connected = CONNECT_DIED_IN_MINE;
@@ -1459,10 +2033,13 @@ void DoPlayerDead()
 		do_screen_message(TXT_DIED_IN_MINE); // Give them some indication of what happened
 
 		if (Current_level_num < 0) {
+			if (Ranking.secretQuickload == 0) // Don't show quickloaders a result screen for secret levels, as that's not in the vanilla game, and quickloaded levels have this mod disabled.
+			DoEndSecretLevelScoreGlitz(0);
 			if (PHYSFSX_exists(SECRETB_FILENAME,0))
 			{
 				do_screen_message(TXT_SECRET_RETURN);
 				state_restore_all(1, 2, SECRETB_FILENAME);			//	2 means you died
+				Ranking.rankScore = Players[Player_num].score - Players[Player_num].last_score - Ranking.excludePoints;
 				set_pos_from_return_segment();
 				Players[Player_num].lives--;						//	re-lose the life, Players[Player_num].lives got written over in restore.
 			} else {
@@ -1489,6 +2066,7 @@ void DoPlayerDead()
 			if (!Control_center_destroyed)
 				state_save_all(2, SECRETC_FILENAME, 0);
 			state_restore_all(1, 2, SECRETB_FILENAME);
+			Ranking.rankScore = Players[Player_num].score - Players[Player_num].last_score - Ranking.excludePoints;
 			set_pos_from_return_segment();
 			Players[Player_num].lives--;						//	re-lose the life, Players[Player_num].lives got written over in restore.
 		} else {
@@ -1518,7 +2096,7 @@ extern int BigWindowSwitch;
 //called when the player is starting a new level for normal game mode and restore state
 //	secret_flag set if came from a secret level
 void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
-{
+	{
 	if (!(Game_mode & GM_MULTI)) {
 		last_drawn_cockpit = -1;
 	}
@@ -1595,6 +2173,7 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 	Game_suspended = 0;
 
 	Control_center_destroyed = 0;
+	Ranking.freezeTimer = 0;
 
 	set_screen_mode(SCREEN_GAME);
 
@@ -1779,6 +2358,20 @@ void StartNewLevel(int level_num)
 	GameTime64 = 0;
 	ThisLevelTime=0;
 
+	Ranking.deathCount = 0;
+
+	Ranking.excludePoints = 0;
+
+	Ranking.rankScore = 0;
+
+	Ranking.maxScore = 0;
+
+	Ranking.missedRngDrops = 0;
+
+	Ranking.quickload = 0;
+
+	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
+
 	if (level_num > 0) {
 		maybe_set_first_secret_visit(level_num);
 	}
@@ -1787,6 +2380,35 @@ void StartNewLevel(int level_num)
 
 	StartNewLevelSub(level_num, 1, 0 );
 
+	int i;
+	for (i = 0; i <= Highest_object_index; i++) {
+		if (Objects[i].type == OBJ_ROBOT) {
+			Ranking.maxScore += Robot_info[Objects[i].id].score_value;
+			if (Objects[i].contains_type == OBJ_ROBOT)
+				Ranking.maxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+		}
+		if (Objects[i].type == OBJ_CNTRLCEN)
+			Ranking.maxScore += CONTROL_CEN_SCORE;
+		if (Objects[i].type == OBJ_HOSTAGE)
+			Ranking.maxScore += HOSTAGE_SCORE;
+	}
+	Ranking.maxScore *= 3;
+	Ranking.maxScore = (int)Ranking.maxScore;
+	//Ranking.parTime = calculateParTime();
+	maybeDeleteRankRecords(level_num);
+	Ranking.alreadyBeaten = 0;
+	if (level_num > 0) {
+		if (calculateRank(level_num) > 0)
+			Ranking.alreadyBeaten = 1;
+	}
+	else {
+		if (calculateRank(Current_mission->last_level - level_num) > 0)
+			Ranking.alreadyBeaten = 1;
+	}
+	if (Ranking.deleted) {
+		HUD_init_message_literal(HM_DEFAULT, "This level's changed! Your record for it has been wiped.");
+		digi_play_sample(SOUND_BAD_SELECTION, F1_0);
+	}
 }
 
 int previewed_spawn_point = 0; 

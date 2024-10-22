@@ -210,7 +210,7 @@ void start_endlevel_sequence()
 #endif
 	int exit_side,tunnel_length;
 
-	if (Player_is_dead || ConsoleObject->flags&OF_SHOULD_BE_DEAD)
+	if (Player_is_dead || ConsoleObject->flags & OF_SHOULD_BE_DEAD)
 		return;				//don't start if dead!
 
 	reset_rear_view(); //turn off rear view if set - NOTE: make sure this happens before we pause demo recording!!

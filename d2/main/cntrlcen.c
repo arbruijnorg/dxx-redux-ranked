@@ -43,6 +43,7 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "state.h"
 #include "byteswap.h"
 #include "args.h"
+#include "player.h"
 
 //@@vms_vector controlcen_gun_points[MAX_CONTROLCEN_GUNS];
 //@@vms_vector controlcen_gun_dirs[MAX_CONTROLCEN_GUNS];
@@ -67,9 +68,11 @@ void calc_controlcen_gun_point(reactor *reactor, object *obj,int gun_num)
 	vms_vector *gun_point = &obj->ctype.reactor_info.gun_pos[gun_num];
 	vms_vector *gun_dir = &obj->ctype.reactor_info.gun_dir[gun_num];
 
+	// If this is a boss level the reactor might have been removed.
+    // Nothing to do in that case.
+	if (obj->type == OBJ_GHOST) return;
 	Assert(obj->type == OBJ_CNTRLCEN);
 	Assert(obj->render_type==RT_POLYOBJ);
-
 	Assert(gun_num < reactor->n_guns);
 
 	//instance gun position & orientation
@@ -225,6 +228,12 @@ void do_countdown_frame()
 			reset_palette_add();							//restore palette for death message
 			//controlcen->MaxCapacity = Fuelcen_max_amount;
 			//gauge_message( "Control Center Reset" );
+			if (!Player_is_dead) {
+				Ranking.deathCount++;
+				if (Current_level_num < 0)
+					Ranking.secretDeathCount++;
+			}
+			Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
 			DoPlayerDead();		//kill_player();
 		}																				
 	}
@@ -248,6 +257,8 @@ void do_controlcen_destroyed_stuff(object *objp)
 
 	// And start the countdown stuff.
 	Control_center_destroyed = 1;
+	if (Player_is_dead && Current_level_num > 0)
+			Ranking.secretDeathCount--;
 
 	// If a secret level, delete secret.sgc to indicate that we can't return to our secret level.
 	if (Current_level_num < 0)

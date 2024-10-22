@@ -101,16 +101,38 @@ static inline int PHYSFSX_readString(PHYSFS_file *file, char *s)
 	return strlen(s);
 }
 
-static inline int PHYSFSX_gets(PHYSFS_file *file, char *s)
+static inline int PHYSFSX_gets(PHYSFS_file* file, char* s)
 {
-	char *ptr = s;
+	char* ptr = s;
 
 	if (PHYSFS_eof(file))
 		*ptr = 0;
 	else
 		do
 			PHYSFS_read(file, ptr, 1, 1);
-		while (!PHYSFS_eof(file) && *ptr++ != '\n');
+	while (!PHYSFS_eof(file) && *ptr++ != '\n');
+
+	return strlen(s);
+}
+
+static inline int PHYSFSX_getsTerminated(PHYSFS_file* file, char* s)
+{
+	char* ptr = s;
+
+	if (PHYSFS_eof(file))
+		*ptr = 0;
+	else
+	{
+		do
+		{
+			char c;
+			PHYSFS_read(file, &c, 1, 1);
+			if (c == '\n')
+				break;
+			*ptr++ = c;
+		} while (!PHYSFS_eof(file));
+		*ptr = '\0';
+	}
 
 	return strlen(s);
 }

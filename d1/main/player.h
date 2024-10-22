@@ -26,6 +26,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "fix.h"
 #include "vecmat.h"
 #include "weapon.h"
+#include "fuelcen.h"
 
 #define MAX_PLAYERS 8
 #define OBSERVER_PLAYER_ID 7
@@ -56,7 +57,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #define CLOAK_TIME_MAX          (F1_0*30)
 #define INVULNERABLE_TIME_MAX   (F1_0*30)
 
-#define PLAYER_STRUCT_VERSION 	16		//increment this every time player struct changes
+#define PLAYER_STRUCT_VERSION 	17		//increment this every time player struct changes
 
 // defines for teams
 #define TEAM_BLUE   0
@@ -121,6 +122,23 @@ typedef struct player {
 	sbyte   hours_level;            // Hours played (since time_total can only go up to 9 hours)
 	sbyte   hours_total;            // Hours played (since time_total can only go up to 9 hours)
 } __pack__ player;
+
+typedef struct ranking { // This struct contains variables for the ranking system mod. Most of them don't have to be doubles. It's either for math compatibility or consistency.
+	double     deathCount;                         // Number of times the player died during the level.
+	double     rankScore;                          // The version of score used for this mod, as to not disturb the vanilla score system.
+	double     excludePoints;                      // Number of points gotten from sources we still want to contribute to vanilla score, but not count toward rank calculation.
+	double     maxScore;				           // The current level's S-rank score. Won't include hostage points until the result screen, to make calculation of other bonuses easier.
+	double     level_time;                         // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
+	double     parTime;                            // The algorithmically-generated required time for the current level.
+	double     quickload;				           // Whether the player has quickloaded into the current level.
+	double     calculatedScore;		               // Stores the score determined in calculateRank.
+	int        rank;					           // Stores the rank determined in calculateRank.
+	double     missedRngDrops;					   // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	int        alreadyBeaten;                      // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
+	int        deleted;                            // Whether to tell the player their record file was deleted due to a level change.
+	int		   fromBestRanksButton;                // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
+	int        missionRanks[5000];                 // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+} __pack__ ranking;
 
 // Same as above but structure how Savegames expect
 typedef struct player_rw {
@@ -191,6 +209,7 @@ extern int N_players;   // Number of players ( >1 means a net game, eh?)
 extern int Player_num;  // The player number who is on the console.
 
 extern player Players[MAX_PLAYERS];				// Misc player info
+extern ranking Ranking; // Ranking system mod variables.
 extern player_ship *Player_ship;
 
 // Probably should go in player struct, but I don't want to break savegames for this

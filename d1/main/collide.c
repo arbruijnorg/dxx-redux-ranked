@@ -69,6 +69,8 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #endif
 #include "collide.h"
 #include "multibot.h"
+#include "gameseq.h"
+#include "object.h"
 
 #define WALL_DAMAGE_SCALE (128) // Was 32 before 8:55 am on Thursday, September 15, changed by MK, walls were hurting me more than robots!
 #define WALL_DAMAGE_THRESHOLD (F1_0/3)
@@ -153,12 +155,23 @@ void apply_force_damage(object *obj,fix force,object *other_obj)
 			else {
 				if (other_obj->type == OBJ_WEAPON)
 					result = apply_damage_to_robot(obj,damage/2, other_obj->ctype.laser_info.parent_num);
-				else
+			else
 					result = apply_damage_to_robot(obj,damage/2, other_obj-Objects);
 			}
 
-			if (result && (other_obj->ctype.laser_info.parent_signature == ConsoleObject->signature))
-				add_points_to_score(Robot_info[obj->id].score_value);
+			if (result) {
+				if (obj->matcen_creator != 0 || obj->flags & OF_ROBOT_DROPPED) {
+					Ranking.excludePoints += Robot_info[obj->id].score_value;
+					if (obj->flags & OF_ROBOT_DROPPED)
+						Ranking.missedRngDrops += Robot_info[obj->id].score_value;
+				}
+				if (!(other_obj->ctype.laser_info.parent_signature == ConsoleObject->signature)) {
+					Ranking.excludePoints -= Robot_info[obj->id].score_value;
+					add_points_to_score(0);
+				}
+				else
+					add_points_to_score(Robot_info[obj->id].score_value);
+			}
 			break;
 
 		case OBJ_PLAYER:
@@ -323,7 +336,7 @@ void collide_player_and_wall( object * player, fix hitspeed, short hitseg, short
 					multi_send_damage(damage, Players[Player_num].shields, OBJ_WALL, 0, DAMAGE_WALL, NULL);
 				}
 			  	#endif
-			  	apply_damage_to_player( player, player, damage, 0 );			  	
+			  	apply_damage_to_player( player, player, damage, 0 );
 			}
 		}
 	}
@@ -995,7 +1008,11 @@ void collide_robot_and_weapon( object * robot, object * weapon, vms_vector *coll
 
 			if (! apply_damage_to_robot(robot, damage, weapon->ctype.laser_info.parent_num))
 				bump_two_objects(robot, weapon, 0);		//only bump if not dead. no damage from bump
-			else if (weapon->ctype.laser_info.parent_signature == ConsoleObject->signature) {
+			else if (weapon->ctype.laser_info.parent_signature == ConsoleObject->signature || !(Game_mode & GM_MULTI_COOP)) {
+				if (robot->matcen_creator != 0 || robot->flags & OF_ROBOT_DROPPED)
+					Ranking.excludePoints += Robot_info[robot->id].score_value;
+				if (robot->flags & OF_ROBOT_DROPPED)
+					Ranking.missedRngDrops += Robot_info[robot->id].score_value;
 				add_points_to_score(Robot_info[robot->id].score_value);
 			}
 		}
@@ -1032,7 +1049,7 @@ void collide_hostage_and_player( object * hostage, object * player, vms_vector *
 	if ( player == ConsoleObject )	{
 		add_points_to_score(HOSTAGE_SCORE);
 
-		// Do effect
+			// Do effect
 		hostage_rescue(hostage->id);
 
 		// Remove the hostage object.

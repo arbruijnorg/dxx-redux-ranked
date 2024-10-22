@@ -36,27 +36,20 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "text.h"
 #include "u_mem.h"
 #include "ignorecase.h"
+#include "gamefont.h"
+#include "playsave.h"
+#include "menu.h"
 
-//values that describe where a mission is located
+ //values that describe where a mission is located
 enum mle_loc
 {
 	ML_CURDIR = 0,
 	ML_MISSIONDIR = 1
 };
 
-//mission list entry
-typedef struct mle {
-	char    *filename;          // filename without extension
-	int     builtin_hogsize;    // if it's the built-in mission, used for determining the version
-	char    mission_name[MISSION_NAME_LEN+1];
-	ubyte   anarchy_only_flag;  // if true, mission is anarchy only
-	char	*path;				// relative file path
-	enum mle_loc	location;           // where the mission is
-} mle;
-
 static int num_missions = -1;
 
-Mission *Current_mission = NULL; // currently loaded mission
+Mission* Current_mission = NULL; // currently loaded mission
 
 // Allocate the Level_names, Secret_level_names and Secret_level_table arrays
 static int allocate_levels(void)
@@ -64,7 +57,7 @@ static int allocate_levels(void)
 	MALLOC(Level_names, d_fname, Last_level);
 	if (!Level_names)
 		return 0;
-	
+
 	if (Last_secret_level)
 	{
 		N_secret_levels = -Last_secret_level;
@@ -72,12 +65,12 @@ static int allocate_levels(void)
 		MALLOC(Secret_level_names, d_fname, N_secret_levels);
 		if (!Secret_level_names)
 			return 0;
-		
+
 		MALLOC(Secret_level_table, ubyte, N_secret_levels);
 		if (!Secret_level_table)
 			return 0;
 	}
-	
+
 	return 1;
 }
 
@@ -91,117 +84,117 @@ int load_mission_d1(void)
 
 	switch (PHYSFSX_fsize("descent.hog"))
 	{
-		case D1_SHAREWARE_MISSION_HOGSIZE:
-		case D1_SHAREWARE_10_MISSION_HOGSIZE:
-			N_secret_levels = 0;
-	
-			Last_level = 7;
-			Last_secret_level = 0;
-			
-			if (!allocate_levels())
-			{
-				free_mission();
-				return 0;
-			}
-	
-			//build level names
-			for (i=0;i<Last_level;i++)
-				sprintf(Level_names[i], "level%02d.sdl", i+1);
+	case D1_SHAREWARE_MISSION_HOGSIZE:
+	case D1_SHAREWARE_10_MISSION_HOGSIZE:
+		N_secret_levels = 0;
 
-			strcpy(Briefing_text_filename,BIMD1_BRIEFING_FILE);
-			strcpy(Ending_text_filename,BIMD1_ENDING_FILE_SHARE);
-	
-			break;
-		case D1_MAC_SHARE_MISSION_HOGSIZE:
-			N_secret_levels = 0;
-	
-			Last_level = 3;
-			Last_secret_level = 0;
-	
-			if (!allocate_levels())
-			{
-				free_mission();
-				return 0;
-			}
-			
-			//build level names
-			for (i=0;i<Last_level;i++)
-				sprintf(Level_names[i], "level%02d.sdl", i+1);
+		Last_level = 7;
+		Last_secret_level = 0;
 
-			strcpy(Briefing_text_filename,BIMD1_BRIEFING_FILE);
-			strcpy(Ending_text_filename,BIMD1_ENDING_FILE_SHARE);
+		if (!allocate_levels())
+		{
+			free_mission();
+			return 0;
+		}
 
-			break;
-		case D1_OEM_MISSION_HOGSIZE:
-		case D1_OEM_10_MISSION_HOGSIZE:
-			N_secret_levels = 1;
-	
-			Last_level = 15;
-			Last_secret_level = -1;
-	
-			if (!allocate_levels())
-			{
-				free_mission();
-				return 0;
-			}
-			
-			//build level names
-			for (i=0; i < Last_level - 1; i++)
-				sprintf(Level_names[i], "level%02d.rdl", i+1);
-			sprintf(Level_names[i], "saturn%02d.rdl", i+1);
-			for (i=0; i < -Last_secret_level; i++)
-				sprintf(Secret_level_names[i], "levels%1d.rdl", i+1);
-	
-			Secret_level_table[0] = 10;
+		//build level names
+		for (i = 0; i < Last_level; i++)
+			sprintf(Level_names[i], "level%02d.sdl", i + 1);
 
-			strcpy(Briefing_text_filename,BIMD1_BRIEFING_FILE_OEM);
-			strcpy(Ending_text_filename,BIMD1_ENDING_FILE_OEM);
+		strcpy(Briefing_text_filename, BIMD1_BRIEFING_FILE);
+		strcpy(Ending_text_filename, BIMD1_ENDING_FILE_SHARE);
 
-			break;
-		default:
-			Int3(); // fall through
-		case D1_MISSION_HOGSIZE:
-		case D1_10_MISSION_HOGSIZE:
-		case D1_MAC_MISSION_HOGSIZE:
-			N_secret_levels = 3;
-	
-			Last_level = BIMD1_LAST_LEVEL;
-			Last_secret_level = BIMD1_LAST_SECRET_LEVEL;
-	
-			if (!allocate_levels())
-			{
-				free_mission();
-				return 0;
-			}
+		break;
+	case D1_MAC_SHARE_MISSION_HOGSIZE:
+		N_secret_levels = 0;
 
-			//build level names
-			for (i=0;i<Last_level;i++)
-				sprintf(Level_names[i], "level%02d.rdl", i+1);
-			for (i=0;i<-Last_secret_level;i++)
-				sprintf(Secret_level_names[i], "levels%1d.rdl", i+1);
-	
-			Secret_level_table[0] = 10;
-			Secret_level_table[1] = 21;
-			Secret_level_table[2] = 24;
+		Last_level = 3;
+		Last_secret_level = 0;
 
-			strcpy(Briefing_text_filename,BIMD1_BRIEFING_FILE);
-			strcpy(Ending_text_filename,BIMD1_ENDING_FILE);
+		if (!allocate_levels())
+		{
+			free_mission();
+			return 0;
+		}
 
-			break;
+		//build level names
+		for (i = 0; i < Last_level; i++)
+			sprintf(Level_names[i], "level%02d.sdl", i + 1);
+
+		strcpy(Briefing_text_filename, BIMD1_BRIEFING_FILE);
+		strcpy(Ending_text_filename, BIMD1_ENDING_FILE_SHARE);
+
+		break;
+	case D1_OEM_MISSION_HOGSIZE:
+	case D1_OEM_10_MISSION_HOGSIZE:
+		N_secret_levels = 1;
+
+		Last_level = 15;
+		Last_secret_level = -1;
+
+		if (!allocate_levels())
+		{
+			free_mission();
+			return 0;
+		}
+
+		//build level names
+		for (i = 0; i < Last_level - 1; i++)
+			sprintf(Level_names[i], "level%02d.rdl", i + 1);
+		sprintf(Level_names[i], "saturn%02d.rdl", i + 1);
+		for (i = 0; i < -Last_secret_level; i++)
+			sprintf(Secret_level_names[i], "levels%1d.rdl", i + 1);
+
+		Secret_level_table[0] = 10;
+
+		strcpy(Briefing_text_filename, BIMD1_BRIEFING_FILE_OEM);
+		strcpy(Ending_text_filename, BIMD1_ENDING_FILE_OEM);
+
+		break;
+	default:
+		Int3(); // fall through
+	case D1_MISSION_HOGSIZE:
+	case D1_10_MISSION_HOGSIZE:
+	case D1_MAC_MISSION_HOGSIZE:
+		N_secret_levels = 3;
+
+		Last_level = BIMD1_LAST_LEVEL;
+		Last_secret_level = BIMD1_LAST_SECRET_LEVEL;
+
+		if (!allocate_levels())
+		{
+			free_mission();
+			return 0;
+		}
+
+		//build level names
+		for (i = 0; i < Last_level; i++)
+			sprintf(Level_names[i], "level%02d.rdl", i + 1);
+		for (i = 0; i < -Last_secret_level; i++)
+			sprintf(Secret_level_names[i], "levels%1d.rdl", i + 1);
+
+		Secret_level_table[0] = 10;
+		Secret_level_table[1] = 21;
+		Secret_level_table[2] = 24;
+
+		strcpy(Briefing_text_filename, BIMD1_BRIEFING_FILE);
+		strcpy(Ending_text_filename, BIMD1_ENDING_FILE);
+
+		break;
 	}
 
 	return 1;
 }
 
 //compare a string for a token. returns true if match
-int istok(char *buf,char *tok)
+int istok(char* buf, char* tok)
 {
-	return d_strnicmp(buf,tok,strlen(tok)) == 0;
+	return d_strnicmp(buf, tok, strlen(tok)) == 0;
 
 }
 
 //adds a terminating 0 after a string at the first white space
-void add_term(char *s)
+void add_term(char* s)
 {
 	while (*s && !isspace(*s)) s++;
 
@@ -210,11 +203,11 @@ void add_term(char *s)
 
 //returns ptr to string after '=' & white space, or NULL if no '='
 //adds 0 after parm at first white space
-char *get_value(char *buf)
+char* get_value(char* buf)
 {
-	char *t;
+	char* t;
 
-	t = strchr(buf,'=')+1;
+	t = strchr(buf, '=') + 1;
 
 	if (t) {
 		while (*t && isspace(*t)) t++;
@@ -227,57 +220,57 @@ char *get_value(char *buf)
 }
 
 //reads a line, returns ptr to value of passed parm.  returns NULL if none
-char *get_parm_value(char *parm,PHYSFS_file *f)
+char* get_parm_value(char* parm, PHYSFS_file* f)
 {
 	static char buf[80];
 
-	if (!PHYSFSX_fgets(buf,80,f))
+	if (!PHYSFSX_fgets(buf, 80, f))
 		return NULL;
 
-	if (istok(buf,parm))
+	if (istok(buf, parm))
 		return get_value(buf);
 	else
 		return NULL;
 }
 
-int ml_sort_func(mle *e0,mle *e1)
+int ml_sort_func(mle* e0, mle* e1)
 {
-	return d_stricmp(e0->mission_name,e1->mission_name);
+	return d_stricmp(e0->mission_name, e1->mission_name);
 
 }
 
 //returns 1 if file read ok, else 0
-int read_mission_file(mle *mission, char *filename, int location)
+int read_mission_file(mle* mission, char* filename, int location)
 {
 	char filename2[100];
-	PHYSFS_file *mfile;
+	PHYSFS_file* mfile;
 
 	switch (location) {
-		case ML_MISSIONDIR:
-			strcpy(filename2,MISSION_DIR);
-			break;
+	case ML_MISSIONDIR:
+		strcpy(filename2, MISSION_DIR);
+		break;
 
-		default:
-			Int3();		//fall through
+	default:
+		Int3();		//fall through
 
-		case ML_CURDIR:
-			strcpy(filename2,"");
-			break;
+	case ML_CURDIR:
+		strcpy(filename2, "");
+		break;
 	}
-	strcat(filename2,filename);
+	strcat(filename2, filename);
 
 	mfile = PHYSFSX_openReadBuffered(filename2);
 
 	if (mfile) {
-		char *p;
-		char temp[PATH_MAX], *ext;
+		char* p;
+		char temp[PATH_MAX], * ext;
 
-		strcpy(temp,filename);
+		strcpy(temp, filename);
 		p = strrchr(temp, '/');	// get the filename at the end of the path
 		if (!p)
 			p = temp;
 		else p++;
-		
+
 		if ((ext = strchr(p, '.')) == NULL)
 			return 0;	//missing extension
 
@@ -288,13 +281,13 @@ int read_mission_file(mle *mission, char *filename, int location)
 		mission->filename = mission->path + (p - temp);
 		mission->location = location;
 
-		p = get_parm_value("name",mfile);
+		p = get_parm_value("name", mfile);
 
 		if (p) {
-			char *t;
-			if ((t=strchr(p,';'))!=NULL)
-				*t=0;
-			t = p + strlen(p)-1;
+			char* t;
+			if ((t = strchr(p, ';')) != NULL)
+				*t = 0;
+			t = p + strlen(p) - 1;
 			while (isspace(*t))
 				*t-- = 0; // remove trailing whitespace
 			if (strlen(p) > MISSION_NAME_LEN)
@@ -307,11 +300,11 @@ int read_mission_file(mle *mission, char *filename, int location)
 			return 0;
 		}
 
-		p = get_parm_value("type",mfile);
+		p = get_parm_value("type", mfile);
 
 		//get mission type
 		if (p)
-			mission->anarchy_only_flag = istok(p,"anarchy");
+			mission->anarchy_only_flag = istok(p, "anarchy");
 
 		PHYSFS_close(mfile);
 
@@ -321,10 +314,10 @@ int read_mission_file(mle *mission, char *filename, int location)
 	return 0;
 }
 
-void add_d1_builtin_mission_to_list(mle *mission)
+void add_d1_builtin_mission_to_list(mle* mission)
 {
-    int size;
-    
+	int size;
+
 	size = PHYSFSX_fsize("descent.hog");
 	if (size == -1)
 		return;
@@ -364,9 +357,9 @@ void add_d1_builtin_mission_to_list(mle *mission)
 	num_missions++;
 }
 
-void add_missions_to_list(mle *mission_list, char *path, char *rel_path, int anarchy_mode)
+void add_missions_to_list(mle* mission_list, char* path, char* rel_path, int anarchy_mode)
 {
-	char **find, **i, *ext;
+	char** find, ** i, * ext;
 
 	find = PHYSFS_enumerateFiles(path);
 
@@ -406,12 +399,12 @@ void add_missions_to_list(mle *mission_list, char *path, char *rel_path, int ana
 }
 
 /* move <mission_name> to <place> on mission list, increment <place> */
-void promote (mle *mission_list, char * mission_name, int * top_place)
+void promote(mle* mission_list, char* mission_name, int* top_place)
 {
 	int i;
 	char name[FILENAME_LEN], * t;
 	strcpy(name, mission_name);
-	if ((t = strchr(name,'.')) != NULL)
+	if ((t = strchr(name, '.')) != NULL)
 		*t = 0; //kill extension
 	for (i = *top_place; i < num_missions; i++)
 		if (!d_stricmp(mission_list[i].filename, name)) {
@@ -428,8 +421,8 @@ void promote (mle *mission_list, char * mission_name, int * top_place)
 
 void free_mission(void)
 {
-    // May become more complex with the editor
-    if (Current_mission)
+	// May become more complex with the editor
+	if (Current_mission)
 	{
 		if (Current_mission->path && !PLAYING_BUILTIN_MISSION)
 		{
@@ -444,13 +437,13 @@ void free_mission(void)
 
 		if (Level_names)
 			d_free(Level_names);
-		if(Secret_level_names)
+		if (Secret_level_names)
 			d_free(Secret_level_names);
-		if(Secret_level_table)
+		if (Secret_level_table)
 			d_free(Secret_level_table);
-		
-        d_free(Current_mission);
-    }
+
+		d_free(Current_mission);
+	}
 }
 
 
@@ -458,9 +451,9 @@ void free_mission(void)
 //fills in the global list of missions.  Returns the number of missions
 //in the list.  If anarchy_mode is set, then also add anarchy-only missions.
 
-mle *build_mission_list(int anarchy_mode)
+mle* build_mission_list(int anarchy_mode)
 {
-	mle *mission_list;
+	mle* mission_list;
 	int top_place;
 	char	search_str[PATH_MAX] = MISSION_DIR;
 
@@ -480,10 +473,10 @@ mle *build_mission_list(int anarchy_mode)
 
 	MALLOC(mission_list, mle, MAX_MISSIONS);
 	num_missions = 0;
-	
+
 	add_d1_builtin_mission_to_list(mission_list + num_missions);
 	add_missions_to_list(mission_list, search_str, search_str + strlen(search_str), anarchy_mode);
-	
+
 	// move original missions (in story-chronological order)
 	// to top of mission list
 	top_place = 0;
@@ -491,48 +484,48 @@ mle *build_mission_list(int anarchy_mode)
 
 	if (num_missions > top_place)
 		qsort(&mission_list[top_place],
-		      num_missions - top_place,
-		      sizeof(*mission_list),
- 				(int (*)( const void *, const void * ))ml_sort_func);
+			num_missions - top_place,
+			sizeof(*mission_list),
+			(int (*)(const void*, const void*))ml_sort_func);
 
 
 	if (num_missions > top_place)
 		qsort(&mission_list[top_place],
-		      num_missions - top_place,
-		      sizeof(*mission_list),
-		      (int (*)( const void *, const void * ))ml_sort_func);
+			num_missions - top_place,
+			sizeof(*mission_list),
+			(int (*)(const void*, const void*))ml_sort_func);
 
 	return mission_list;
 }
 
-void free_mission_list(mle *mission_list)
+void free_mission_list(mle* mission_list)
 {
 	int i;
 
 	for (i = 0; i < num_missions; i++)
 		d_free(mission_list[i].path);
-	
+
 	d_free(mission_list);
 	num_missions = 0;
 }
 
-void init_extra_robot_movie(char *filename);
+void init_extra_robot_movie(char* filename);
 
 //values for built-in mission
 
 //loads the specfied mission from the mission list.
 //build_mission_list() must have been called.
 //Returns true if mission loaded ok, else false.
-int load_mission(mle *mission)
+int load_mission(mle* mission)
 {
-	PHYSFS_file *mfile;
-	char buf[PATH_MAX], *v;
+	PHYSFS_file* mfile;
+	char buf[PATH_MAX], * v;
 
 	if (Current_mission)
 		free_mission();
 	Current_mission = d_malloc(sizeof(Mission));
 	if (!Current_mission) return 0;
-	*(mle *) Current_mission = *mission;
+	*(mle*)Current_mission = *mission;
 	Current_mission->path = d_strdup(mission->path);
 	Current_mission->filename = Current_mission->path + (mission->filename - mission->path);
 	Current_mission->n_secret_levels = 0;
@@ -556,16 +549,16 @@ int load_mission(mle *mission)
 
 	switch (mission->location) {
 	case ML_MISSIONDIR:
-		strcpy(buf,MISSION_DIR);
+		strcpy(buf, MISSION_DIR);
 		break;
 	default:
 		Int3();							//fall through
 	case ML_CURDIR:
-		strcpy(buf,"");
+		strcpy(buf, "");
 		break;
 	}
 	strcat(buf, mission->path);
-	strcat(buf,".msn");
+	strcat(buf, ".msn");
 
 	PHYSFSEXT_locateCorrectCase(buf);
 
@@ -576,81 +569,81 @@ int load_mission(mle *mission)
 	}
 
 	//for non-builtin missions, load HOG
-	strcpy(buf+strlen(buf)-4,".hog");		//change extension
+	strcpy(buf + strlen(buf) - 4, ".hog");		//change extension
 	PHYSFSEXT_locateCorrectCase(buf);
-	if (PHYSFSX_exists(buf,1))
+	if (PHYSFSX_exists(buf, 1))
 		PHYSFSX_contfile_init(buf, 0);
 
-	snprintf(Briefing_text_filename, sizeof(Briefing_text_filename), "%s.tex",Current_mission_filename);
-	if (!PHYSFSX_exists(Briefing_text_filename,1))
-		snprintf(Briefing_text_filename, sizeof(Briefing_text_filename), "%s.txb",Current_mission_filename);
-	snprintf(Ending_text_filename, sizeof(Ending_text_filename), "%s.tex",Current_mission_filename);
-	if (!PHYSFSX_exists(Ending_text_filename,1))
-		snprintf(Ending_text_filename, sizeof(Ending_text_filename), "%s.txb",Current_mission_filename);
+	snprintf(Briefing_text_filename, sizeof(Briefing_text_filename), "%s.tex", Current_mission_filename);
+	if (!PHYSFSX_exists(Briefing_text_filename, 1))
+		snprintf(Briefing_text_filename, sizeof(Briefing_text_filename), "%s.txb", Current_mission_filename);
+	snprintf(Ending_text_filename, sizeof(Ending_text_filename), "%s.tex", Current_mission_filename);
+	if (!PHYSFSX_exists(Ending_text_filename, 1))
+		snprintf(Ending_text_filename, sizeof(Ending_text_filename), "%s.txb", Current_mission_filename);
 
-	while (PHYSFSX_fgets(buf,sizeof(buf),mfile)) {
-		if (istok(buf,"type"))
+	while (PHYSFSX_fgets(buf, sizeof(buf), mfile)) {
+		if (istok(buf, "type"))
 			continue;						//already have name, go to next line
-		else if (istok(buf,"briefing")) {
+		else if (istok(buf, "briefing")) {
 			if ((v = get_value(buf)) != NULL) {
 				add_term(v);
 				if (strlen(v) < FILENAME_LEN && strlen(v) > 0)
 				{
-					char *tmp, *ptr;
+					char* tmp, * ptr;
 					MALLOC(tmp, char, FILENAME_LEN);
 					snprintf(tmp, FILENAME_LEN, "%s", v);
 					if ((ptr = strrchr(tmp, '.'))) // if there's a filename extension, kill it. No one knows it's the right one.
 						*ptr = '\0';
-					strncat(tmp, ".tex", sizeof(char)*FILENAME_LEN); // apply tex-extenstion
-					if (PHYSFSX_exists(tmp,1)) // check if this file exists ...
+					strncat(tmp, ".tex", sizeof(char) * FILENAME_LEN); // apply tex-extenstion
+					if (PHYSFSX_exists(tmp, 1)) // check if this file exists ...
 						snprintf(Briefing_text_filename, FILENAME_LEN, "%s", tmp); // ... and apply ...
 					else // ... otherwise ...
 					{
 						if ((ptr = strrchr(tmp, '.')))
 							*ptr = '\0';
-						strncat(tmp, ".txb", sizeof(char)*FILENAME_LEN); // apply txb extension
-						if (PHYSFSX_exists(tmp,1)) // check if this file exists ...
+						strncat(tmp, ".txb", sizeof(char) * FILENAME_LEN); // apply txb extension
+						if (PHYSFSX_exists(tmp, 1)) // check if this file exists ...
 							snprintf(Briefing_text_filename, FILENAME_LEN, "%s", tmp); // ... and apply ...
 					}
 					d_free(tmp);
 				}
 			}
 		}
-		else if (istok(buf,"ending")) {
+		else if (istok(buf, "ending")) {
 			if ((v = get_value(buf)) != NULL) {
 				add_term(v);
 				if (strlen(v) < FILENAME_LEN && strlen(v) > 0)
 				{
-					char *tmp, *ptr;
+					char* tmp, * ptr;
 					MALLOC(tmp, char, FILENAME_LEN);
 					snprintf(tmp, FILENAME_LEN, "%s", v);
 					if ((ptr = strrchr(tmp, '.'))) // if there's a filename extension, kill it. No one knows it's the right one.
 						*ptr = '\0';
-					strncat(tmp, ".tex", sizeof(char)*FILENAME_LEN); // apply tex-extenstion
-					if (PHYSFSX_exists(tmp,1)) // check if this file exists ...
+					strncat(tmp, ".tex", sizeof(char) * FILENAME_LEN); // apply tex-extenstion
+					if (PHYSFSX_exists(tmp, 1)) // check if this file exists ...
 						snprintf(Briefing_text_filename, FILENAME_LEN, "%s", tmp); // ... and apply ...
 					else // ... otherwise ...
 					{
 						if ((ptr = strrchr(tmp, '.')))
 							*ptr = '\0';
-						strncat(tmp, ".txb", sizeof(char)*FILENAME_LEN); // apply txb extension
-						if (PHYSFSX_exists(tmp,1)) // check if this file exists ...
+						strncat(tmp, ".txb", sizeof(char) * FILENAME_LEN); // apply txb extension
+						if (PHYSFSX_exists(tmp, 1)) // check if this file exists ...
 							snprintf(Ending_text_filename, FILENAME_LEN, "%s", tmp); // ... and apply ...
 					}
 					d_free(tmp);
 				}
 			}
 		}
-		else if (istok(buf,"num_levels")) {
+		else if (istok(buf, "num_levels")) {
 
-			if ((v=get_value(buf))!=NULL) {
-				int n_levels,i;
+			if ((v = get_value(buf)) != NULL) {
+				int n_levels, i;
 
 				n_levels = atoi(v);
-				
+
 				Assert(n_levels <= MAX_LEVELS_PER_MISSION);
 				n_levels = min(n_levels, MAX_LEVELS_PER_MISSION);
-				
+
 				MALLOC(Level_names, d_fname, n_levels);
 				if (!Level_names)
 				{
@@ -658,11 +651,11 @@ int load_mission(mle *mission)
 					return 0;
 				}
 
-				for (i=0;i<n_levels;i++) {
-					PHYSFSX_fgets(buf,sizeof(buf),mfile);
+				for (i = 0; i < n_levels; i++) {
+					PHYSFSX_fgets(buf, sizeof(buf), mfile);
 					add_term(buf);
 					if (strlen(buf) <= 12) {
-						strcpy(Level_names[i],buf);
+						strcpy(Level_names[i], buf);
 						Last_level++;
 					}
 					else
@@ -671,8 +664,8 @@ int load_mission(mle *mission)
 
 			}
 		}
-		else if (istok(buf,"num_secrets")) {
-			if ((v=get_value(buf))!=NULL) {
+		else if (istok(buf, "num_secrets")) {
+			if ((v = get_value(buf)) != NULL) {
 				int i;
 
 				N_secret_levels = atoi(v);
@@ -686,25 +679,25 @@ int load_mission(mle *mission)
 					free_mission();
 					return 0;
 				}
-				
+
 				MALLOC(Secret_level_table, ubyte, N_secret_levels);
 				if (!Secret_level_table)
 				{
 					free_mission();
 					return 0;
 				}
-				
-				for (i=0;i<N_secret_levels;i++) {
-					char *t;
 
-					PHYSFSX_fgets(buf,sizeof(buf),mfile);
-					if ((t=strchr(buf,','))!=NULL) *t++=0;
+				for (i = 0; i < N_secret_levels; i++) {
+					char* t;
+
+					PHYSFSX_fgets(buf, sizeof(buf), mfile);
+					if ((t = strchr(buf, ',')) != NULL) *t++ = 0;
 					else
 						break;
 
 					add_term(buf);
 					if (strlen(buf) <= 12) {
-						strcpy(Secret_level_names[i],buf);
+						strcpy(Secret_level_names[i], buf);
 						Secret_level_table[i] = atoi(t);
 						if (Secret_level_table[i]<1 || Secret_level_table[i]>Last_level)
 							break;
@@ -731,10 +724,10 @@ int load_mission(mle *mission)
 
 //loads the named mission if exists.
 //Returns true if mission loaded ok, else false.
-int load_mission_by_name(char *mission_name)
+int load_mission_by_name(char* mission_name)
 {
 	int i;
-	mle *mission_list = build_mission_list(1);
+	mle* mission_list = build_mission_list(1);
 	bool found = 0;
 
 	for (i = 0; i < num_missions; i++)
@@ -745,73 +738,119 @@ int load_mission_by_name(char *mission_name)
 	return found;
 }
 
+int load_mission_by_name_aggregate(mle* mission_list) // Version of load_mission_by_name used to generate aggregate ranks for missions. The original function works, but loads missions^2 MSN files, causing massive load times.
+{
+	int i;
+	bool found = 0;
+	int rankPoints;
+	int currentRank;
+	for (i = 0; i < num_missions; i++) {
+		//if (!d_stricmp(mission_name, mission_list[i].filename))
+		found = load_mission(mission_list + i);
+		rankPoints = 0;
+		for (int c = 1; c <= Current_mission->last_level - Current_mission->last_secret_level; c++) {
+			currentRank = calculateRank(c);
+			if (currentRank > 0)
+				rankPoints += currentRank;
+			else {
+				rankPoints = 0; // We found an N/A somewhere, don't return an aggregate rank.
+				continue;
+			}
+		}
+		// If all levels in the current mission are completed, an aggregate rank set here will show next to it.
+		if (PlayerCfg.RankShowPlusMinus)
+			Ranking.missionRanks[i] = rankPoints / (Current_mission->last_level - Current_mission->last_secret_level);
+		else
+			Ranking.missionRanks[i] = truncateRanks(rankPoints / (Current_mission->last_level - Current_mission->last_secret_level));
+	}
+	return found;
+}
+
 typedef struct mission_menu
 {
-	mle *mission_list;
+	mle* mission_list;
 	int (*when_selected)(void);
 } mission_menu;
 
-int mission_menu_handler(listbox *lb, d_event *event, mission_menu *mm)
+struct listbox
 {
-	char **list = listbox_get_items(lb);
+	window * wind;
+	char* title;
+	int nitems;
+	char** item;
+	int allow_abort_flag;
+	int (*listbox_callback)(listbox* lb, d_event* event, void* userdata);
+	int citem, first_item;
+	int marquee_maxchars, marquee_charpos, marquee_scrollback;
+	fix64 marquee_lasttime; // to scroll text if string does not fit in box
+	int box_w, height, box_x, box_y, title_height;
+	short swidth, sheight; float fntscalex, fntscaley; // with these we check if
+	int mouse_state;
+	void* userdata;
+};
+
+int mission_menu_handler(listbox* lb, d_event* event, mission_menu* mm)
+{
+	char** list = listbox_get_items(lb);
 	int citem = listbox_get_citem(lb);
 
 	switch (event->type)
 	{
-		case EVENT_NEWMENU_SELECTED:
-			if (citem >= 0)
+	case EVENT_NEWMENU_SELECTED:
+		if (citem >= 0)
+		{
+			// Chose a mission
+			strcpy(GameCfg.LastMission, list[citem]);
+			if (!load_mission(mm->mission_list + citem))
 			{
-				// Chose a mission
-				strcpy(GameCfg.LastMission, list[citem]);
-				
-				if (!load_mission(mm->mission_list + citem))
-				{
-					nm_messagebox( NULL, 1, TXT_OK, TXT_MISSION_ERROR);
-					return 1;	// stay in listbox so user can select another one
-				}
+				nm_messagebox(NULL, 1, TXT_OK, TXT_MISSION_ERROR);
+				return 1;	// stay in listbox so user can select another one
 			}
-			return !(*mm->when_selected)();
-			break;
+		}
+		return !(*mm->when_selected)();
+		break;
+		
+	case EVENT_WINDOW_CLOSE:
+		free_mission_list(mm->mission_list);
+		d_free(list);
+		d_free(mm);
+		break;
 
-		case EVENT_WINDOW_CLOSE:
-			free_mission_list(mm->mission_list);
-			d_free(list);
-			d_free(mm);
-			break;
-			
-		default:
-			break;
+	case EVENT_WINDOW_DRAW:
+		if (Ranking.fromBestRanksButton)
+			return drawSmallRankImages(Ranking.missionRanks, lb);
+	default:
+		break;
 	}
-	
+
 	return 0;
 }
 
-int select_mission(int anarchy_mode, char *message, int (*when_selected)(void))
+int select_mission(int anarchy_mode, char* message, int (*when_selected)(void))
 {
-    mle *mission_list = build_mission_list(anarchy_mode);
+	mle* mission_list = build_mission_list(anarchy_mode);
 	int new_mission_num;
-
-    if (num_missions <= 1)
+	char** m;
+	char** paddedNames = malloc(num_missions * sizeof(char*));
+	if (num_missions <= 1)
 	{
-        new_mission_num = load_mission(mission_list) ? 0 : -1;
+		new_mission_num = load_mission(mission_list) ? 0 : -1;
 		free_mission_list(mission_list);
 		(*when_selected)();
-		
 		return (new_mission_num >= 0);
-    }
+	}
 	else
 	{
-		mission_menu *mm;
-        int i, default_mission;
-        char **m;
-		
-		MALLOC(m, char *, num_missions);
+		mission_menu* mm;
+		int i, default_mission;
+
+		MALLOC(m, char*, num_missions);
 		if (!m)
 		{
 			free_mission_list(mission_list);
 			return 0;
 		}
-		
+
 		MALLOC(mm, mission_menu, 1);
 		if (!mm)
 		{
@@ -819,21 +858,32 @@ int select_mission(int anarchy_mode, char *message, int (*when_selected)(void))
 			free_mission_list(mission_list);
 			return 0;
 		}
-
+		
 		mm->mission_list = mission_list;
 		mm->when_selected = when_selected;
-		
-        default_mission = 0;
-        for (i = 0; i < num_missions; i++) {
-            m[i] = mission_list[i].mission_name;
-            if ( !d_stricmp( m[i], GameCfg.LastMission ) )
-                default_mission = i;
-        }
+		default_mission = 0;
+		for (i = 0; i < num_missions; i++) {
+			m[i] = mission_list[i].mission_name;
+			//if (Ranking.fromBestRanksButton) {
+				//paddedNames[i] = malloc(strlen(mission_list[i].mission_name) + 5);
+				//strcpy(paddedNames[i], mission_list[i].mission_name);
+				//strcat(paddedNames[i], "    ");
+				//m[i] = paddedNames[i];
+			//}
+			//else
+				//m[i] = mission_list[i].mission_name;
+			if (!d_stricmp(m[i], GameCfg.LastMission))
+				default_mission = i;
+		}
+		newmenu_listbox1(message , num_missions, m, 1, default_mission, (int (*)(listbox*, d_event*, void*))mission_menu_handler, mm);
+	}
+	if (Ranking.fromBestRanksButton)
+		load_mission_by_name_aggregate(mission_list); // Load the mission list so we can access how many levels they all have.
+	//for (int i = 0; i < num_missions; i++)
+		//free(paddedNames[i]);
+	//free(paddedNames);
 
-        newmenu_listbox1( message, num_missions, m, 1, default_mission, (int (*)(listbox *, d_event *, void *))mission_menu_handler, mm );
-    }
-
-    return 1;	// presume success
+	return 1;	// presume success
 }
 
 #ifdef EDITOR
@@ -841,12 +891,12 @@ void create_new_mission(void)
 {
 	if (Current_mission)
 		free_mission();
-	
+
 	Current_mission = d_malloc(sizeof(Mission));
 	if (!Current_mission)
 		return;
 	memset(Current_mission, 0, sizeof(Mission));
-	
+
 	Current_mission->path = d_strdup("new_mission");
 	if (!Current_mission->path)
 	{
@@ -855,7 +905,7 @@ void create_new_mission(void)
 	}
 
 	Current_mission->filename = Current_mission->path;
-	
+
 	MALLOC(Level_names, d_fname, 1);
 	if (!Level_names)
 	{

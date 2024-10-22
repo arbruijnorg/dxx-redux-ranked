@@ -57,6 +57,7 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "byteswap.h"
 #include "multi.h"
 #include "makesig.h"
+#include "player.h"
 
 char Gamesave_current_filename[PATH_MAX];
 
@@ -538,7 +539,7 @@ void read_object(object *obj,PHYSFS_file *f,int version)
 			Int3();
 
 	}
-
+	obj->matcen_creator = 0;
 }
 
 #ifdef EDITOR

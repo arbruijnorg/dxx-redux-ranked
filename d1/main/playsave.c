@@ -89,7 +89,7 @@ int new_player_config()
     PlayerCfg.MouseOverrun[0] = PlayerCfg.MouseOverrun[1] = PlayerCfg.MouseOverrun[2] = PlayerCfg.MouseOverrun[3] = PlayerCfg.MouseOverrun[4] = PlayerCfg.MouseOverrun[5] = 0;
 	PlayerCfg.MouseFSDead = 0;
 	PlayerCfg.MouseFSIndicator = 1;
-	PlayerCfg.CurrentCockpitMode = PlayerCfg.PreferredCockpitMode = CM_FULL_COCKPIT;
+	PlayerCfg.PreferredCockpitMode = PlayerCfg.CurrentCockpitMode = CM_FULL_COCKPIT;
 	PlayerCfg.ReticleType = RET_TYPE_CLASSIC;
 	PlayerCfg.ReticleRGBA[0] = RET_COLOR_DEFAULT_R; PlayerCfg.ReticleRGBA[1] = RET_COLOR_DEFAULT_G; PlayerCfg.ReticleRGBA[2] = RET_COLOR_DEFAULT_B; PlayerCfg.ReticleRGBA[3] = RET_COLOR_DEFAULT_A;
 	PlayerCfg.ReticleSize = 0;
@@ -121,6 +121,7 @@ int new_player_config()
 	PlayerCfg.MyTeamColor = 8;
 	PlayerCfg.OtherTeamColor = 8;
 	PlayerCfg.ObsShareSettings = 1;
+	PlayerCfg.RankShowPlusMinus = 1;
 	for (int obs_mode = 0; obs_mode < NUM_OBS_MODES; obs_mode++) {
 		PlayerCfg.ObsTurbo[obs_mode] = 0;
 		PlayerCfg.ObsShowCockpit[obs_mode] = 1;
@@ -380,7 +381,7 @@ int read_player_d1x(char *filename)
 			while(!strstr(word,"END") && !PHYSFS_eof(f))
 			{
 				if(!strcmp(word,"MODE"))
-					PlayerCfg.CurrentCockpitMode = PlayerCfg.PreferredCockpitMode = atoi(line);
+					PlayerCfg.PreferredCockpitMode = PlayerCfg.CurrentCockpitMode = atoi(line);
 				else if(!strcmp(word,"HUD"))
 					PlayerCfg.HudMode = atoi(line);
 				else if(!strcmp(word,"RETTYPE"))
@@ -448,6 +449,8 @@ int read_player_d1x(char *filename)
 					PlayerCfg.MyTeamColor = atoi(line);
 				if (!strcmp(word, "OTHERTEAMCOLOR"))
 					PlayerCfg.OtherTeamColor = atoi(line);
+				if (!strcmp(word, "RANKSHOWPLUSMINUS"))
+					PlayerCfg.RankShowPlusMinus = atoi(line);
 				//if(!strcmp(word,"QUIETPLASMA"))
 				//	PlayerCfg.QuietPlasma = atoi(line);
 				if(!strcmp(word,"MAXFPS")) {
@@ -906,6 +909,7 @@ int write_player_d1x(char *filename)
 		//PHYSFSX_printf(fout,"quietplasma=%i\n",PlayerCfg.QuietPlasma);	
 		PHYSFSX_printf(fout,"maxfps=%i\n",PlayerCfg.maxFps);	
 		PHYSFSX_printf(fout,"nochatsound=%i\n",PlayerCfg.NoChatSound);
+		PHYSFSX_printf(fout, "rankshowplusminus=%i\n", PlayerCfg.RankShowPlusMinus);
 		PHYSFSX_printf(fout,"[end]\n");
 		PHYSFSX_printf(fout, "[observer]\n");
 		PHYSFSX_printf(fout, "obssharesettings=%i\n", PlayerCfg.ObsShareSettings);

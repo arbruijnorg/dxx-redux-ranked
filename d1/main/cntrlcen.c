@@ -31,6 +31,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "robot.h"
 #include "endlevel.h"
 #include "byteswap.h"
+#include "player.h"
 
 reactor Reactors[MAX_REACTORS];
 
@@ -51,6 +52,7 @@ void calc_controlcen_gun_point(reactor *reactor, object *obj,int gun_num)
 	vms_vector *gun_point = &obj->ctype.reactor_info.gun_pos[gun_num];
 	vms_vector *gun_dir = &obj->ctype.reactor_info.gun_dir[gun_num];
 
+	if(obj->type == OBJ_GHOST) return; // I carried over a patch from D2 that prevents a crash when loading saves on boss levels.
 	Assert(obj->type == OBJ_CNTRLCEN);
 	Assert(obj->render_type==RT_POLYOBJ);
 
@@ -195,6 +197,9 @@ void do_countdown_frame()
 			reset_palette_add();							//restore palette for death message
 			//controlcen->MaxCapacity = Fuelcen_max_amount;
 			//gauge_message( "Control Center Reset" );
+			if (!Player_is_dead)
+				Ranking.deathCount++;
+			Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
 			DoPlayerDead();		//kill_player();
 		}																				
 	}

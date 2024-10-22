@@ -143,6 +143,7 @@ int new_player_config()
 	PlayerCfg.MyTeamColor = 8;
 	PlayerCfg.OtherTeamColor = 8;
 	PlayerCfg.ObsShareSettings = 1;
+	PlayerCfg.RankShowPlusMinus = 1;
 	for (int obs_mode = 0; obs_mode < NUM_OBS_MODES; obs_mode++) {
 		PlayerCfg.ObsTurbo[obs_mode] = 0;
 		PlayerCfg.ObsShowCockpit[obs_mode] = 1;
@@ -419,6 +420,8 @@ int read_player_d2x(char *filename)
 					PlayerCfg.MyTeamColor = atoi(line);
 				if (!strcmp(word, "OTHERTEAMCOLOR"))
 					PlayerCfg.OtherTeamColor = atoi(line);
+				if (!strcmp(word, "RANKSHOWPLUSMINUS"))
+					PlayerCfg.RankShowPlusMinus = atoi(line);
 				//if(!strcmp(word,"QUIETPLASMA"))
 				//	PlayerCfg.QuietPlasma = atoi(line);
 				if(!strcmp(word,"MAXFPS")) {
@@ -692,6 +695,7 @@ int write_player_d2x(char *filename)
 		//PHYSFSX_printf(fout,"quietplasma=%i\n",PlayerCfg.QuietPlasma);	
 		PHYSFSX_printf(fout,"maxfps=%i\n",PlayerCfg.maxFps);	
 		PHYSFSX_printf(fout,"nochatsound=%i\n",PlayerCfg.NoChatSound);
+		PHYSFSX_printf(fout, "rankshowplusminus=%i\n", PlayerCfg.RankShowPlusMinus);
 		PHYSFSX_printf(fout,"[end]\n");
 		PHYSFSX_printf(fout, "[observer]\n");
 		PHYSFSX_printf(fout, "obssharesettings=%i\n", PlayerCfg.ObsShareSettings);

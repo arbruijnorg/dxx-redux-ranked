@@ -193,8 +193,8 @@ void init_cockpit()
 		PlayerCfg.CurrentCockpitMode = CM_FULL_SCREEN;
 
 #ifndef OGL
-	if ( Game_screen_mode != (GameArg.GfxHiresGFXAvailable? SM(640,480) : SM(320,200)) && PlayerCfg.CurrentCockpitMode != CM_LETTERBOX) {
-		PlayerCfg.CurrentCockpitMode = CM_FULL_SCREEN;
+	if ( Game_screen_mode != (GameArg.GfxHiresGFXAvailable? SM(640,480) : SM(320,200)) && PlayerCfg.CockpitMode[1] != CM_LETTERBOX) {
+		PlayerCfg.CockpitMode[1] = CM_FULL_SCREEN;
 	}
 #endif
 
@@ -990,7 +990,7 @@ void check_rear_view()
 
 		if (Rear_view) {
 			Rear_view = 0;
-			if (PlayerCfg.CurrentCockpitMode==CM_REAR_VIEW) {
+			if (PlayerCfg.CurrentCockpitMode == CM_REAR_VIEW) {
 				select_cockpit(PlayerCfg.PreferredCockpitMode);
 			}
 			if (Newdemo_state == ND_STATE_RECORDING)
@@ -1020,7 +1020,7 @@ void check_rear_view()
 		{
 			if (leave_mode==1 && Rear_view) {
 				Rear_view = 0;
-				if (PlayerCfg.CurrentCockpitMode==CM_REAR_VIEW) {
+				if (PlayerCfg.CurrentCockpitMode == CM_REAR_VIEW) {
 					select_cockpit(PlayerCfg.PreferredCockpitMode);
 				}
 				if (Newdemo_state == ND_STATE_RECORDING)

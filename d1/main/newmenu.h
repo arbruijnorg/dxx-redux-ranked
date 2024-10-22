@@ -141,6 +141,7 @@ extern const char *Newmenu_allowed_chars;
 extern char **listbox_get_items(listbox *lb);
 extern int listbox_get_nitems(listbox *lb);
 extern int listbox_get_citem(listbox *lb);
+extern int listbox_get_first_item(listbox* lb);
 struct window *listbox_get_window(listbox *lb);
 extern void listbox_delete_item(listbox *lb, int item);
 

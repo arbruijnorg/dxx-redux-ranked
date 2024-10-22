@@ -57,6 +57,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "textures.h"
 #include "multi.h"
 #include "makesig.h"
+#include "player.h"
 
 #ifndef NDEBUG
 void dump_mine_info(void);
@@ -547,7 +548,7 @@ void read_object(object *obj,PHYSFS_file *f,int version)
 			Int3();
 
 	}
-
+	obj->matcen_creator = 0;
 }
 
 #ifdef EDITOR

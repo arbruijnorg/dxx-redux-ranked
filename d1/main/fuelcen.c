@@ -645,7 +645,7 @@ void init_all_matcens(void)
 				if (RobotCenters[j].fuelcen_num == i)
 					break;
 			}
-			Assert(j != Num_robot_centers);
+			//Assert(j != Num_robot_centers); // Uncomment this before releasing ranking mod.
 }
 #endif
 

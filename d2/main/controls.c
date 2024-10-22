@@ -131,18 +131,18 @@ void read_flying_controls( object * obj )
 				int old_count,new_count;
 	
 				//add in value from 0..1
-				afterburner_scale = f1_0 + min(f1_0/2, Players[Player_num].afterburner_charge) * 2;
+				afterburner_scale = f1_0 + min(f1_0 / 2, Players[Player_num].afterburner_charge) * 2;
 	
 				forward_thrust_time = fixmul(FrameTime,afterburner_scale);	//based on full thrust
 	
-				old_count = (Players[Player_num].afterburner_charge / (DROP_DELTA_TIME/AFTERBURNER_USE_SECS));
+				old_count = (Players[Player_num].afterburner_charge / (DROP_DELTA_TIME / AFTERBURNER_USE_SECS));
 
-				Players[Player_num].afterburner_charge -= FrameTime/AFTERBURNER_USE_SECS;
+				Players[Player_num].afterburner_charge -= FrameTime / AFTERBURNER_USE_SECS;
 
 				if (Players[Player_num].afterburner_charge < 0)
 					Players[Player_num].afterburner_charge = 0;
 
-				new_count = (Players[Player_num].afterburner_charge / (DROP_DELTA_TIME/AFTERBURNER_USE_SECS));
+				new_count = (Players[Player_num].afterburner_charge / (DROP_DELTA_TIME / AFTERBURNER_USE_SECS));
 
 				if (old_count != new_count) {
 					Drop_afterburner_blob_flag = 1;	//drop blob (after physics called)
@@ -156,7 +156,7 @@ void read_flying_controls( object * obj )
 			fix cur_energy,charge_up;
 	
 			//charge up to full
-			charge_up = min(FrameTime/8,f1_0 - Players[Player_num].afterburner_charge);	//recharge over 8 seconds
+			charge_up = min(FrameTime / 8, f1_0 - Players[Player_num].afterburner_charge);	//recharge over 8 seconds
 	
 			cur_energy = max(Players[Player_num].energy-i2f(10),0);	//don't drop below 10
 

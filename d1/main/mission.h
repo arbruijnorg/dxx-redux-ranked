@@ -62,6 +62,16 @@ typedef struct {
 	d_fname	*secret_level_names;
 } Mission;
 
+//mission list entry
+typedef struct mle {
+	char* filename;          // filename without extension
+	int     builtin_hogsize;    // if it's the built-in mission, used for determining the version
+	char    mission_name[MISSION_NAME_LEN + 1];
+	ubyte   anarchy_only_flag;  // if true, mission is anarchy only
+	char* path;				// relative file path
+	enum mle_loc	location;           // where the mission is
+} mle;
+
 extern Mission *Current_mission; // current mission
 
 #define Current_mission_longname	Current_mission->mission_name
@@ -89,6 +99,7 @@ extern Mission *Current_mission; // current mission
 //loads the named mission if it exists.
 //Returns true if mission loaded ok, else false.
 int load_mission_by_name (char *mission_name);
+int load_mission_by_name_aggregate (mle* mission_list);
 
 //Handles creating and selecting from the mission list.
 //Returns 1 if a mission was loaded.

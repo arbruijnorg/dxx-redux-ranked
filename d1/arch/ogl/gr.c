@@ -423,6 +423,7 @@ int ogl_init_window(int x, int y)
 	glewInit();
 #ifdef OGL_MERGE
 	ogl_init_prog();
+	loadRankImages();
 #endif
 
 	linedotscale = ((x/640<y/480?x/640:y/480)<1?1:(x/640<y/480?x/640:y/480));
@@ -479,6 +480,7 @@ int gr_toggle_fullscreen(void)
 		ogl_smash_texture_list_internal();//if we are or were fullscreen, changing vid mode will invalidate current textures
 #ifdef OGL_MERGE
 		ogl_init_prog();
+		loadRankImages();
 #endif
 	}
 	GameCfg.WindowMode = (sdl_video_flags & SDL_FULLSCREEN)?0:1;
@@ -728,8 +730,10 @@ void gr_set_attributes(void)
 #endif
 	ogl_smash_texture_list_internal();
 #ifdef OGL_MERGE
-	if (gl_initialized)
+	if (gl_initialized) {
 		ogl_init_prog();
+		loadRankImages();
+	}
 #endif
 }
 

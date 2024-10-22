@@ -53,7 +53,7 @@ class CFloatMatrix;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 /**
- * \class CFixVector
+  * \class CFixVector
  * A 3 element fixed-point vector.
  */
 class __xpack__ CFixVector {
@@ -182,7 +182,7 @@ class __xpack__ CFixVector {
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 /**
- * \class CFloatVector
+  * \class CFloatVector
  * A 4 element floating point vector class
  */
 class CFloatVector {

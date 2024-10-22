@@ -138,9 +138,6 @@ void powerup_basic(int redadd, int greenadd, int blueadd, int score, const char 
 
 	if (!(Game_mode & GM_MULTI) || !Netgame.ReducedFlash)
 		PALETTE_FLASH_ADD(redadd,greenadd,blueadd);
-
-	add_points_to_score(score);
-
 }
 
 //#ifndef RELEASE

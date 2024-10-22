@@ -1584,7 +1584,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum)
 	//	The mighty console object can open all doors (for purposes of determining paths).
 	if (objp == ConsoleObject) {
 
-		if (Walls[wall_num].type == WALL_DOOR)
+		if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE)
 			return 1;
 	}
 
