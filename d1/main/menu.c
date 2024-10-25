@@ -233,7 +233,7 @@ int ranks_menu_keycommand(listbox* lb, d_event* event)
 				sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
 			if (PHYSFS_exists(filename)) {
 				PHYSFS_delete(filename);
-				nm_messagebox(NULL, 1, "Ok", "Record deleted.\nRefresh level list to update.");
+				do_best_ranks_menu();
 			}
 		}
 	}
@@ -610,14 +610,27 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 		return ranks_menu_keycommand(lb, event);
 		break;
 	case EVENT_NEWMENU_SELECTED:
+		Ranking.lastSelectedItem = citem;
 		Players[Player_num].lives = 3;
 		Difficulty_level = PlayerCfg.DefaultDifficulty;
-		if (!do_difficulty_menu())
-			return 1;
-		if (citem < Current_mission->last_level)
-			StartNewGame(citem + 1);
-		else
-			StartNewGame(Current_mission->last_level - citem - 1);
+		if (citem < Current_mission->last_level) {
+			if (calculateRank(citem + 1))
+				DoBestRanksScoreGlitz(citem + 1);
+			else {
+				if (!do_difficulty_menu())
+					return 1;
+				StartNewGame(citem + 1);
+			}
+		}
+		else {
+			if (calculateRank(citem + 1))
+				DoBestRanksScoreGlitz(citem + 1);
+			else {
+				if (!do_difficulty_menu())
+					return 1;
+				StartNewGame(Current_mission->last_level - citem - 1);
+			}
+		}
 		break;
 	case EVENT_WINDOW_CLOSE:
 		break;
@@ -635,7 +648,7 @@ void do_best_ranks_menu()
 	int numlines = Current_mission->last_level - Current_mission->last_secret_level;
 	char** list = (char**)malloc(sizeof(char*) * numlines);
 	char message[256];
-	sprintf(message, "%s's %s records\n<Ctrl-D> deletes", Players[Player_num].callsign, Current_mission->mission_name);
+	sprintf(message, "%s's %s records\nSelect views details, <Ctrl-D> deletes", Players[Player_num].callsign, Current_mission->mission_name);
 	char filename[256];
 	char** items = (char**)malloc(sizeof(char*) * numlines);
 	int* ranks = (int*)malloc(sizeof(int) * numlines);
@@ -682,7 +695,9 @@ void do_best_ranks_menu()
 			PHYSFS_close(fp);
 		}
 	}
-	listbox* lb = newmenu_listbox1(message, numlines, list, 1, 0, (int (*)(listbox*, d_event*, void*))ranks_menu_handler, ranks);
+	if (Ranking.lastSelectedItem > numlines - 1)
+		Ranking.lastSelectedItem = 0; // Reset this if the levels list is too short so the player can't be placed past the end of the listbox.
+	listbox* lb = newmenu_listbox1(message, numlines, list, 1, Ranking.lastSelectedItem, (int (*)(listbox*, d_event*, void*))ranks_menu_handler, ranks);
 	window* wind = listbox_get_window(lb);
 	while (window_exists(wind))
 		event_process();

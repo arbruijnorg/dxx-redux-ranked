@@ -1033,7 +1033,7 @@ int load_mission_by_name_aggregate(mle* mission_list) // Version of load_mission
 				rankPoints += currentRank;
 			else {
 				rankPoints = 0; // We found an N/A somewhere, don't return an aggregate rank.
-				continue;
+				break;
 			}
 		}
 		// If all levels in the current mission are completed, an aggregate rank set here will show next to it.
@@ -1050,6 +1050,7 @@ typedef struct mission_menu
 {
 	mle *mission_list;
 	int (*when_selected)(void);
+	char** paddedNames;
 } mission_menu;
 
 struct listbox
@@ -1091,7 +1092,10 @@ int mission_menu_handler(listbox* lb, d_event* event, mission_menu* mm)
 		break;
 
 	case EVENT_WINDOW_CLOSE:
-		//free_mission_list(mm->mission_list); // I'm pretty sure these are supposed to be here, but I get "freeing non-malloced pointer" warnings when they are, and I don't know if or where I should be mallocing things after aggregates got added.
+		free_mission_list(mm->mission_list);
+		for (int i = 0; i < num_missions; i++)
+			free(mm->paddedNames[i]);
+		free(mm->paddedNames);
 		d_free(list);
 		d_free(mm);
 		break;
@@ -1141,8 +1145,10 @@ int select_mission(int anarchy_mode, char* message, int (*when_selected)(void))
 
 		mm->mission_list = mission_list;
 		mm->when_selected = when_selected;
+		mm->paddedNames = paddedNames;
 		default_mission = 0;
 		for (i = 0; i < num_missions; i++) {
+			m[i] = mission_list[i].mission_name;
 			if (Ranking.fromBestRanksButton) {
 				paddedNames[i] = malloc(strlen(mission_list[i].mission_name) + 5);
 				strcpy(paddedNames[i], mission_list[i].mission_name);
@@ -1156,14 +1162,8 @@ int select_mission(int anarchy_mode, char* message, int (*when_selected)(void))
 		}
 		newmenu_listbox1(message, num_missions, m, 1, default_mission, (int (*)(listbox*, d_event*, void*))mission_menu_handler, mm);
 	}
-	if (Ranking.fromBestRanksButton) {
+	if (Ranking.fromBestRanksButton)
 		load_mission_by_name_aggregate(mission_list); // Load the mission list so we can access how many levels they all have.
-		free_mission_list(mission_list);
-		for (int i = 0; i < num_missions; i++) {
-			free(paddedNames[i]);
-		}
-		free(paddedNames);
-	}
 
 	return 1;	// presume success
 }

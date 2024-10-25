@@ -103,6 +103,8 @@ void editor_reset_stuff_on_level();
 
 // Show endlevel bonus scores
 extern void DoEndLevelScoreGlitz(int network);
+extern void DoEndSecretLevelScoreGlitz();
+extern void DoBestRanksScoreGlitz(int level_num);
 
 // stuff for multiplayer
 extern int NumNetPlayerPositions;

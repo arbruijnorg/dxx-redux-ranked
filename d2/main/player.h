@@ -139,7 +139,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  excludePoints;           // Number of points gotten from sources we want to not count toward rank calculation, but still contribute to vanilla score.
 	double  maxScore;				 // The current level's S-rank score.
 	double  level_time;              // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
-	double  quickload;				 // Whether the player has quickloaded into the current level.
+	int     quickload;				 // Whether the player has quickloaded into the current level.
 	double  parTime;                 // The algorithmically-generated required time for the current level.
 	double  freezeTimer;             // Tells normal levels' in-game timer whether it should be frozen or not.
 	double  calculatedScore;		 // Stores the score determined in calculateRank.
@@ -148,6 +148,8 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     alreadyBeaten;           // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
 	int     deleted;                 // Whether to tell the player their record file was deleted due to a level change.
 	int	    fromBestRanksButton;     // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
+	int     startingLevel;           // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
+	int     lastSelectedItem;        // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
 	int     missionRanks[5000];      // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
@@ -159,7 +161,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  secretlast_score;		  // Secret equivalent of Players[Player_num].last_score.
 	int		secret_hostages_on_board; // Since Players[Player_num].hostages_on_board carries over, and we don't want base level hostages' points counting for secret levels and vice versa.
 	double  secretDeathCount;         // We don't want starting a new base level to remove the secret level's death penalty, or vise versa, so increment this alongside deathCount, but only reset it upon starting a new secret level.
-	double  secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
+	int     secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
 	double  secretParTime;
 	double  hostages_secret_level;    // Secret equivalent of Players[Player_num].hostages_level.
 	double  secretMissedRngDrops;

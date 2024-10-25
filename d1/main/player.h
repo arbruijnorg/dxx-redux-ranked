@@ -130,13 +130,15 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double     maxScore;				           // The current level's S-rank score. Won't include hostage points until the result screen, to make calculation of other bonuses easier.
 	double     level_time;                         // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
 	double     parTime;                            // The algorithmically-generated required time for the current level.
-	double     quickload;				           // Whether the player has quickloaded into the current level.
+	int        quickload;				           // Whether the player has quickloaded into the current level.
 	double     calculatedScore;		               // Stores the score determined in calculateRank.
 	int        rank;					           // Stores the rank determined in calculateRank.
 	double     missedRngDrops;					   // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
 	int        alreadyBeaten;                      // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
 	int        deleted;                            // Whether to tell the player their record file was deleted due to a level change.
-	int		   fromBestRanksButton;                // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
+	int		   fromBestRanksButton;                // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
+	int        startingLevel;                      // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
+	int        lastSelectedItem;                   // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
 	int        missionRanks[5000];                 // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
 } __pack__ ranking;
 

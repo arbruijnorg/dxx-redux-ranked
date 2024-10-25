@@ -234,7 +234,7 @@ int ranks_menu_keycommand(listbox* lb, d_event* event)
 				sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
 			if (PHYSFS_exists(filename)) {
 				PHYSFS_delete(filename);
-				nm_messagebox(NULL, 1, "Ok", "Record deleted.\nRefresh level list to update.");
+				do_best_ranks_menu();
 			}
 		}
 	}
@@ -633,14 +633,26 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 		return ranks_menu_keycommand(lb, event);
 		break;
 	case EVENT_NEWMENU_SELECTED:
+		Ranking.lastSelectedItem = citem;
 		Players[Player_num].lives = 3;
 		Difficulty_level = PlayerCfg.DefaultDifficulty;
-		if (!do_difficulty_menu())
-			return 1;
-		if (citem < Current_mission->last_level)
-			StartNewGame(citem + 1);
-		else
-			StartNewGame(Current_mission->last_level - citem - 1);
+		if (citem < Current_mission->last_level) {
+			if (calculateRank(citem + 1))
+				DoBestRanksScoreGlitz(citem + 1);
+			else {
+				if (!do_difficulty_menu())
+					return 1;
+				StartNewGame(citem + 1);
+			}
+		}
+		else {
+			if (calculateRank(citem + 1))
+				DoBestRanksScoreGlitz(citem + 1);
+			else {
+				nm_messagebox(NULL, 1, "Ok", "Can't start on secret level!\nTry saving right before teleporter.");
+				return 1;
+			}
+		}
 		break;
 	case EVENT_WINDOW_CLOSE:
 		break;
@@ -721,7 +733,9 @@ void do_best_ranks_menu()
 			PHYSFS_close(fp);
 		}
 	}
-	listbox* lb = newmenu_listbox1(message, numlines, list, 1, 0, (int (*)(listbox*, d_event*, void*))ranks_menu_handler, ranks);
+	if (Ranking.lastSelectedItem > numlines - 1)
+		Ranking.lastSelectedItem = 0; // Reset this if the levels list is too short so the player can't be placed past the end of the listbox.
+	listbox* lb = newmenu_listbox1(message, numlines, list, 1, Ranking.lastSelectedItem, (int (*)(listbox*, d_event*, void*))ranks_menu_handler, ranks);
 	window* wind = listbox_get_window(lb);
 	while (window_exists(wind))
 		event_process();
@@ -737,6 +751,7 @@ int do_option ( int select)
 {
 	switch (select) {
 		case MENU_NEW_GAME:
+			Ranking.fromBestRanksButton = 0;
 			select_mission(0, "New Game\n\nSelect mission", do_new_game_menu);
 			break;
 		case MENU_GAME:
@@ -765,6 +780,7 @@ int do_option ( int select)
 			scores_view(NULL, -1);
 			break;
 		case MENU_VIEW_RANKS:
+			Ranking.fromBestRanksButton = 1;
 			select_mission(0, "Select mission", do_best_ranks_menu);
 			break;
 #if 1 //def SHAREWARE
@@ -785,6 +801,7 @@ int do_option ( int select)
 #ifdef USE_UDP
 		case MENU_START_UDP_NETGAME:
 			multi_protocol = MULTI_PROTO_UDP;
+			Ranking.fromBestRanksButton = 0;
 			select_mission(1, TXT_MULTI_MISSION, net_udp_setup_game);
 			break;
 		case MENU_JOIN_MANUAL_UDP_NETGAME:

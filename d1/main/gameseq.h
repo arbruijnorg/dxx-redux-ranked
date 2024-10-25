@@ -107,6 +107,7 @@ void editor_reset_stuff_on_level();
 
 // Show endlevel bonus scores
 extern void DoEndLevelScoreGlitz(int network);
+extern void DoBestRanksScoreGlitz(int level_num);
 
 // Calculate scores and ranks based on saved performance data
 extern int calculateRank(int level_num);

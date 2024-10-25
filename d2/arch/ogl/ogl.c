@@ -1998,6 +1998,7 @@ void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int filter_blueship_wing, 
 		png_data pdata;
 
 		sprintf(filename, /*"textures/"*/ "%s.png", bitmapname);
+		con_printf(CON_NORMAL, "Loading %s\n", filename);
 		if (read_png(filename, &pdata))
 		{
 			con_printf(CON_DEBUG, "%s: %ux%ux%i p=%i(%i) c=%i a=%i chans=%i\n", filename, pdata.width, pdata.height, pdata.depth, pdata.paletted, pdata.num_palette, pdata.color, pdata.alpha, pdata.channels);
