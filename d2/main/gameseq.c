@@ -132,6 +132,7 @@ int	N_players=1;	// Number of players ( >1 means a net game, eh?)
 int 	Player_num=0;	// The player number who is on the console.
 player	Players[MAX_PLAYERS+4];	// Misc player info
 ranking Ranking; // Ranking system mod variables.
+extern restartLevel RestartLevel;
 obj_position	Player_init[MAX_PLAYERS];
 
 // Global variables telling what sort of game we have
@@ -848,7 +849,7 @@ int calculateRank(int level_num)
 	double hostagePoints = 0;
 	double difficulty = 0;
 	int deathCount = 0;
-	double missedRngDrops = 0;
+	double missedrngspawn = 0;
 	double rankPoints2 = 0;
 	char buffer[256];
 	char filename[256];
@@ -879,7 +880,7 @@ int calculateRank(int level_num)
 			PHYSFSX_getsTerminated(fp, buffer);
 			deathCount = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			missedRngDrops = atof(buffer);
+			missedrngspawn = atof(buffer);
 		}
 	}
 	PHYSFS_close(fp);
@@ -895,7 +896,7 @@ int calculateRank(int level_num)
 	if (playerHostages == levelHostages)
 		hostagePoints *= 3;
 	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
-	double score = playerPoints + skillPoints + timePoints + missedRngDrops + hostagePoints;
+	double score = playerPoints + skillPoints + timePoints + missedrngspawn + hostagePoints;
 	maxScore += levelHostages * 7500;
 	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount));
 	deathPoints = (int)deathPoints;
@@ -933,61 +934,10 @@ void getLevelNameFromRankFile(int level_num, char* buffer)
 	PHYSFS_close(fp);
 }
 
-void maybeDeleteRankRecords(int level_num) // This function deletes record files if it detects a level has been altered (changes in number of points or hostages in a level).
-{ // Counting par time changes would make this much more effective, but that could change due to reasons unrelated to level, so let that slide.
-	Ranking.deleted = 0;
-	int levelHostages;
-	int levelPoints;
-	char buffer[256];
-	char filename[256];
-	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
-	if (level_num < 0)
-		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num * -1);
-	PHYSFS_file* fp = PHYSFS_openRead(filename);
-	if (fp == NULL) {
-		fp = PHYSFS_openWrite(filename); // File missing, make a new one.
-		PHYSFSX_printf(fp, "-1\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "\n");
-		PHYSFSX_printf(fp, "???");
-		PHYSFSX_printf(fp, "\n");
-	}
-	else {
-		PHYSFSX_getsTerminated(fp, buffer); // Fetch level data starting here, but only the first two things, as that's what we need to ensure hasn't changed.
-		levelHostages = atoi(buffer);
-		PHYSFSX_getsTerminated(fp, buffer);
-		levelPoints = atoi(buffer);
-		if (levelHostages > -1) {
-			if ((level_num > 0 && (levelPoints != Ranking.maxScore / 3 || levelHostages != Players[Player_num].hostages_level)) || (level_num < 0 && (levelPoints != Ranking.secretMaxScore / 3 || levelHostages != Ranking.hostages_secret_level))) { // Don't waste time on an already blank records file, and delete if level data doesn't match.
-				PHYSFS_delete(filename);
-				fp = PHYSFS_openWrite(filename); // Now that we've deleted the record for the no-longer-existent level, make a new fresh file.
-				PHYSFSX_printf(fp, "-1\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "\n");
-				PHYSFSX_printf(fp, "???");
-				PHYSFSX_printf(fp, "\n");
-				Ranking.deleted = 1; // Tell the player their records file has been deleted due to the level changing.
-			}
-		}
-	}
-	PHYSFS_close(fp);
-}
-
 //starts a new game on the given level
 void StartNewGame(int start_level)
 {
+	RestartLevel.restarted = 0;
 	PHYSFS_file* fp;
 	char filename[256];
 	int i = 1;
@@ -1052,11 +1002,13 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 			show_fullscr(&nm_background1);
 			grs_bitmap* bm = RankBitmaps[endlevel_current_rank];
 			int x = grd_curscreen->sc_w * 0.4;
-			int y = LINE_SPACING * 29;
+			int y = grd_curscreen->sc_h * 0.725;
 			int h = grd_curscreen->sc_h * 0.1125;
 			if (!endlevel_current_rank)
 				h *= 1.0806; // Make E-rank bigger to compensate for the tilt.
 			int w = 3 * h;
+			if (!endlevel_current_rank || endlevel_current_rank == 2 || endlevel_current_rank == 5 || endlevel_current_rank == 8 || endlevel_current_rank == 11 || endlevel_current_rank == 13)
+				x += w * 0.138888889; // Push the image right if it doesn't have a plus or minus, depending on which letter it is. Otherwise it won't be centered.
 			ogl_ubitmapm_cs(x, y, w, h, bm, -1, F1_0);
 			grs_bitmap oldbackground = nm_background1;
 			nm_background1 = transparent;
@@ -1074,14 +1026,12 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 				return 1;
 			}
 			else {
-				if (!do_difficulty_menu())
+				if (!do_difficulty_menu()) {
 					return 1;
+				}
 				StartNewGame(Ranking.startingLevel);
 			}
 			break;
-		//case EVENT_WINDOW_CLOSE:
-			//do_best_ranks_menu();
-			//break;
 		}
 	}
 	return 0;
@@ -1094,6 +1044,8 @@ void DoEndLevelScoreGlitz(int network)
 {
 	if (Ranking.level_time == 0)
 		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
+	Ranking.maxScore -= Ranking.num_thieves * 7500; // Subtracct thieves from the max score right before result screen loads so the "remains" counter is correct in the level.
+	RestartLevel.restarted = 0;
 	
 	int level_points, skill_points, death_points, shield_points, energy_points, time_points, hostage_points, all_hostage_points, endgame_points;
 	double skill_points2, missed_rng_drops, hostage_points2;
@@ -1155,8 +1107,8 @@ void DoEndLevelScoreGlitz(int network)
 		hostage_points2 *= 3;
 	hostage_points2 = round(hostage_points2); // Round this because I got 24999 hostage bonus once.
 	death_points = (Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount))) * -1;
-	Ranking.missedRngDrops *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
-	missed_rng_drops = Ranking.missedRngDrops;
+	Ranking.missedrngspawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
+	missed_rng_drops = Ranking.missedrngspawn;
 	Ranking.rankScore += skill_points2 + time_points + hostage_points2 + death_points + missed_rng_drops;
 
 	int minutes = Ranking.level_time / 60;
@@ -1191,8 +1143,8 @@ void DoEndLevelScoreGlitz(int network)
 		sprintf(m_str[c++], "Hostages: %i/%i\t%.0f", Players[Player_num].hostages_on_board, Players[Player_num].hostages_level, hostage_points2);
 		sprintf(m_str[c++], "Skill: %s\t%.0f", diffname, skill_points2);
 		sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.deathCount, death_points);
-		if (Ranking.missedRngDrops < 0)
-			sprintf(m_str[c++], "Missed RNG drops: \t%.0f\n", Ranking.missedRngDrops);
+		if (Ranking.missedrngspawn < 0)
+			sprintf(m_str[c++], "Missed RNG spawn: \t%.0f\n", Ranking.missedrngspawn);
 		else
 			strcpy(m_str[c++], "\n");
 		sprintf(m_str[c++], "%s%0.0f", TXT_TOTAL_SCORE, Ranking.rankScore);
@@ -1233,7 +1185,7 @@ void DoEndLevelScoreGlitz(int network)
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_on_board);
 					PHYSFSX_printf(temp, "%i\n", Difficulty_level);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.deathCount);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.missedRngDrops);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.missedrngspawn);
 					PHYSFSX_printf(temp, "%s\n", Current_level_name);
 					PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
 					PHYSFS_close(temp);
@@ -1301,7 +1253,7 @@ void DoEndLevelScoreGlitz(int network)
 		else
 #endif
 			// NOTE LINK TO ABOVE!!!
-			newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, Menu_pcx_name);
+			newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, STARS_BACKGROUND);
 		
 		gr_free_bitmap_data(&transparent);
 }
@@ -1317,13 +1269,14 @@ void DoEndSecretLevelScoreGlitz()
 	char				title[128];
 	int				is_last_level = 0;
 	Ranking.secretlevel_time = Ranking.secretlevel_time / 65536;
+	Ranking.secretMaxScore -= Ranking.num_secret_thieves * 7500; // Subtracct thieves from the max score right before result screen loads so the "remains" counter is correct in the level.
 
 	//	Compute level player is on, deal with secret levels (negative numbers)
 
 	level_points = Players[Player_num].score - Ranking.secretlast_score;
 	Ranking.secretRankScore = level_points - Ranking.secretExcludePoints;
 
-	skill_points = (int)(Ranking.rankScore * ((double)Difficulty_level / 4));
+	skill_points = (int)(Ranking.secretRankScore * ((double)Difficulty_level / 4));
 
 	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
 	if (Ranking.secretlevel_time < Ranking.secretParTime)
@@ -1334,8 +1287,8 @@ void DoEndSecretLevelScoreGlitz()
 		hostage_points *= 3;
 	hostage_points = round(hostage_points); // Round this because I got 24999 hostage bonus once.
 	death_points = (Ranking.secretMaxScore * 0.4 - Ranking.secretMaxScore * (0.4 / pow(2, Ranking.secretDeathCount))) * -1;
-	Ranking.secretMissedRngDrops *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
-	missed_rng_drops = Ranking.secretMissedRngDrops;
+	Ranking.secretmissedrngspawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
+	missed_rng_drops = Ranking.secretmissedrngspawn;
 	Ranking.secretRankScore += skill_points + time_points + hostage_points + death_points + missed_rng_drops;
 
 	int minutes = Ranking.secretlevel_time / 60;
@@ -1370,10 +1323,10 @@ void DoEndSecretLevelScoreGlitz()
 		sprintf(m_str[c++], "Hostages: %i/%.0f\t%.0f", Ranking.secret_hostages_on_board, Ranking.hostages_secret_level, hostage_points);
 		sprintf(m_str[c++], "Skill: %s\t%i", diffname, skill_points);
 		sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.secretDeathCount, death_points);
-		if (Ranking.secretMissedRngDrops > 0)
-			Ranking.secretMissedRngDrops = 0; // Let's hope this penalty isn't actually needed on a secret level with a thief, or it won't function correctly.
-		if (Ranking.secretMissedRngDrops < 0)
-			sprintf(m_str[c++], "Missed RNG drops: \t%.0f\n", Ranking.secretMissedRngDrops);
+		if (Ranking.secretmissedrngspawn > 0)
+			Ranking.secretmissedrngspawn = 0; // Let's hope this penalty isn't actually needed on a secret level with a thief, or it won't function correctly.
+		if (Ranking.secretmissedrngspawn < 0)
+			sprintf(m_str[c++], "Missed RNG spawn: \t%.0f\n", Ranking.secretmissedrngspawn);
 		else
 			strcpy(m_str[c++], "\n");
 		sprintf(m_str[c++], "%s%0.0f", TXT_TOTAL_SCORE, Ranking.secretRankScore);
@@ -1386,7 +1339,7 @@ void DoEndSecretLevelScoreGlitz()
 			rank = (int)rankPoints + 1;
 		if (!PlayerCfg.RankShowPlusMinus)
 			rank = truncateRanks(rank + 1) - 1;
-		endlevel_current_rank = rank;
+   		endlevel_current_rank = rank;
 		if (cheats.enabled) {
 			strcpy(m_str[c++], "\n\n\n");
 			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
@@ -1412,7 +1365,7 @@ void DoEndSecretLevelScoreGlitz()
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.secret_hostages_on_board);
 					PHYSFSX_printf(temp, "%i\n", Difficulty_level);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretDeathCount);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretMissedRngDrops);
+					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretmissedrngspawn);
 					PHYSFSX_printf(temp, "%s\n", Current_level_name);
 					PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
 					PHYSFS_close(temp);
@@ -1453,7 +1406,7 @@ void DoEndSecretLevelScoreGlitz()
 		transparent.bm_data[0] = 255;
 		transparent.bm_flags |= BM_FLAG_TRANSPARENT;
 
-		newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, Menu_pcx_name);
+		newmenu_do2(NULL, title, c, m, endlevel_handler, NULL, 0, STARS_BACKGROUND);
 		
 		gr_free_bitmap_data(&transparent);
 }
@@ -1475,7 +1428,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	double hostagePoints = 0;
 	double difficulty = 0;
 	int deathCount = 0;
-	double missedRngDrops = 0;
+	double missedrngspawn = 0;
 	char buffer[256];
 	char filename[256];
 	char levelName[256];
@@ -1508,7 +1461,7 @@ void DoBestRanksScoreGlitz(int level_num)
 			PHYSFSX_getsTerminated(fp, buffer);
 			deathCount = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			missedRngDrops = atof(buffer);
+			missedrngspawn = atof(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
 			sprintf(levelName, buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
@@ -1528,7 +1481,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	if (playerHostages == levelHostages)
 		hostagePoints *= 3;
 	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
-	double score = playerPoints + skillPoints + timePoints + missedRngDrops + hostagePoints;
+	double score = playerPoints + skillPoints + timePoints + missedrngspawn + hostagePoints;
 	maxScore += levelHostages * 7500;
 	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount));
 	deathPoints = (int)deathPoints;
@@ -1569,8 +1522,8 @@ void DoBestRanksScoreGlitz(int level_num)
 		sprintf(m_str[c++], "Deaths: %i\t%0.f", deathCount, -deathPoints);
 	else
 		sprintf(m_str[c++], "Deaths: %i\t%i", deathCount, 0);
-	if (missedRngDrops < 0)
-		sprintf(m_str[c++], "Missed RNG drops: \t%.0f\n", missedRngDrops);
+	if (missedrngspawn < 0)
+		sprintf(m_str[c++], "Missed RNG spawn: \t%.0f\n", missedrngspawn);
 	else
 		strcpy(m_str[c++], "\n");
 	sprintf(m_str[c++], "%s%0.0f", TXT_TOTAL_SCORE, score);
@@ -1594,9 +1547,9 @@ void DoBestRanksScoreGlitz(int level_num)
 	// m[c].type = NM_TYPE_MENU;	m[c++].text = "Ok";
 		
 	if (level_num > Current_mission->last_level)
-		sprintf(title, "%s on %s\nlevel S%i: %s\nEnter plays level, esc returns", Players[Player_num].callsign, Current_mission->mission_name, (Current_mission->last_level - level_num) * -1, levelName);
+		sprintf(title, "%s on %s\nlevel S%i: %s\nEnter plays level, esc returns to title", Players[Player_num].callsign, Current_mission->mission_name, (Current_mission->last_level - level_num) * -1, levelName);
 	else
-		sprintf(title, "%s on %s\nlevel %i: %s\nEnter plays level, esc returns", Players[Player_num].callsign, Current_mission->mission_name, level_num, levelName);
+		sprintf(title, "%s on %s\nlevel %i: %s\nEnter plays level, esc returns to title", Players[Player_num].callsign, Current_mission->mission_name, level_num, levelName);
 
 	Assert(c <= N_GLITZITEMS);
 
@@ -1797,42 +1750,80 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		Ranking.secretExcludePoints = 0;
 		Ranking.secretRankScore = 0;
 		Ranking.secretMaxScore = 0;
-		Ranking.secretMissedRngDrops = 0;
+		Ranking.secretmissedrngspawn = 0;
 		Ranking.secretlast_score = Players[Player_num].score;
 		Ranking.secret_hostages_on_board = 0;
 		Ranking.secretQuickload = 0;
 		Ranking.hostages_secret_level = 0;
 		Ranking.fromBestRanksButton = 0; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
+		Ranking.num_secret_thieves = 0;
 		
-		int i;
+		int i, isRankable = 0; // We need to check if this secret level is beatable, since some secret levels in D2 are meant to be part of a base one.
 		for (i = 0; i <= Highest_object_index; i++) {
+			// It has been decided that thieves will not count toward max score. They're just too annoying and unfun to kill, but will give you a considerable point advantage if you manage to take one down quickly.
+			// However, we can't do that here. We have to let them slide for now so the "remains" counter stays accurate. Let's instead count them, then use that number to subtract the points when the level's over.
 			if (Objects[i].type == OBJ_ROBOT) {
 				Ranking.secretMaxScore += Robot_info[Objects[i].id].score_value;
-				if (Objects[i].contains_type == OBJ_ROBOT)
+				if (Objects[i].id == 42)
+					Ranking.num_secret_thieves++;
+				if (Objects[i].contains_type == OBJ_ROBOT) {
 					Ranking.secretMaxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+					if (Objects[i].contains_id == 42)
+						Ranking.num_secret_thieves += Objects[i].contains_count;
+				}
+				if (Robot_info[Objects[i].id].boss_flag > 0)
+					isRankable = 1; // A boss is present, this level is beatable.
 			}
-			if (Objects[i].type == OBJ_CNTRLCEN)
+			if (Objects[i].type == OBJ_CNTRLCEN) {
 				Ranking.secretMaxScore += CONTROL_CEN_SCORE;
+				isRankable = 1; // A reactor is present, this level is beatable.
+			}
 			if (Objects[i].type == OBJ_HOSTAGE) {
 				Ranking.secretMaxScore += HOSTAGE_SCORE;
 				Ranking.hostages_secret_level++;
 			}
 		}
 		Ranking.secretMaxScore = (int)(Ranking.secretMaxScore * 3);
-		//Ranking.secretParTime = calculateParTime();
-		maybeDeleteRankRecords(level_num);
+		for (i = 0; i <= Num_triggers; i++) {
+			if (Triggers[i].flags & TRIGGER_EXIT)
+				isRankable = 1; // A level-ending exit is present, this level is beatable.
+		}
 		Ranking.alreadyBeaten = 0;
-		if (level_num > 0) {
-			if (calculateRank(level_num) > 0)
-				Ranking.alreadyBeaten = 1;
+		if (isRankable) {
+			//Ranking.secretParTime = calculateParTime();
+			if (level_num > 0) {
+				if (calculateRank(level_num) > 0)
+					Ranking.alreadyBeaten = 1;
+			}
+			else {
+				if (calculateRank(Current_mission->last_level - level_num) > 0)
+					Ranking.alreadyBeaten = 1;
+			}
 		}
-		else {
-			if (calculateRank(Current_mission->last_level - level_num) > 0)
-				Ranking.alreadyBeaten = 1;
-		}
-		if (Ranking.deleted) {
-			HUD_init_message_literal(HM_DEFAULT, "This level's changed! Your record for it has been wiped.");
-			digi_play_sample(SOUND_BAD_SELECTION, F1_0);
+		else { // If this level is not beatable, mark the level as beaten with zero points and an S-rank, so the mission can have an aggregate rank.
+			PHYSFS_File* fp;
+			PHYSFS_File* temp;
+			char filename[256];
+			char temp_filename[256];
+			sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
+			time_t timeOfScore = time(NULL);
+			temp = PHYSFS_openWrite(temp_filename);
+			PHYSFSX_printf(temp, "%i\n", Ranking.hostages_secret_level);
+			PHYSFSX_printf(temp, "%.0f\n", 0);
+			PHYSFSX_printf(temp, "%f\n", 0);
+			PHYSFSX_printf(temp, "%.0f\n", 0);
+			PHYSFSX_printf(temp, "%.3f\n", 0);
+			PHYSFSX_printf(temp, "%i\n", 0);
+			PHYSFSX_printf(temp, "%i\n", Difficulty_level);
+			PHYSFSX_printf(temp, "%.0f\n", 0);
+			PHYSFSX_printf(temp, "%.0f\n", 0);
+			PHYSFSX_printf(temp, "%s\n", Current_level_name);
+			PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
+			PHYSFS_close(temp);
+			PHYSFS_close(fp);
+			PHYSFS_delete(filename);
+			PHYSFSX_rename(temp_filename, filename);
 		}
 	}
 
@@ -1956,6 +1947,7 @@ void EnterSecretLevel(void)
 	// do_cloak_invul_stuff();
 	if (Game_wind)
 		window_set_visible(Game_wind, 1);
+	Ranking.fromBestRanksButton = 0; // So loading a save doesn't cause the next result screen to let you select difficulty.
 	if (Ranking.secretQuickload == 1) {
 		HUD_init_message_literal(HM_DEFAULT, "You quickloaded! Ranking system mod disabled for this level.");
 		digi_play_sample(SOUND_BAD_SELECTION, F1_0);
@@ -2515,25 +2507,49 @@ void StartNewLevel(int level_num)
 	Ranking.excludePoints = 0;
 	Ranking.rankScore = 0;
 	Ranking.maxScore = 0;
-	Ranking.missedRngDrops = 0;
+	Ranking.missedrngspawn = 0;
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
 	Ranking.fromBestRanksButton = 0; // So the result screen knows it's not just viewing record details.
+	Ranking.num_thieves = 0;
+	RestartLevel.primary_weapon = Players[Player_num].primary_weapon;
+	RestartLevel.secondary_weapon = Players[Player_num].secondary_weapon;
+	RestartLevel.flags = Players[Player_num].flags;
+	RestartLevel.energy = Players[Player_num].energy;
+	RestartLevel.shields = Players[Player_num].shields;
+	RestartLevel.lives = Players[Player_num].lives;
+	RestartLevel.laser_level = Players[Player_num].laser_level;
+	RestartLevel.primary_weapon_flags = Players[Player_num].primary_weapon_flags;
+	RestartLevel.secondary_weapon_flags = Players[Player_num].secondary_weapon_flags;
+	for (int i = 0; i < MAX_PRIMARY_WEAPONS; i++)
+		RestartLevel.primary_ammo[i] = Players[Player_num].primary_ammo[i];
+	for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
+		RestartLevel.secondary_ammo[i] = Players[Player_num].secondary_ammo[i];
 
 	if (level_num > 0) {
 		maybe_set_first_secret_visit(level_num);
 	}
 
-	ShowLevelIntro(level_num);
+	if (!RestartLevel.restarted) // Skip briefing for restarts.
+		ShowLevelIntro(level_num);
+	else
+		First_secret_visit = 1; // Reset a secret level upon restarting its base level, for continuity's sake.
 
-	StartNewLevelSub(level_num, 1, 0 );
+		StartNewLevelSub(level_num, 1, 0);
 
 	int i;
 	for (i = 0; i <= Highest_object_index; i++) {
+		// It has been decided that thieves will not count toward max score (AKA they won't be required for S-ranks). They're just too annoying and unfun to kill, but will give you a considerable point advantage if you manage to take one down quickly.
+		// However, we can't do that here. We have to let them slide for now so the "remains" counter stays accurate. Let's instead count them, then use that number to subtract the points when the level's over.
 		if (Objects[i].type == OBJ_ROBOT) {
 			Ranking.maxScore += Robot_info[Objects[i].id].score_value;
-			if (Objects[i].contains_type == OBJ_ROBOT)
+			if (Objects[i].id == 42)
+				Ranking.num_thieves++;
+			if (Objects[i].contains_type == OBJ_ROBOT) {
 				Ranking.maxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+				if (Objects[i].contains_id == 42)
+					Ranking.num_thieves += Objects[i].contains_count;
+			}
 		}
 		if (Objects[i].type == OBJ_CNTRLCEN)
 			Ranking.maxScore += CONTROL_CEN_SCORE;
@@ -2542,7 +2558,6 @@ void StartNewLevel(int level_num)
 	}
 	Ranking.maxScore = (int)(Ranking.maxScore * 3);
 	//Ranking.parTime = calculateParTime();
-	maybeDeleteRankRecords(level_num);
 	Ranking.alreadyBeaten = 0;
 	if (level_num > 0) {
 		if (calculateRank(level_num) > 0)
@@ -2551,10 +2566,6 @@ void StartNewLevel(int level_num)
 	else {
 		if (calculateRank(Current_mission->last_level - level_num) > 0)
 			Ranking.alreadyBeaten = 1;
-	}
-	if (Ranking.deleted) {
-		HUD_init_message_literal(HM_DEFAULT, "This level's changed! Your record for it has been wiped.");
-		digi_play_sample(SOUND_BAD_SELECTION, F1_0);
 	}
 }
 

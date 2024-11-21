@@ -104,6 +104,8 @@ extern void object_goto_prev_viewer(void);
 
 int	Debug_spew;
 
+restartLevel RestartLevel;
+
 //	External Variables ---------------------------------------------------------
 
 extern char WaitForRefuseAnswer,RefuseThisPlayer,RefuseTeam;
@@ -774,9 +776,16 @@ int HandleSystemKey(int key)
 			{
 				int choice;
 				int allow_loadsave = !(Game_mode & GM_MULTI) || (Game_mode & GM_MULTI_COOP);
-				choice = allow_loadsave ?
-					nm_messagebox(NULL, 4, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Game Menu") :
-					nm_messagebox(NULL, 2, "Abort Game", TXT_OPTIONS_, "Game Menu");
+				if (Ranking.quickload) { // If the level was reached via quickload, don't show the restart level button, as that's supposed to be part of the ranking mod, which is disabled in this case.
+					choice = allow_loadsave ?
+						nm_messagebox(NULL, 4, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Game menu") :
+						nm_messagebox(NULL, 2, "Abort Game", TXT_OPTIONS_, "Game menu");
+				}
+				else {
+					choice = allow_loadsave ?
+						nm_messagebox(NULL, 5, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Restart level", "Game menu") :
+						nm_messagebox(NULL, 3, "Abort Game", TXT_OPTIONS_, "Restart level", "Game menu");
+				}
 				switch(choice)
 				{
 					case 0: // Abort Game
@@ -790,6 +799,9 @@ int HandleSystemKey(int key)
 						break;
 					case 3: // Load Game
 						HandleSystemKey(KEY_ALTED | KEY_F3);
+						break;
+					case 4: // Restart level
+						HandleSystemKey(KEY_ALTED | KEY_F5);
 						break;
 				}
 				return 1;
@@ -950,6 +962,28 @@ int HandleSystemKey(int key)
 				Ranking.quickload = 1;
 				Ranking.secretQuickload = 1;
 				state_restore_all(1, 0, NULL);
+			break;
+		case KEY_ALTED+KEY_F5:
+			if (Current_level_num > 0) {
+				Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
+				Players[Player_num].secondary_weapon = RestartLevel.secondary_weapon;
+				Players[Player_num].score = Players[Player_num].last_score;
+				Players[Player_num].flags = RestartLevel.flags;
+				Players[Player_num].energy = RestartLevel.energy;
+				Players[Player_num].shields = RestartLevel.shields;
+				Players[Player_num].lives = RestartLevel.lives;
+				Players[Player_num].laser_level = RestartLevel.laser_level;
+				Players[Player_num].primary_weapon_flags = RestartLevel.primary_weapon_flags;
+				Players[Player_num].secondary_weapon_flags = RestartLevel.secondary_weapon_flags;
+				for (int i = 0; i < MAX_PRIMARY_WEAPONS; i++)
+					Players[Player_num].primary_ammo[i] = RestartLevel.primary_ammo[i];
+				for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
+					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
+				RestartLevel.restarted = 1;
+				StartNewLevel(Current_level_num);
+			}
+			else
+				nm_messagebox(NULL, 1, "Ok", "Can't restart secret level!\nTry saving right before teleporter.");
 			break;
 
 

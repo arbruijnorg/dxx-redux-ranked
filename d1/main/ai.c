@@ -1423,8 +1423,15 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum)
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE)
-			return 1;
+		if (Ranking.parTimePathCompletable) {
+			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE)
+				return 1;
+		}
+		else
+		{
+			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)
+				return 1;
+		}
 	}
 
 	if ((objp->id == ROBOT_BRAIN) || (objp->ctype.ai_info.behavior == AIB_RUN_FROM)) {

@@ -133,14 +133,30 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int        quickload;				           // Whether the player has quickloaded into the current level.
 	double     calculatedScore;		               // Stores the score determined in calculateRank.
 	int        rank;					           // Stores the rank determined in calculateRank.
-	double     missedRngDrops;					   // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	double     missedrngspawn;					   // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
 	int        alreadyBeaten;                      // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
 	int        deleted;                            // Whether to tell the player their record file was deleted due to a level change.
 	int		   fromBestRanksButton;                // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
 	int        startingLevel;                      // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
 	int        lastSelectedItem;                   // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
 	int        missionRanks[5000];                 // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+	int        parTimePathCompletable;             // Hate that I had to put this here in Ranking, but I would have to change countless function parameters if I tried to put it in state.
 } __pack__ ranking;
+
+typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.
+	uint    flags;
+	fix     energy;
+	fix     shields;
+	ubyte   lives;
+	ubyte   laser_level;
+	sbyte   primary_weapon;
+	sbyte   secondary_weapon;
+	ushort  primary_weapon_flags;
+	ushort  secondary_weapon_flags;
+	ushort  primary_ammo[MAX_PRIMARY_WEAPONS];
+	ushort  secondary_ammo[MAX_PRIMARY_WEAPONS];
+	int     restarted; // Used for whether to skip briefings or not.
+} __pack__ restartLevel;
 
 // Same as above but structure how Savegames expect
 typedef struct player_rw {

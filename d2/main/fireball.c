@@ -182,12 +182,12 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 												if (Current_level_num > 0) {
 													Ranking.excludePoints += Robot_info[obj0p->id].score_value;
 													if (obj0p->flags & OF_ROBOT_DROPPED)
-														Ranking.missedRngDrops += Robot_info[obj0p->id].score_value;
+														Ranking.missedrngspawn += Robot_info[obj0p->id].score_value;
 												}
 												else {
 													Ranking.secretExcludePoints += Robot_info[obj0p->id].score_value;
 													if (obj0p->flags & OF_ROBOT_DROPPED)
-														Ranking.secretMissedRngDrops += Robot_info[obj0p->id].score_value;
+														Ranking.secretmissedrngspawn += Robot_info[obj0p->id].score_value;
 												}
 											}
 											if (!(parent == Players[Player_num].objnum)) {
@@ -1394,9 +1394,9 @@ void do_explosion_sequence(object *obj)
 					del_obj->contains_id = robptr->contains_id;
 					if (robptr->contains_type == OBJ_ROBOT) {
 						if (Current_level_num > 0)
-							Ranking.missedRngDrops -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
+							Ranking.missedrngspawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 						else
-							Ranking.secretMissedRngDrops -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
+							Ranking.secretmissedrngspawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 					}
 					maybe_replace_powerup_with_energy(del_obj);
 					fireball_flag_hack = 1; //random drops, so set the no score flag

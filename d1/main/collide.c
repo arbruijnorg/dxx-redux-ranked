@@ -163,7 +163,7 @@ void apply_force_damage(object *obj,fix force,object *other_obj)
 				if (obj->matcen_creator != 0 || obj->flags & OF_ROBOT_DROPPED) {
 					Ranking.excludePoints += Robot_info[obj->id].score_value;
 					if (obj->flags & OF_ROBOT_DROPPED)
-						Ranking.missedRngDrops += Robot_info[obj->id].score_value;
+						Ranking.missedrngspawn += Robot_info[obj->id].score_value;
 				}
 				if (!(other_obj->ctype.laser_info.parent_signature == ConsoleObject->signature)) {
 					Ranking.excludePoints -= Robot_info[obj->id].score_value;
@@ -1012,7 +1012,7 @@ void collide_robot_and_weapon( object * robot, object * weapon, vms_vector *coll
 				if (robot->matcen_creator != 0 || robot->flags & OF_ROBOT_DROPPED)
 					Ranking.excludePoints += Robot_info[robot->id].score_value;
 				if (robot->flags & OF_ROBOT_DROPPED)
-					Ranking.missedRngDrops += Robot_info[robot->id].score_value;
+					Ranking.missedrngspawn += Robot_info[robot->id].score_value;
 				add_points_to_score(Robot_info[robot->id].score_value);
 			}
 		}

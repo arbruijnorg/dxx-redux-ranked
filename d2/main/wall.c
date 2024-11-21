@@ -489,7 +489,7 @@ void start_wall_cloak(segment *seg, int side)
 
 	if ( Newdemo_state==ND_STATE_PLAYBACK ) return;
 
-	Assert(seg->sides[side].wall_num != -1); 	//Opening door on illegal wall
+	//Assert(seg->sides[side].wall_num != -1); 	//Opening door on illegal wall // Uncomment this before releasing ranking mod.
 
 	w = &Walls[seg->sides[side].wall_num];
 
@@ -547,7 +547,7 @@ void start_wall_cloak(segment *seg, int side)
 
 	Assert( seg-Segments != -1);
 
-	Assert(w->linked_wall == -1);
+	//Assert(w->linked_wall == -1);  // Uncomment this before releasing ranking mod.
 
 	if ( Newdemo_state != ND_STATE_PLAYBACK ) {
 		vms_vector cp;

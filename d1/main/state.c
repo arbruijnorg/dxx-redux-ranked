@@ -1518,6 +1518,7 @@ RetryObjectLoading:
 		if (!window_is_visible(Game_wind))
 			window_set_visible(Game_wind, 1);
 	reset_time();
+	Ranking.fromBestRanksButton = 0; // So loading a save doesn't cause the next result screen to let you select difficulty.
 	HUD_init_message_literal(HM_DEFAULT, "You quickloaded! Ranking system mod disabled for this level.");
 	digi_play_sample(SOUND_BAD_SELECTION, F1_0);
 	return 1;

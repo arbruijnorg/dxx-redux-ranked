@@ -144,13 +144,14 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  freezeTimer;             // Tells normal levels' in-game timer whether it should be frozen or not.
 	double  calculatedScore;		 // Stores the score determined in calculateRank.
 	int     rank;				     // Stores the rank determined in calculateRank.
-	double  missedRngDrops;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	double  missedrngspawn;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
 	int     alreadyBeaten;           // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
 	int     deleted;                 // Whether to tell the player their record file was deleted due to a level change.
 	int	    fromBestRanksButton;     // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
 	int     startingLevel;           // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
 	int     lastSelectedItem;        // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
 	int     missionRanks[5000];      // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+	int     num_thieves;             // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
 	
@@ -164,8 +165,24 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
 	double  secretParTime;
 	double  hostages_secret_level;    // Secret equivalent of Players[Player_num].hostages_level.
-	double  secretMissedRngDrops;
+	double  secretmissedrngspawn;
+	int     num_secret_thieves;
 } __pack__ ranking;
+
+typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.
+	uint    flags;
+	fix     energy;
+	fix     shields;
+	ubyte   lives;
+	ubyte   laser_level;
+	sbyte   primary_weapon;
+	sbyte   secondary_weapon;
+	ushort  primary_weapon_flags;
+	ushort  secondary_weapon_flags;
+	ushort  primary_ammo[MAX_PRIMARY_WEAPONS];
+	ushort  secondary_ammo[MAX_PRIMARY_WEAPONS];
+	int     restarted; // Used for whether to skip briefings or not.
+} __pack__ restartLevel;
 
 // Same as above but structure how Savegames expect
 typedef struct player_rw {

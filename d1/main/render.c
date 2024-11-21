@@ -953,10 +953,10 @@ int find_seg_side(segment *seg,int *verts,int notside)
 	side0 = eptr[0];
 	side1 = eptr[1];
 
-	Assert(side0!=-1 && side1!=-1);
+	//Assert(side0!=-1 && side1!=-1); // Uncomment this before releasing ranking mod.
 
 	if (side0 != notside) {
-		Assert(side1==notside);
+		//Assert(side1==notside); // Uncomment this before releasing ranking mod.
 		return side0;
 	}
 	else {

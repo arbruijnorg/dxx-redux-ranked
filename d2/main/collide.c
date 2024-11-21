@@ -187,12 +187,12 @@ void apply_force_damage(object *obj,fix force,object *other_obj)
 					if (Current_level_num > 0) {
 						Ranking.excludePoints += Robot_info[obj->id].score_value;
 						if (obj->flags & OF_ROBOT_DROPPED)
-							Ranking.missedRngDrops += Robot_info[obj->id].score_value;
+							Ranking.missedrngspawn += Robot_info[obj->id].score_value;
 					}
 					else {
 						Ranking.secretExcludePoints += Robot_info[obj->id].score_value;
 						if (obj->flags & OF_ROBOT_DROPPED)
-							Ranking.secretMissedRngDrops += Robot_info[obj->id].score_value;
+							Ranking.secretmissedrngspawn += Robot_info[obj->id].score_value;
 					}
 				}
 				if (!(other_obj->ctype.laser_info.parent_signature == ConsoleObject->signature)) {
@@ -1006,12 +1006,12 @@ void collide_robot_and_player( object * robot, object * playerobj, vms_vector *c
 					if (Current_level_num > 0) {
 						Ranking.excludePoints += Robot_info[robot->id].score_value;
 						if (robot->flags & OF_ROBOT_DROPPED)
-							Ranking.missedRngDrops += Robot_info[robot->id].score_value;
+							Ranking.missedrngspawn += Robot_info[robot->id].score_value;
 					}
 					else {
 						Ranking.secretExcludePoints += Robot_info[robot->id].score_value;
 						if (robot->flags & OF_ROBOT_DROPPED)
-							Ranking.secretMissedRngDrops += Robot_info[robot->id].score_value;
+							Ranking.secretmissedrngspawn += Robot_info[robot->id].score_value;
 					}
 				}
 				add_points_to_score(Robot_info[robot->id].score_value);
@@ -1722,12 +1722,12 @@ void collide_robot_and_weapon( object * robot, object * weapon, vms_vector *coll
 					if (Current_level_num > 0) {
 						Ranking.excludePoints += Robot_info[robot->id].score_value;
 						if (robot->flags & OF_ROBOT_DROPPED)
-							Ranking.missedRngDrops += Robot_info[robot->id].score_value;
+							Ranking.missedrngspawn += Robot_info[robot->id].score_value;
 					}
 					else {
 						Ranking.secretExcludePoints += Robot_info[robot->id].score_value;
 						if (robot->flags & OF_ROBOT_DROPPED)
-							Ranking.secretMissedRngDrops += Robot_info[robot->id].score_value;
+							Ranking.secretmissedrngspawn += Robot_info[robot->id].score_value;
 					}
 				}
 				add_points_to_score(Robot_info[robot->id].score_value);
