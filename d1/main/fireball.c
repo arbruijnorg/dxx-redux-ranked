@@ -56,6 +56,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 //--unused-- ubyte	Frame_processed[MAX_OBJECTS];
 
 int fireball_flag_hack;
+int fireball_matcen_hack;
 
 object *object_create_explosion_sub(object *objp, short segnum, vms_vector * position, fix size, int vclip_type, fix maxdamage, fix maxdistance, fix maxforce, int parent )
 {
@@ -133,10 +134,10 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 								if ( obj0p->shields >= 0 ) {
 									if (apply_damage_to_robot(obj0p, damage, parent))
 										if (objp != NULL) {
-											if (obj0p->matcen_creator != 0 || obj0p->flags & OF_ROBOT_DROPPED) {
+											if (obj0p->matcen_creator || obj0p->flags & OF_ROBOT_DROPPED) {
 												Ranking.excludePoints += Robot_info[obj0p->id].score_value;
-												if (obj0p->flags & OF_ROBOT_DROPPED)
-													Ranking.missedrngspawn += Robot_info[obj0p->id].score_value;
+												if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+													Ranking.missedRngSpawn += Robot_info[obj0p->id].score_value;
 											}
 											if (!(parent == Players[Player_num].objnum)) {
 												Ranking.excludePoints -= Robot_info[obj0p->id].score_value;
@@ -987,6 +988,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 
 				obj = &Objects[objnum];
 
+				obj->matcen_creator = fireball_matcen_hack;
+
 				//Set polygon-object-specific data
 
 				obj->rtype.pobj_info.model_num = Robot_info[obj->id].model_num;
@@ -1234,7 +1237,7 @@ void do_explosion_sequence(object *obj)
 			if (del_obj->contains_type == OBJ_POWERUP)
 				maybe_replace_powerup_with_energy(del_obj);
 			fireball_flag_hack = 0; // Fixed drops, so don't set the no score flag.
-			// Maybe address infinite robot drop loops here at some point, but the logistics for that make me wanna rip my hair out, so sorry for now U3AAH.
+			fireball_matcen_hack = 0; // Set the child's matcen value to the parent's, so Ranking.missedrngspawn functions right.
 			object_create_egg(del_obj);
 		} else if ((del_obj->type == OBJ_ROBOT) && !(Game_mode & GM_MULTI)) { // Multiplayer handled outside this code!!
 			robot_info	*robptr = &Robot_info[del_obj->id];
@@ -1243,10 +1246,11 @@ void do_explosion_sequence(object *obj)
 					del_obj->contains_count = ((d_rand() * robptr->contains_count) >> 15) + 1;
 					del_obj->contains_type = robptr->contains_type;
 					del_obj->contains_id = robptr->contains_id;
-					if (robptr->contains_type == OBJ_ROBOT)
-						Ranking.missedrngspawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
+					if (!del_obj->matcen_creator && robptr->contains_type == OBJ_ROBOT)
+						Ranking.missedRngSpawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 					maybe_replace_powerup_with_energy(del_obj);
 					fireball_flag_hack = 1; // Random drops, so set the no score flag.
+					fireball_matcen_hack = del_obj->matcen_creator; // Set the child's matcen value to the parent's, so Ranking.missedrngspawn functions right.
 					object_create_egg(del_obj);
 				}
 			}

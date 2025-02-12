@@ -144,14 +144,15 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  freezeTimer;             // Tells normal levels' in-game timer whether it should be frozen or not.
 	double  calculatedScore;		 // Stores the score determined in calculateRank.
 	int     rank;				     // Stores the rank determined in calculateRank.
-	double  missedrngspawn;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	double  missedRngSpawn;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
 	int     alreadyBeaten;           // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
-	int     deleted;                 // Whether to tell the player their record file was deleted due to a level change.
 	int	    fromBestRanksButton;     // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
 	int     startingLevel;           // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
 	int     lastSelectedItem;        // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
 	int     missionRanks[5000];      // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
-	int     num_thieves;             // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
+	int     num_thief_points;        // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
+	int     warmStart;               // If the player enters a level from a previous one, this becomes 1. If this is 1 when a result screen comes up, total score will have an asterisk next to it. This does nothing else. It's just informative for those who care.
+	int     isRankable;              // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
 	
@@ -165,14 +166,32 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
 	double  secretParTime;
 	double  hostages_secret_level;    // Secret equivalent of Players[Player_num].hostages_level.
-	double  secretmissedrngspawn;
-	int     num_secret_thieves;
+	double  secretMissedRngSpawn;
+	int     secretAlreadyBeaten;
+	int     num_secret_thief_points;
+	int     secretIsRankable;
+
+	// Below are the variables from the par time algorithm that are better off globally stored for the sake of convenience or ease of access by code.
+	// I hate how I had to put so many things here, but I would have to change countless function parameters if I tried to put as many things in state as possible. I've already done that enough as it is.
+	
+	int     parTimePathCompletable;
+	int     parTimeStateSegnum;
+	// 254 is MAX_WALLS.
+	int     currentlyLockedWalls[254];
+	int     numCurrentlyLockedWalls;
+	int     parTimeUnlockIDs[254];
+	int     parTimeUnlockTypes[254];
+	int     parTimeNumWeapons;
+	int     parTimeHeldWeapons[9];
+	int     parTimeHasQuads;
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.
 	uint    flags;
 	fix     energy;
 	fix     shields;
+	fix     afterburner_charge;
+	fix     omega_charge;
 	ubyte   lives;
 	ubyte   laser_level;
 	sbyte   primary_weapon;
@@ -182,6 +201,9 @@ typedef struct restartLevel { // Recreate and store certain info from player to 
 	ushort  primary_ammo[MAX_PRIMARY_WEAPONS];
 	ushort  secondary_ammo[MAX_PRIMARY_WEAPONS];
 	int     restarted; // Used for whether to skip briefings or not.
+	int     restartedCache; // Just one of the many hoops needed to keep the restart counter accurate when restarting at result screen.
+	int     isResults; // So pressing R on a wide array of menus doesn't try to restart a level you aren't on.
+	int     updateRestartStuff; // Self explanatory.
 } __pack__ restartLevel;
 
 // Same as above but structure how Savegames expect

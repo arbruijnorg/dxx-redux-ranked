@@ -109,6 +109,7 @@ typedef struct player_config
 	int MyTeamColor;
 	int OtherTeamColor;
 	ubyte RankShowPlusMinus;
+	ubyte Speedometer;
 	ubyte ObsShareSettings;
 	ubyte ObsTurbo[NUM_OBS_MODES];
 	ubyte ObsShowCockpit[NUM_OBS_MODES];

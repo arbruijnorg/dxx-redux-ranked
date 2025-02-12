@@ -1000,7 +1000,13 @@ void newdemo_record_viewer_object(object * obj)
 	nd_record_v_rendering[RenderingType]=1;
 	nd_write_byte(ND_EVENT_VIEWER_OBJECT);
 	nd_write_byte(RenderingType);
+
+	// workaround for observer player with RT_NONE
+	ubyte render_type = obj->render_type;
+	obj->render_type = RT_POLYOBJ;
 	nd_write_object(obj);
+	obj->render_type = render_type;
+	
 	start_time();
 }
 
@@ -1831,6 +1837,9 @@ int newdemo_read_frame_information(int rewrite)
 				nd_write_object(obj);
 				break;
 			}
+			if (is_observer())
+				Viewer->render_type = RT_NONE;
+
 			if (Newdemo_vcr_state != ND_STATE_PAUSED) {
 				segnum = obj->segnum;
 				obj->next = obj->prev = obj->segnum = -1;

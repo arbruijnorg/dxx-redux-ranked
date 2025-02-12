@@ -653,13 +653,13 @@ void do_best_ranks_menu()
 	char** items = (char**)malloc(sizeof(char*) * numlines);
 	int* ranks = (int*)malloc(sizeof(int) * numlines);
 	int i;
-	if (Current_mission->anarchy_only_flag == 1) {
-		list[i] = (char*)malloc(sizeof(char) * 64);
-		snprintf(list[i], 64, "Not a single player mission.");
-	}
-	else {
-		for (i = 0; i < numlines; i++)
-		{
+	for (i = 0; i < numlines; i++)
+	{
+		if (Current_mission->anarchy_only_flag == 1) {
+			list[i] = (char*)malloc(sizeof(char) * 64);
+			snprintf(list[i], 64, "Not a single player mission.");
+		}
+		else {
 			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
 			if (i >= Current_mission->last_level)
 				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
@@ -2196,12 +2196,13 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[32];
+	newmenu_item m[33];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	do {
 		ADD_CHECK(31, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
+		ADD_CHECK(32, "Show Speedometer", PlayerCfg.Speedometer);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Persistent Debris", PlayerCfg.PersistentDebris);
 		ADD_CHECK(2, "Screenshots w/o HUD", PlayerCfg.PRShot);
@@ -2329,6 +2330,7 @@ void do_misc_menu()
 		PlayerCfg.ShowCustomColors = m[25].value;
 		PlayerCfg.PreferMyTeamColors = (PlayerCfg.MyTeamColor == 8 && PlayerCfg.OtherTeamColor == 8) ? 0 : m[30].value;
 		PlayerCfg.RankShowPlusMinus = m[31].value;
+		PlayerCfg.Speedometer = m[32].value;
 
 	} while (i > -1);
 

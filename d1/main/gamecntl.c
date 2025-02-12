@@ -498,7 +498,7 @@ int HandleDemoKey(int key)
 //returns 1 if screen changed
 int HandleSystemKey(int key)
 {
-	if (!Player_is_dead)
+	//if (!Player_is_dead)
 		switch (key)
 		{
 			case KEY_ESC:
@@ -693,7 +693,7 @@ int HandleSystemKey(int key)
 				Players[Player_num].primary_ammo[i] = RestartLevel.primary_ammo[i];
 			for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
 				Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
-			RestartLevel.restarted = 1;
+			RestartLevel.restarted++;
 			// Note: time abuse with restarts is possible due to player speed not resetting properly and idk how to fix it.
 			StartNewLevel(Current_level_num);
 			break;

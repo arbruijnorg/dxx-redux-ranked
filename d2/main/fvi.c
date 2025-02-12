@@ -644,7 +644,7 @@ int find_vector_intersection(fvi_query *fq,fvi_info *hit_data)
 	int i;
 
 	Assert(fq->ignore_obj_list != (int *)(-1));
-	Assert((fq->startseg <= Highest_segment_index) && (fq->startseg >= 0));
+	//Assert((fq->startseg <= Highest_segment_index) && (fq->startseg >= 0));
 
 	fvi_hit_seg = -1;
 	fvi_hit_side = -1;

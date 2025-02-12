@@ -766,9 +766,27 @@ void hud_show_pointstonextlife()
 	gr_printf(HUD_SCALE_X_AR(bm->bm_w) + x, FSPACY(20), "1-up in %5d", pointstonextlife);
 }
 
+void hud_show_speedometer()
+{
+	int speed = f2fl(sqrt(pow(ConsoleObject->mtype.phys_info.velocity.x, 2) + pow(ConsoleObject->mtype.phys_info.velocity.y, 2) + pow(ConsoleObject->mtype.phys_info.velocity.z, 2)));
+
+	gr_set_curfont(GAME_FONT);
+
+	if (Color_0_31_0 == -1)
+		Color_0_31_0 = BM_XRGB(0, 31, 0);
+	gr_set_fontcolor(Color_0_31_0, -1);
+
+	if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 17.75), "%d", speed);
+	if (PlayerCfg.CurrentCockpitMode == CM_STATUS_BAR)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 12.75), "%d", speed);
+	if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 10.75), "%d", speed);
+}
+
 void hud_show_pointsleftinlevel()
 {
-	int pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
+	double pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
 
 	if (HUD_toolong)
 		return;
@@ -778,7 +796,15 @@ void hud_show_pointsleftinlevel()
 	if (Color_0_31_0 == -1)
 		Color_0_31_0 = BM_XRGB(0, 31, 0);
 	gr_set_fontcolor(Color_0_31_0, -1);
-	gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%5d remains", pointsleftinlevel);
+
+	if (pointsleftinlevel - Ranking.missedRngSpawn) {
+		if (Ranking.missedRngSpawn < 0)
+			gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
+		else
+			gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+	}
+	else
+		gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
 }
 
 void hud_show_timer_count()
@@ -934,7 +960,7 @@ void play_homing_warning(void)
 
 	int pnum = get_pnum_for_hud();
 
-	if (Endlevel_sequence || Player_is_dead)
+	if (Endlevel_sequence || Player_is_dead || Newdemo_state == ND_STATE_PLAYBACK)
 		return;
 
 	if (Players[pnum].homing_object_dist >= 0) {
@@ -4158,7 +4184,7 @@ void show_HUD_names()
 // Show bomb highlights in observer mode
 void observer_show_bomb_highlights()
 {
-	if (!is_observer() || !PlayerCfg.ObsShowBombTimes)
+	if (!is_observer() || !PlayerCfg.ObsShowBombTimes[get_observer_game_mode()])
 	{
 		return;
 	}
@@ -4228,6 +4254,11 @@ void observer_show_bomb_highlights()
 
 void draw_hud()
 {
+	int pnum = get_pnum_for_hud();
+	if (Newdemo_state == ND_STATE_RECORDING)
+		if (Players[pnum].homing_object_dist >= 0)
+			newdemo_record_homing_distance(Players[pnum].homing_object_dist);
+
 	n_players = multi_get_kill_list(player_list);
 
 	if (is_observer()) {
@@ -4257,7 +4288,6 @@ void draw_hud()
 
 				if (Newdemo_state==ND_STATE_RECORDING)
 				{
-					int pnum = get_pnum_for_hud();
 					newdemo_record_player_flags(Players[pnum].flags);
 				}
 			}
@@ -4316,6 +4346,8 @@ void draw_hud()
 			hud_show_pointsleftinlevel();
 		show_time();
 	}
+	if (PlayerCfg.Speedometer)
+		hud_show_speedometer();
 
 	if ( !Rear_view && PlayerCfg.CurrentCockpitMode!=CM_REAR_VIEW)
 		hud_show_timer_count();
@@ -4338,7 +4370,6 @@ void draw_hud()
 
 			if (Newdemo_state==ND_STATE_RECORDING)
 			{
-				int pnum = get_pnum_for_hud();
 				newdemo_record_player_flags(Players[pnum].flags);
 			}
 		}
@@ -4402,10 +4433,6 @@ void render_gauges()
 
 	gr_set_current_canvas(NULL);
 	gr_set_curfont( GAME_FONT );
-
-	if (Newdemo_state == ND_STATE_RECORDING)
-		if (Players[pnum].homing_object_dist >= 0)
-			newdemo_record_homing_distance(Players[pnum].homing_object_dist);
 
 	draw_weapon_boxes();
 

@@ -505,7 +505,7 @@ void game_draw_hud_stuff()
 
 		y = GHEIGHT-(LINE_SPACING*2);
 
-		if (can_draw_observer_cockpit() && PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
+		if (is_observer() && can_draw_observer_cockpit() && PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
 			y = grd_curcanv->cv_bitmap.bm_h / 1.2 ;
 
 		if (PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW) {
@@ -891,7 +891,7 @@ void toggle_cockpit()
 }
 
 int last_drawn_cockpit = -1;
-extern void ogl_loadbmtexture(grs_bitmap *bm, int filter_blueship_wing);
+extern void ogl_loadbmtexture(grs_bitmap *bm);
 
 // This actually renders the new cockpit onto the screen.
 void update_cockpits()

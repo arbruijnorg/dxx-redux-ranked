@@ -1412,10 +1412,19 @@ void move_towards_segment_center(object *objp)
 #endif
 }
 
+int thisWallUnlocked(int wall_num)
+{
+	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++) {
+		if (Ranking.currentlyLockedWalls[i] == wall_num)
+			return 0;
+	}
+	return 1;
+}
+
 //	-----------------------------------------------------------------------------------------------------------
 //	Return true if door can be flown through by a suitable type robot.
 //	Only brains and avoid robots can open doors.
-int ai_door_is_openable(object *objp, segment *segp, int sidenum)
+int ai_door_is_openable(object* objp, segment* segp, int sidenum, int isParTime, int currentObjectiveID)
 {
 	int	wall_num;
 
@@ -1423,13 +1432,28 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum)
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		if (Ranking.parTimePathCompletable) {
-			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE)
-				return 1;
+		if (isParTime) {
+			if (Ranking.parTimePathCompletable) {
+				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED) && !(((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) || Walls[wall_num].type == WALL_CLOSED) && !thisWallUnlocked(wall_num)))
+					return 1;
+				else if (!thisWallUnlocked(wall_num)) // If this wall is not unlocked, scan the list of locked walls for this one. 
+					for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++) // If it's found, check if we're trying to get what unlocks it. If so, act as if the path isn't completable to prevent a softlock. This method does mean Algo doesn't take the time to shoot through a grate, but this is negligible.
+						if (Ranking.currentlyLockedWalls[i] == wall_num && Ranking.parTimeUnlockIDs[i] == currentObjectiveID) // We don't have to specify an objective type, since this level design can only be done fairly with a switch.
+							if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)) // This line's condition MUST MATCH line 1609's.
+								return 1;
+			}
+			else
+			{
+				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)) { // && !((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) && !thisWallUnlocked(wall_num))) // Now ignoring locked doors too since those can also be shot through (EG: MN1998).
+					if (Walls[wall_num].type == WALL_CLOSED)
+						Ranking.parTimeStateSegnum = Walls[wall_num].segnum; // Since we're about to go through a closed wall, set Algo's segnum to before it so it doesn't actually fly through it. In actual gameplay this is for shooting through walls.
+					return 1;
+				}
+			}
 		}
 		else
 		{
-			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)
+			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || (Walls[wall_num].type == WALL_CLOSED && !thisWallUnlocked(wall_num))) // Since no closed wall will be unlocked at the time objects are considered accessible or not, we can use that function.
 				return 1;
 		}
 	}

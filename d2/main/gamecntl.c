@@ -762,7 +762,7 @@ dump_door_debugging_info()
 //returns 1 if screen changed
 int HandleSystemKey(int key)
 {
-	if (!Player_is_dead)
+	//if (!Player_is_dead)
 		switch (key)
 		{
 
@@ -776,7 +776,7 @@ int HandleSystemKey(int key)
 			{
 				int choice;
 				int allow_loadsave = !(Game_mode & GM_MULTI) || (Game_mode & GM_MULTI_COOP);
-				if (Ranking.quickload) { // If the level was reached via quickload, don't show the restart level button, as that's supposed to be part of the ranking mod, which is disabled in this case.
+				if (Ranking.quickload || Current_level_num < 0) { // If the level was reached via quickload, don't show the restart level button, as that's supposed to be part of the ranking mod, which is disabled in this case. Also can't restart on secret levels so don't give the option there.
 					choice = allow_loadsave ?
 						nm_messagebox(NULL, 4, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Game menu") :
 						nm_messagebox(NULL, 2, "Abort Game", TXT_OPTIONS_, "Game menu");
@@ -958,13 +958,12 @@ int HandleSystemKey(int key)
 		KEY_MAC(case KEY_COMMAND+KEY_O:)
 		KEY_MAC(case KEY_COMMAND+KEY_ALTED+KEY_3:)
 		case KEY_ALTED+KEY_F3:
-			if (!((Game_mode & GM_MULTI) && !(Game_mode & GM_MULTI_COOP)))
-				Ranking.quickload = 1;
-				Ranking.secretQuickload = 1;
+			if (!((Game_mode & GM_MULTI) && !(Game_mode & GM_MULTI_COOP))) {
 				state_restore_all(1, 0, NULL);
-			break;
+			}
+				break;
 		case KEY_ALTED+KEY_F5:
-			if (Current_level_num > 0) {
+			if (Current_level_num > 0)
 				Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
 				Players[Player_num].secondary_weapon = RestartLevel.secondary_weapon;
 				Players[Player_num].score = Players[Player_num].last_score;
@@ -979,11 +978,10 @@ int HandleSystemKey(int key)
 					Players[Player_num].primary_ammo[i] = RestartLevel.primary_ammo[i];
 				for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
 					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
-				RestartLevel.restarted = 1;
+				Players[Player_num].afterburner_charge = RestartLevel.afterburner_charge;
+				Omega_charge = RestartLevel.omega_charge;
+				RestartLevel.restarted++;
 				StartNewLevel(Current_level_num);
-			}
-			else
-				nm_messagebox(NULL, 1, "Ok", "Can't restart secret level!\nTry saving right before teleporter.");
 			break;
 
 

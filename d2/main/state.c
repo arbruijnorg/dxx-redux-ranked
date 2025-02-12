@@ -1181,6 +1181,9 @@ int state_restore_all(int in_game, int secret_restore, char *filename_override)
 	//	If Nsecret.sgc (where N = filenum) exists, then copy it to secret.sgc.
 	//	If it doesn't exist, then delete secret.sgc
 	if (!secret_restore) {
+		Ranking.quickload = 1;
+		Ranking.secretQuickload = 1;
+		Ranking.warmStart = 1;
 		int	rval;
 		char	temp_fname[PATH_MAX], fc;
 

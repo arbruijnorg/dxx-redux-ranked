@@ -65,6 +65,7 @@ fix	Flash_effect=0;
 
 int	PK1=1, PK2=8;
 int fireball_flag_hack;
+int fireball_matcen_hack;
 
 object *object_create_explosion_sub(object *objp, short segnum, vms_vector * position, fix size, int vclip_type, fix maxdamage, fix maxdistance, fix maxforce, int parent )
 {
@@ -178,16 +179,16 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 
 									if (apply_damage_to_robot(obj0p, damage, parent))
 										if (objp != NULL) {
-											if (obj0p->matcen_creator != 0 || obj0p->flags & OF_ROBOT_DROPPED) {
+											if (obj0p->matcen_creator || obj0p->flags & OF_ROBOT_DROPPED) {
 												if (Current_level_num > 0) {
 													Ranking.excludePoints += Robot_info[obj0p->id].score_value;
-													if (obj0p->flags & OF_ROBOT_DROPPED)
-														Ranking.missedrngspawn += Robot_info[obj0p->id].score_value;
+													if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+														Ranking.missedRngSpawn += Robot_info[obj0p->id].score_value;
 												}
 												else {
 													Ranking.secretExcludePoints += Robot_info[obj0p->id].score_value;
-													if (obj0p->flags & OF_ROBOT_DROPPED)
-														Ranking.secretmissedrngspawn += Robot_info[obj0p->id].score_value;
+													if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+														Ranking.secretMissedRngSpawn += Robot_info[obj0p->id].score_value;
 												}
 											}
 											if (!(parent == Players[Player_num].objnum)) {
@@ -1041,7 +1042,7 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 			break;
 
 		case OBJ_ROBOT:
-			for (count=0; count<num; count++) {
+			for (count = 0; count < num; count++) {
 				int	rand_scale;
 				new_velocity = *init_vel;
 				old_mag = vm_vec_mag_quick(init_vel);
@@ -1052,14 +1053,14 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 //				if (Game_mode & GM_MULTI)
 //					rand_scale = 4;
 //				else
-					rand_scale = 2;
+				rand_scale = 2;
 
-				new_velocity.x += (d_rand()-16384)*2;
-				new_velocity.y += (d_rand()-16384)*2;
-				new_velocity.z += (d_rand()-16384)*2;
+				new_velocity.x += (d_rand() - 16384) * 2;
+				new_velocity.y += (d_rand() - 16384) * 2;
+				new_velocity.z += (d_rand() - 16384) * 2;
 
 				vm_vec_normalize_quick(&new_velocity);
-				vm_vec_scale(&new_velocity, (F1_0*32 + old_mag) * rand_scale);
+				vm_vec_scale(&new_velocity, (F1_0 * 32 + old_mag) * rand_scale);
 				new_pos = *pos;
 				//	This is dangerous, could be outside mine.
 //				new_pos.x += (d_rand()-16384)*8;
@@ -1068,7 +1069,7 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 
 				objnum = obj_create(OBJ_ROBOT, id, segnum, &new_pos, &vmd_identity_matrix, Polygon_models[Robot_info[id].model_num].rad, CT_AI, MT_PHYSICS, RT_POLYOBJ);
 
-				if ( objnum < 0 ) {
+				if (objnum < 0) {
 					Int3();
 					return objnum;
 				}
@@ -1094,6 +1095,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 				//@@if (Robot_info[obj->id].flags & RIF_BIG_RADIUS)
 				//@@	obj->size = (obj->size*3)/2;
 
+				obj->matcen_creator = fireball_matcen_hack;
+				
 				//Set polygon-object-specific data
 
 				obj->rtype.pobj_info.model_num = Robot_info[obj->id].model_num;
@@ -1384,6 +1387,7 @@ void do_explosion_sequence(object *obj)
 			if (del_obj->contains_type == OBJ_POWERUP)
 				maybe_replace_powerup_with_energy(del_obj);
 			fireball_flag_hack = 0; //fixed drops, so don't set the no score flag
+			fireball_matcen_hack = 0; // Set the child's matcen value to the parent's, so Ranking.missedrngspawn functions right.
 			object_create_egg(del_obj);
 		} else if ((del_obj->type == OBJ_ROBOT) && !(Game_mode & GM_MULTI)) { // Multiplayer handled outside this code!!
 			robot_info* robptr = &Robot_info[del_obj->id];
@@ -1392,14 +1396,15 @@ void do_explosion_sequence(object *obj)
 					del_obj->contains_count = ((d_rand() * robptr->contains_count) >> 15) + 1;
 					del_obj->contains_type = robptr->contains_type;
 					del_obj->contains_id = robptr->contains_id;
-					if (robptr->contains_type == OBJ_ROBOT) {
+					if (!del_obj->matcen_creator && robptr->contains_type == OBJ_ROBOT) {
 						if (Current_level_num > 0)
-							Ranking.missedrngspawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
+							Ranking.missedRngSpawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 						else
-							Ranking.secretmissedrngspawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
+							Ranking.secretMissedRngSpawn -= Robot_info[del_obj->contains_id].score_value * del_obj->contains_count;
 					}
 					maybe_replace_powerup_with_energy(del_obj);
 					fireball_flag_hack = 1; //random drops, so set the no score flag
+					fireball_matcen_hack = del_obj->matcen_creator; // Set the child's matcen value to the parent's, so Ranking.missedrngspawn functions right.
 					object_create_egg(del_obj);
 				}
 			}

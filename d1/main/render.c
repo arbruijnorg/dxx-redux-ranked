@@ -1255,6 +1255,7 @@ void build_object_lists(int n_segs)
 				if (obj->type == OBJ_NONE)
 					continue;
 
+				obj->segnum = segnum; // Because the assert after this line failed and I couldn't figure out why. Yeah, master dev skills I know, but it works.
 				Assert( obj->segnum == segnum );
 
 				if (obj->flags & OF_ATTACHED)

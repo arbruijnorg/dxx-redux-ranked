@@ -63,6 +63,8 @@ char Gamesave_current_filename[PATH_MAX];
 
 int Gamesave_current_version;
 
+restartLevel RestartLevel;
+
 #define GAME_VERSION            32
 #define GAME_COMPATIBLE_VERSION 22
 
@@ -1408,6 +1410,7 @@ int load_level(const char * filename_passed)
 	#endif
 
 	#if !defined(NDEBUG) && !defined(COMPACT_SEGS)
+	if (!RestartLevel.restarted)
 	if (check_segment_connections())
 		nm_messagebox( "ERROR", 1, "Ok", 
 				"Connectivity errors detected in\n"

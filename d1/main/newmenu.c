@@ -68,6 +68,8 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #define MESSAGEBOX_TEXT_SIZE 2176  // How many characters in messagebox
 #define MAX_TEXT_WIDTH FSPACX(120) // How many pixels wide a input box can be
 
+restartLevel RestartLevel;
+
 struct newmenu
 {
 	window			*wind;
@@ -1027,6 +1029,39 @@ int newmenu_key_command(window *wind, d_event *event, newmenu *menu)
 				if (menu->rval)
 					*menu->rval = menu->citem;
 				window_close(menu->wind);
+				return 1;
+			}
+			break;
+
+		case KEY_R: // Allow restarting level from result screen with R.
+			if (RestartLevel.isResults && !Ranking.quickload) {
+				if (item->type == NM_TYPE_INPUT_MENU)
+					item->group = 0;	// go out of editing mode
+				// Tell callback, allow staying in menu
+				event->type = EVENT_NEWMENU_SELECTED;
+				if (menu->subfunction && (*menu->subfunction)(menu, event, menu->userdata))
+					return 1;
+				if (menu->rval)
+					*menu->rval = menu->citem;
+				window_close(menu->wind);
+				Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
+				Players[Player_num].secondary_weapon = RestartLevel.secondary_weapon;
+				Players[Player_num].score = Players[Player_num].last_score;
+				Players[Player_num].flags = RestartLevel.flags;
+				Players[Player_num].energy = RestartLevel.energy;
+				Players[Player_num].shields = RestartLevel.shields;
+				Players[Player_num].lives = RestartLevel.lives;
+				Players[Player_num].laser_level = RestartLevel.laser_level;
+				Players[Player_num].primary_weapon_flags = RestartLevel.primary_weapon_flags;
+				Players[Player_num].secondary_weapon_flags = RestartLevel.secondary_weapon_flags;
+				for (int i = 0; i < MAX_PRIMARY_WEAPONS; i++)
+					Players[Player_num].primary_ammo[i] = RestartLevel.primary_ammo[i];
+				for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
+					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
+				RestartLevel.restarted = RestartLevel.restartedCache;
+				RestartLevel.restarted++;
+				RestartLevel.isResults = 2;
+				RestartLevel.updateRestartStuff = 0;
 				return 1;
 			}
 			break;

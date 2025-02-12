@@ -1379,7 +1379,7 @@ int mark_player_path_to_segment(int segnum)
 
 	Last_level_path_created = Current_level_num;
 
-	if (create_path_points(objp, objp->segnum, segnum, Point_segs_free_ptr, &player_path_length, 100, 0, 0, -1) == -1) {
+	if (create_path_points(objp, objp->segnum, segnum, Point_segs_free_ptr, &player_path_length, 100, 0, 0, -1, 0, NULL) == -1) {
 		return 0;
 	}
 
@@ -1461,6 +1461,9 @@ bool is_observer() {
 
 bool can_draw_observer_cockpit()
 {
+	// The result of this function is meaningful only in observer mode.
+	Assert(is_observer());
+
 	// We can only draw a cockpit in observer mode if the relevant setting is enabled, and we're
 	// observing in first-person mode.
 	return PlayerCfg.ObsShowCockpit[get_observer_game_mode()] && is_observing_player() && !Obs_at_distance;

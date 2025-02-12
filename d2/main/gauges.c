@@ -747,9 +747,27 @@ void hud_show_pointstonextlife()
 	gr_printf(HUD_SCALE_X_AR(bm->bm_w) + x, FSPACY(20), "1-up in %5d", pointstonextlife);
 }
 
+void hud_show_speedometer()
+{
+	int speed = f2fl(sqrt(pow(ConsoleObject->mtype.phys_info.velocity.x, 2) + pow(ConsoleObject->mtype.phys_info.velocity.y, 2) + pow(ConsoleObject->mtype.phys_info.velocity.z, 2)));
+
+	gr_set_curfont(GAME_FONT);
+
+	if (Color_0_31_0 == -1)
+		Color_0_31_0 = BM_XRGB(0, 31, 0);
+	gr_set_fontcolor(Color_0_31_0, -1);
+
+	if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 17.75), "%d", speed);
+	if (PlayerCfg.CurrentCockpitMode == CM_STATUS_BAR)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 12.75), "%d", speed);
+	if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
+		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 10.75), "%d", speed);
+}
+
 void hud_show_pointsleftinlevel()
 {
-	int pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
+	double pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
 	if (Current_level_num < 0)
 		pointsleftinlevel = Ranking.secretMaxScore / 3 - Ranking.secretRankScore;
 	if (HUD_toolong)
@@ -760,7 +778,27 @@ void hud_show_pointsleftinlevel()
 	if (Color_0_31_0 == -1)
 		Color_0_31_0 = BM_XRGB(0, 31, 0);
 	gr_set_fontcolor(Color_0_31_0, -1);
-	gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%5d remains", pointsleftinlevel);
+
+	if (Current_level_num > 0) {
+		if (pointsleftinlevel - Ranking.missedRngSpawn) {
+			if (Ranking.missedRngSpawn < 0)
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
+			else
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+		}
+		else
+			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
+	}
+	else {
+		if ((pointsleftinlevel - Ranking.secretMissedRngSpawn && Ranking.secretMissedRngSpawn <= 0) || (pointsleftinlevel && (Ranking.secretMissedRngSpawn > 0))) { // Gotta do a gross if jungle here because of the secretMissedRngSpawn bug caused by thieves.
+			if (Ranking.secretMissedRngSpawn < 0)
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.secretMissedRngSpawn);
+			else
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+		}
+		else
+			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
+	}
 }
 
 void hud_show_timer_count()
@@ -916,7 +954,7 @@ void play_homing_warning(void)
 
 	int pnum = get_pnum_for_hud();
 
-	if (Endlevel_sequence || Player_is_dead)
+	if (Endlevel_sequence || Player_is_dead || Newdemo_state == ND_STATE_PLAYBACK)
 		return;
 
 	if (Players[pnum].homing_object_dist >= 0) {
@@ -1590,12 +1628,12 @@ void show_time()
 		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:0%.03f", mins, secs);
 	else
 		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
-	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
-		if (Current_level_num > 0) {
+	if ((Current_level_num > 0 && Ranking.alreadyBeaten) || (Current_level_num < 0 && Ranking.secretAlreadyBeaten)) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
+		if (Current_level_num > 0 || !Ranking.secretIsRankable) {
 			mins = Ranking.parTime / 60;
 			secs = Ranking.parTime - mins * 60;
 		}
-		else {
+		if (Current_level_num < 0 || !Ranking.isRankable) {
 			mins = Ranking.secretParTime / 60;
 			secs = Ranking.secretParTime - mins * 60;
 		}
@@ -4513,7 +4551,7 @@ void show_HUD_names()
 // Show bomb highlights in observer mode
 void observer_show_bomb_highlights()
 {
-	if (!is_observer() || !PlayerCfg.ObsShowBombTimes)
+	if (!is_observer() || !PlayerCfg.ObsShowBombTimes[get_observer_game_mode()])
 	{
 		return;
 	}
@@ -4583,13 +4621,16 @@ void observer_show_bomb_highlights()
 //draw all the things on the HUD
 void draw_hud()
 {
+	int pnum = get_pnum_for_hud();
 	if (Newdemo_state == ND_STATE_RECORDING)
 	{
-		if (Players[Player_num].primary_weapon == VULCAN_INDEX)
-			newdemo_record_primary_ammo(Players[Player_num].primary_ammo[Players[Player_num].primary_weapon]);
-		if (Players[Player_num].primary_weapon == OMEGA_INDEX)
+		if (Players[pnum].homing_object_dist >= 0)
+			newdemo_record_homing_distance(Players[pnum].homing_object_dist);
+		if (Players[pnum].primary_weapon == VULCAN_INDEX)
+			newdemo_record_primary_ammo(Players[pnum].primary_ammo[Players[pnum].primary_weapon]);
+		if (Players[pnum].primary_weapon == OMEGA_INDEX)
 			newdemo_record_primary_ammo(Omega_charge);
-		newdemo_record_secondary_ammo(Players[Player_num].secondary_ammo[Players[Player_num].secondary_weapon]);
+		newdemo_record_secondary_ammo(Players[pnum].secondary_ammo[Players[pnum].secondary_weapon]);
 	}
 
 	n_players = multi_get_kill_list(player_list);
@@ -4621,7 +4662,6 @@ void draw_hud()
 
 				if (Newdemo_state == ND_STATE_RECORDING)
 				{
-					int pnum = get_pnum_for_hud();
 					newdemo_record_player_flags(Players[pnum].flags);
 				}
 			}
@@ -4682,10 +4722,12 @@ void draw_hud()
 
 	if (!((Game_mode & GM_MULTI) || (!(Newdemo_state == ND_STATE_NORMAL || Newdemo_state == ND_STATE_RECORDING)) || (Ranking.quickload == 1 && Current_level_num > 0) || (Ranking.secretQuickload == 1 && Current_level_num < 0))) {
 		hud_show_pointstonextlife();
-		if (Ranking.alreadyBeaten) // Only show points remaining if the level's been beaten before, so we don't spoil what's in a new level.
+		if ((Current_level_num > 0 && Ranking.alreadyBeaten) || (Current_level_num < 0 && Ranking.secretAlreadyBeaten)) // Only show points remaining if the level's been beaten before, so we don't spoil what's in a new level.
 			hud_show_pointsleftinlevel();
 		show_time();
 	}
+	if (PlayerCfg.Speedometer) // Okay so maybe the mod isn't COMPLETELY disabled...
+		hud_show_speedometer();
 
 	if (!Rear_view && PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW)
 		hud_show_timer_count();
@@ -4708,7 +4750,6 @@ void draw_hud()
 
 			if (Newdemo_state==ND_STATE_RECORDING)
 			{
-				int pnum = get_pnum_for_hud();
 				newdemo_record_player_flags(Players[pnum].flags);
 			}
 		}
@@ -4778,10 +4819,6 @@ void render_gauges()
 
 	gr_set_current_canvas(NULL);
 	gr_set_curfont( GAME_FONT );
-
-	if (Newdemo_state == ND_STATE_RECORDING)
-		if (Players[pnum].homing_object_dist >= 0)
-			newdemo_record_homing_distance(Players[pnum].homing_object_dist);
 
 	draw_weapon_boxes();
 
@@ -4914,6 +4951,10 @@ void do_cockpit_window_view(int win,object *viewer,int rear_view_flag,int user,c
 
 	if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN)
 	{
+		// If we're drawing the kill graph in observer mode, we don't have space for the extra views
+		if (is_observer() && PlayerCfg.ObsShowKillGraph[get_observer_game_mode()] && GameTime64 < Show_graph_until)
+			goto abort;
+		
 		w = HUD_SCALE_X_AR(HIRESMODE?106:44);
 		h = HUD_SCALE_Y_AR(HIRESMODE?106:44);
 

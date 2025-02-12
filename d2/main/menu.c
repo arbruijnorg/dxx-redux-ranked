@@ -691,13 +691,13 @@ void do_best_ranks_menu()
 	Rank[13] = "A+";
 	Rank[14] = "S";
 	int i;
-	if (Current_mission->anarchy_only_flag == 1) {
-		list[i] = (char*)malloc(sizeof(char) * 64);
-		snprintf(list[i], 64, "Not a single player mission.");
-	}
-	else {
-		for (i = 0; i < numlines; i++)
-		{
+	for (i = 0; i < numlines; i++)
+	{
+		if (Current_mission->anarchy_only_flag == 1) {
+			list[i] = (char*)malloc(sizeof(char) * 64);
+			snprintf(list[i], 64, "Not a single player mission.");
+		}
+		else {
 			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
 			if (i >= Current_mission->last_level)
 				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
@@ -760,8 +760,6 @@ int do_option ( int select)
 			select_demo();
 			break;
 		case MENU_LOAD_GAME:
-			Ranking.quickload = 1;
-			Ranking.secretQuickload = 1;
 			state_restore_all(0, 0, NULL);
 			break;
 		#ifdef EDITOR
@@ -2238,12 +2236,13 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[36];
+	newmenu_item m[37];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	do {
 		ADD_CHECK(35, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
+		ADD_CHECK(36, "Show speedometer", PlayerCfg.Speedometer);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Missile view", PlayerCfg.MissileViewEnabled);
 		ADD_CHECK(2, "Headlight on when picked up", PlayerCfg.HeadlightActiveDefault );
@@ -2378,6 +2377,7 @@ void do_misc_menu()
 		PlayerCfg.ShowCustomColors = m[29].value;
 		PlayerCfg.PreferMyTeamColors = (PlayerCfg.MyTeamColor == 8 && PlayerCfg.OtherTeamColor == 8) ? 0 : m[34].value;
 		PlayerCfg.RankShowPlusMinus = m[35].value;
+		PlayerCfg.Speedometer = m[36].value;
 
 	} while( i>-1 );
 

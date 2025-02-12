@@ -1127,6 +1127,7 @@ int state_restore_all_sub(char *filename)
 	player_rw* pl_rw;
 	int rebirth = 0;
 	Ranking.quickload = 1;
+	Ranking.warmStart = 1;
 
 	#ifndef NDEBUG
 	if (GameArg.SysUsePlayersDir && strncmp(filename, "Players/", 8))
