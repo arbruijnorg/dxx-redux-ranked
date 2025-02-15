@@ -1058,8 +1058,8 @@ int newmenu_key_command(window *wind, d_event *event, newmenu *menu)
 					Players[Player_num].primary_ammo[i] = RestartLevel.primary_ammo[i];
 				for (int i = 0; i < MAX_SECONDARY_WEAPONS; i++)
 					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
-				RestartLevel.restarted = RestartLevel.restartedCache;
-				RestartLevel.restarted++;
+				RestartLevel.restarts = RestartLevel.restartsCache;
+				RestartLevel.restarts++;
 				RestartLevel.isResults = 2;
 				RestartLevel.updateRestartStuff = 0;
 				return 1;

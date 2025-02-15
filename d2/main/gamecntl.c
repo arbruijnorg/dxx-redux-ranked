@@ -980,7 +980,8 @@ int HandleSystemKey(int key)
 					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
 				Players[Player_num].afterburner_charge = RestartLevel.afterburner_charge;
 				Omega_charge = RestartLevel.omega_charge;
-				RestartLevel.restarted++;
+				RestartLevel.restarts++;
+				// Note: time abuse with restarts is possible due to player speed not resetting properly and idk how to fix it.
 				StartNewLevel(Current_level_num);
 			break;
 
@@ -1760,6 +1761,7 @@ int FinalCheats(int key)
 			new_level_num = atoi(m.text);
 			if (new_level_num!=0 && new_level_num>=0 && new_level_num<=Last_level) {
 				window_set_visible(Game_wind, 0);
+				RestartLevel.restarts = 0; // Since we're moving to a new level, reset the restart counter.
 				StartNewLevel(new_level_num);
 				window_set_visible(Game_wind, 1);
 			}

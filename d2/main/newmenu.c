@@ -1067,8 +1067,8 @@ int newmenu_key_command(window *wind, d_event *event, newmenu *menu)
 					Players[Player_num].secondary_ammo[i] = RestartLevel.secondary_ammo[i];
 				Players[Player_num].afterburner_charge = RestartLevel.afterburner_charge;
 				Omega_charge = RestartLevel.omega_charge;
-				RestartLevel.restarted = RestartLevel.restartedCache;
-				RestartLevel.restarted++;
+				RestartLevel.restarts = RestartLevel.restartsCache;
+				RestartLevel.restarts++;
 				RestartLevel.isResults = 2;
 				RestartLevel.updateRestartStuff = 0;
 				return 1;

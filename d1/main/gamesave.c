@@ -1241,7 +1241,7 @@ int load_level(const char * filename_passed)
 	#endif
 
 	#if !defined(NDEBUG) && !defined(COMPACT_SEGS)
-	if (!RestartLevel.restarted)
+	if (!RestartLevel.restarts)
 	if (check_segment_connections())
 		nm_messagebox( "ERROR", 1, "Ok", 
 				"Connectivity errors detected in\n"

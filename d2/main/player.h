@@ -200,8 +200,8 @@ typedef struct restartLevel { // Recreate and store certain info from player to 
 	ushort  secondary_weapon_flags;
 	ushort  primary_ammo[MAX_PRIMARY_WEAPONS];
 	ushort  secondary_ammo[MAX_PRIMARY_WEAPONS];
-	int     restarted; // Used for whether to skip briefings or not.
-	int     restartedCache; // Just one of the many hoops needed to keep the restart counter accurate when restarting at result screen.
+	int     restarts; // Used for whether to skip briefings or not.
+	int     restartsCache; // Just one of the many hoops needed to keep the restart counter accurate when restarting at result screen.
 	int     isResults; // So pressing R on a wide array of menus doesn't try to restart a level you aren't on.
 	int     updateRestartStuff; // Self explanatory.
 } __pack__ restartLevel;

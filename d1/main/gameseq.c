@@ -817,7 +817,7 @@ void getLevelNameFromRankFile(int level_num, char* buffer)
 //starts a new game on the given level
 void StartNewGame(int start_level)
 {	
-	RestartLevel.restarted = 0;
+	RestartLevel.restarts = 0;
 	Ranking.warmStart = 0;
 	PHYSFS_file* fp;
 	char filename[256];
@@ -859,6 +859,7 @@ void StartNewGame(int start_level)
 
 	N_players = 1;
 
+	RestartLevel.updateRestartStuff = 1; // So the player doesn't restart with 0 in every field.
 	StartNewLevel(start_level);
 
 	Players[Player_num].starting_level = start_level;		// Mark where they started
@@ -914,8 +915,8 @@ void DoEndLevelScoreGlitz(int network)
 {
 	if (Ranking.level_time == 0)
 		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
-	RestartLevel.restartedCache = RestartLevel.restarted;
-	RestartLevel.restarted = 0;
+	RestartLevel.restartsCache = RestartLevel.restarts;
+	RestartLevel.restarts = 0;
 	RestartLevel.isResults = 1;
 
 	int level_points, skill_points, death_points, shield_points, energy_points, time_points, hostage_points, all_hostage_points, endgame_points;
@@ -1167,6 +1168,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	char timeOfScore[256];
 	int warmStart;
 	Ranking.quickload = 0; // Set this to 0 so the rank image loads if the player quickloaded on their last played level.
+	Ranking.fromBestRanksButton = 1; // So exiting a level and immediately going back into one via best ranks menu doesn't cause a loop.
 	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
 	if (level_num > Current_mission->last_level)
 		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num - Current_mission->last_level);
@@ -3100,7 +3102,7 @@ void StartNewLevel(int level_num)
 		if (Triggers[i].flags & TRIGGER_EXIT || Triggers[i].flags & TRIGGER_SECRET_EXIT)
 			isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 	}
-	if (!RestartLevel.restarted) // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
+	if (!RestartLevel.restarts) // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
 		Ranking.parTime = calculateParTime();
 	if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an S-rank, so the mission can have an aggregate rank.
 		PHYSFS_File* temp;
@@ -3131,11 +3133,11 @@ void StartNewLevel(int level_num)
 	}
 	else {
 		char message[256];
-		if (RestartLevel.restarted) {
-			if (RestartLevel.restarted == 1)
+		if (RestartLevel.restarts) {
+			if (RestartLevel.restarts == 1)
 				sprintf(message, "1 restart and counting...");
 			else
-				sprintf(message, "%i restarts and counting...", RestartLevel.restarted);
+				sprintf(message, "%i restarts and counting...", RestartLevel.restarts);
 			powerup_basic(-10, -10, -10, 0, message);
 		}
 	}

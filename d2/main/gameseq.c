@@ -937,7 +937,7 @@ void getLevelNameFromRankFile(int level_num, char* buffer)
 //starts a new game on the given level
 void StartNewGame(int start_level)
 {
-	RestartLevel.restarted = 0;
+	RestartLevel.restarts = 0;
 	Ranking.warmStart = 0;
 	PHYSFS_file* fp;
 	char filename[256];
@@ -979,6 +979,7 @@ void StartNewGame(int start_level)
 
 	N_players = 1;
 
+	RestartLevel.updateRestartStuff = 1; // So the player doesn't restart with 0 in every field.
 	if (start_level < 0)
 		StartNewLevelSecret(start_level, 0);
 	else
@@ -1046,8 +1047,8 @@ void DoEndLevelScoreGlitz(int network)
 	if (Ranking.level_time == 0)
 		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
 	Ranking.maxScore -= Ranking.num_thief_points * 3; // Subtract thieves from the max score right before result screen loads so the "remains" counter is correct in the level.
-	RestartLevel.restartedCache = RestartLevel.restarted;
-	RestartLevel.restarted = 0;
+	RestartLevel.restartsCache = RestartLevel.restarts;
+	RestartLevel.restarts = 0;
 	RestartLevel.isResults = 1;
 	
 	int level_points, skill_points, death_points, shield_points, energy_points, time_points, hostage_points, all_hostage_points, endgame_points;
@@ -1439,6 +1440,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	char timeOfScore[256];
 	int warmStart;
 	Ranking.quickload = 0; // Set this to 0 so the rank image loads if the player quickloaded on their last played level.
+	Ranking.fromBestRanksButton = 1; // So exiting a level and immediately going back into one via best ranks menu doesn't cause a loop.
 	sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num); // Find file for the requested level.
 	if (level_num > Current_mission->last_level)
 		sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, level_num - Current_mission->last_level);
@@ -3247,7 +3249,10 @@ void EnterSecretLevel(void)
 		do_screen_message("Alternate Exit Found!\n\nProceeding to Secret Level!");
 		StartNewLevel(Next_level_num);
 	} else {
- 	   	StartNewLevelSecret(Next_level_num, 1);
+		if (RestartLevel.isResults == 2) // We need restart stuff here to make it work on result screens going into a secret level, so the player doesn't get spat out there anyway.
+			StartNewLevel(Current_level_num);
+		else
+		   	StartNewLevelSecret(Next_level_num, 1);
 	}
 	// END NMN
 
@@ -3885,7 +3890,7 @@ void StartNewLevel(int level_num)
 		maybe_set_first_secret_visit(level_num);
 	}
 
-	if (!RestartLevel.restarted && RestartLevel.isResults < 2) // Skip briefing for restarts.
+	if (!RestartLevel.restarts && RestartLevel.isResults < 2) // Skip briefing for restarts.
 		ShowLevelIntro(level_num);
 	else
 		First_secret_visit = 1; // Reset a secret level upon restarting its base level, for continuity's sake.
@@ -3932,12 +3937,12 @@ void StartNewLevel(int level_num)
 		if (Triggers[i].type == TT_EXIT)
 			Ranking.isRankable = 1; // A level-ending exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be somewhere unreachable, but who would put an exit there?
 	}
-	if (RestartLevel.restarted) {
+	if (RestartLevel.restarts) {
 		const char message[256];
-		if (RestartLevel.restarted == 1)
+		if (RestartLevel.restarts == 1)
 			sprintf(message, "1 restart and counting...");
 		else
-			sprintf(message, "%i restarts and counting...", RestartLevel.restarted);
+			sprintf(message, "%i restarts and counting...", RestartLevel.restarts);
 		powerup_basic(-10, -10, -10, 0, message);
 	}
 	else {
