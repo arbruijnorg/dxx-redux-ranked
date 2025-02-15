@@ -2935,7 +2935,8 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 	timer_update();
 	end_timer_value = timer_query();
 
-		state.energyTime = 0; // Set to -1 to make this part of the algorithm function.
+	int energyTime; // Energy time of the current iteration.
+	int repeat = 0; // Whether or not to continue the upcoming while loop.
 	for (int s = 0; s < Highest_segment_index; s++) { // Search all segments, only bothering with energy time calculation if a fuelcen exists.
 		if (Segments[s].special == SEGMENT_IS_FUELCEN) {
 			// Now it's time to do fuelcen stuff. We just kept track of every objective gone to and the energy left after dealing with them, from earliest to latest. I'll comment to explain each step.
@@ -2958,8 +2959,9 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				}
 			}
 			refills[0] = 0;
-			while (state.energyTime == -1) {
-				state.energyTime = 0;
+			while (repeat) {
+				repeat = 0;
+				energyTime = 0;
 				if (numRefills) {
 					for (i = 0; i < state.objectives; i++) { // Reset the arrays for a new simulated visit combination.
 						objectiveSegments[i] = state.objectiveSegments[i];
@@ -2971,11 +2973,12 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 						for (r = 0; r < numRefills; r++) { // Check to see if any of the refills placed so far are on this objective. If so, we're gonna scoot up every energy value from here to the end by the amount that makes the current one 100.
 							if (refills[r] == i && objectiveEnergies[i] < 100) {
 								refillHere = i;
-								state.energyTime += objectiveFuelcenTripTimes[i] + (4 - objectiveEnergies[i] * 0.04); // There's a refill here, add the time it takes to do so from this objective's segment, plus the time it takes to get back up to 100 energy.
-								break;
+								// There's a refill here. Add the time it takes to do so from this objective's segment, plus the time it takes to get back up to 100 energy. A full refill from 0 to 100 takes four seconds.
+								energyTime += objectiveFuelcenTripTimes[i] + (4 - objectiveEnergies[i] * 0.04);
+								break; // We already found our refill, no need to continue looking for it.
 							}
 						}
-						if (state.energyTime > shortestEnergyTime)
+						if (energyTime > shortestEnergyTime)
 							break; // Don't bother continuing with this combo, we've already deduced it's not gonna be the fastest one.
 						if (refillHere > -1) {
 							increaseEnergiesBy = 100 - objectiveEnergies[i];
@@ -2992,6 +2995,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 							refills[i] = 0;
 						}
 					}
+					// Ideally there will a check to skip a combo here if any of the refill locations match, since you can't refill twice at once. Won't bother yet in case a better energy method is found.
 				}
 				int validRefillCombo = 1;
 				for (i = 0; i < state.objectives; i++) {
@@ -3000,11 +3004,11 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 						break;
 					}
 				}
-				if (validRefillCombo && (state.energyTime < shortestEnergyTime || shortestEnergyTime == -1)) // If we found valid combos, we need to keep track of the most optimal one.
-					shortestEnergyTime = state.energyTime;
-				state.energyTime = -1;
+				if (validRefillCombo && (energyTime < shortestEnergyTime || shortestEnergyTime == -1)) // If we found valid combos, we need to keep track of the most optimal one.
+					shortestEnergyTime = energyTime;
+				repeat = 1;
 				if (refills[numRefills - 1] == state.objectives - 1 || !numRefills) {
-					if (numRefills < state.objectives && !(!numRefills && shortestEnergyTime > - 1)) { // We've made it through all the combinations and still no valid combo found. Add another refill and start over.
+					if (numRefills < state.objectives && !(!numRefills && shortestEnergyTime > - 1)) { // Keep adding refills and starting over until every possible number of them has happened. This is currently far too expensive.
 						numRefills++;
 						for (i = 0; i < numRefills; i++)
 							refills[i] = 0;
@@ -3026,8 +3030,11 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		state.chaseTime,
 		state.energyTime,
 		f2fl(end_timer_value - start_timer_value));
-	return ceil(state.movementTime + state.combatTime); // Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
-	// Par time is rounded up to the nearest second so it looks better/legible on the result screen, and leaves room for the time bonus.
+	
+	// Par time is rounded up to the nearest five seconds so it looks better / legible on the result screen, leaves room for the time bonus, and looks like a human set it.
+		return 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
+	// Also because Doom did five second increments.
+	// Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
 }
 
 //called when the player is starting a new level for normal game model

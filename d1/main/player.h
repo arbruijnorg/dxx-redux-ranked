@@ -27,6 +27,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "vecmat.h"
 #include "weapon.h"
 #include "fuelcen.h"
+#include "wall.h"
 
 #define MAX_PLAYERS 8
 #define OBSERVER_PLAYER_ID 7
@@ -146,11 +147,10 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 
 	int        parTimePathCompletable;
 	int        parTimeStateSegnum;
-	// 254 is MAX_WALLS.
-	int        currentlyLockedWalls[254];
+	int        currentlyLockedWalls[MAX_WALLS];
 	int        numCurrentlyLockedWalls;
-	int        parTimeUnlockIDs[254];
-	int        parTimeUnlockTypes[254];
+	int        parTimeUnlockIDs[MAX_WALLS];
+	int        parTimeUnlockTypes[MAX_WALLS];
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.

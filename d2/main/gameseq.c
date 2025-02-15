@@ -2939,13 +2939,15 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		f2fl(end_timer_value - start_timer_value));
 	
 	// Store Algo's weapon info to use for secret levels predeterminately so players can't abuse their par times.
-	Ranking.parTimeNumWeapons = state.num_weapons;
-	for (i = 0; i < 10; i++)
-		Ranking.parTimeHeldWeapons[i] = state.heldWeapons[i];
-	Ranking.parTimeHasQuads = state.hasQuads;
+	//Ranking.parTimeNumWeapons = state.num_weapons;
+	//for (i = 0; i < 10; i++)
+		//Ranking.parTimeHeldWeapons[i] = state.heldWeapons[i];
+	//Ranking.parTimeHasQuads = state.hasQuads;
 	
-	return ceil(state.movementTime + state.combatTime); // Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties. This is important because potentially time-altering things like weapon and enemy stats can be different.
-	// Par time is rounded up to the nearest second so it looks better/legible on the result screen, and leaves room for the time bonus.
+	// Par time is rounded up to the nearest five seconds so it looks better/legible on the result screen, leaves room for the time bonus, and looks like a human set it.
+	return 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
+	// Also because Doom did five second increments.
+	// Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
 }
 
 //	-----------------------------------------------------------------------------------------------------

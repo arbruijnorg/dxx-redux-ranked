@@ -750,7 +750,7 @@ int load_mission_by_name_aggregate(mle* mission_list) // Version of load_mission
 		rankPoints = 0;
 		for (int c = 1; c <= Current_mission->last_level - Current_mission->last_secret_level; c++) {
 			currentRank = calculateRank(c);
-			if (currentRank > 0)
+			if (currentRank)
 				rankPoints += currentRank;
 			else {
 				rankPoints = 0; // We found an N/A somewhere, don't return an aggregate rank.
