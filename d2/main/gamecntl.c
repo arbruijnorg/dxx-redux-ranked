@@ -1635,6 +1635,7 @@ int FinalCheats(int key)
 		if (d_strnicmp(cheat_codes[i].string, cheat_buffer+CHEAT_MAX_LEN-cheatlen, cheatlen)==0)
 		{
 			*cheat_codes[i].stateptr = !*cheat_codes[i].stateptr;
+			Ranking.cheated = 1;
 			cheats.enabled = 1;
 			if (Newdemo_state == ND_STATE_PLAYBACK || (Game_mode & GM_MULTI_COOP) || (Ranking.quickload == 1 && Current_level_num > 0) || (Ranking.secretQuickload == 1 && Current_level_num < 0))
 				Players[Player_num].score = 0;

@@ -154,6 +154,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     num_thief_points;        // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
 	int     warmStart;               // If the player enters a level from a previous one, this becomes 1. If this is 1 when a result screen comes up, total score will have an asterisk next to it. This does nothing else. It's just informative for those who care.
 	int     isRankable;              // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.
+	int     cheated;                 // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
 	

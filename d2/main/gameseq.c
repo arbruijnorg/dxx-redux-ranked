@@ -939,6 +939,7 @@ void StartNewGame(int start_level)
 {
 	RestartLevel.restarts = 0;
 	Ranking.warmStart = 0;
+	Ranking.cheated = 0;
 	PHYSFS_file* fp;
 	char filename[256];
 	int i = 1;
@@ -1165,7 +1166,7 @@ void DoEndLevelScoreGlitz(int network)
 		if (!PlayerCfg.RankShowPlusMinus)
 			rank = truncateRanks(rank + 1) - 1;
 		endlevel_current_rank = rank;
-		if (cheats.enabled) {
+		if (Ranking.cheated) {
 			strcpy(m_str[c++], "\n\n\n");
 			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
 		}
@@ -1348,7 +1349,7 @@ void DoEndSecretLevelScoreGlitz()
 		if (!PlayerCfg.RankShowPlusMinus)
 			rank = truncateRanks(rank + 1) - 1;
    		endlevel_current_rank = rank;
-		if (cheats.enabled) {
+		if (Ranking.cheated) {
 			strcpy(m_str[c++], "\n\n\n");
 			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
 		}
