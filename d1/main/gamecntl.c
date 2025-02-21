@@ -679,8 +679,11 @@ int HandleSystemKey(int key)
 				state_restore_all(1);
 			break;
 		case KEY_ALTED + KEY_F5:
-			Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
-			Players[Player_num].secondary_weapon = RestartLevel.secondary_weapon;
+			// Only change equipped weapon when restarting if it's one they didn't already have.
+			if (!(RestartLevel.primary_weapon_flags & HAS_FLAG(Players[Player_num].primary_weapon)))
+				Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
+			if (!(RestartLevel.secondary_weapon_flags & HAS_FLAG(Players[Player_num].secondary_weapon)))
+				Players[Player_num].secondary_weapon = RestartLevel.secondary_weapon;
 			Players[Player_num].score = Players[Player_num].last_score;
 			Players[Player_num].flags = RestartLevel.flags;
 			Players[Player_num].energy = RestartLevel.energy;
