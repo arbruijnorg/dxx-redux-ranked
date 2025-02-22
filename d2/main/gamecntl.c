@@ -964,7 +964,7 @@ int HandleSystemKey(int key)
 				break;
 		case KEY_ALTED+KEY_F5:
 			if (Current_level_num > 0)
-				// Only change equipped weapon when restarting if it's one they didn't already have.
+				// Only change equipped weapon when restarting if it's one player didn't already have.
 				if (!(RestartLevel.primary_weapon_flags & HAS_FLAG(Players[Player_num].primary_weapon)))
 					Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
 				if (!(RestartLevel.secondary_weapon_flags & HAS_FLAG(Players[Player_num].secondary_weapon)))

@@ -1044,7 +1044,7 @@ int newmenu_key_command(window *wind, d_event *event, newmenu *menu)
 				if (menu->rval)
 					*menu->rval = menu->citem;
 				window_close(menu->wind);
-				// Only change equipped weapon when restarting if it's one they didn't already have.
+				// Only change equipped weapon when restarting if it's one player didn't already have.
 				if (!(RestartLevel.primary_weapon_flags & HAS_FLAG(Players[Player_num].primary_weapon)))
 					Players[Player_num].primary_weapon = RestartLevel.primary_weapon;
 				if (!(RestartLevel.secondary_weapon_flags & HAS_FLAG(Players[Player_num].secondary_weapon)))

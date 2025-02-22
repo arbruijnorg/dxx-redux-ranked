@@ -940,6 +940,7 @@ void StartNewGame(int start_level)
 	RestartLevel.restarts = 0;
 	Ranking.warmStart = 0;
 	Ranking.cheated = 0;
+	Ranking.secret_hostages_on_board = 0; // If we don't set this to zero here, then getting hostages in a secret level, quitting out and starting a new game will cause the next level to never give full rescue bonus.
 	PHYSFS_file* fp;
 	char filename[256];
 	int i = 1;
