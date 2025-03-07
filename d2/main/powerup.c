@@ -268,6 +268,11 @@ int do_powerup(object *obj)
 		case POW_EXTRA_LIFE:
 			Players[Player_num].lives++;
 			powerup_basic(15, 15, 15, 0, "%s", TXT_EXTRA_LIFE);
+			if (Current_level_num > 0) // 1up powerups will be worth 10k in the mod, since lives are worth 10k a piece on vanilla last level result screens.
+				Ranking.excludePoints -= 10000;
+			else
+				Ranking.secretExcludePoints -= 10000;
+			add_points_to_score(0);
 			used=1;
 			break;
 		case POW_ENERGY:

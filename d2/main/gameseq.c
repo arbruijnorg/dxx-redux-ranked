@@ -1738,11 +1738,14 @@ typedef struct
 	int loops;
 	double pathObstructionTime; // Amount of time spent dealing with walls or matcens on the way to an objective (basically an Abyss 1.0 hotfix for the 32k HP wall let's be real lol).
 	double shortestPathObstructionTime;
-	double chaseTime; // This variable is only used for balance testing in debug mode.
 	int hasQuads;
 	partime_objective inaccessibleObjectives[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // Things behind closed walls with no unlock trigger
 	int numInaccessibleObjectives;
 	int segnum; // What segment Algo is in.
+	double energyTime; // Time spent to from and inside fuel centers.
+	int objectives; // How many objectives Algo has dealt with so far.
+	int objectiveSegments[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	double objectiveEnergies[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 } partime_calc_state;
 
 double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int pathFinal) // Tell algo to use the weapon that's fastest for the destructible wall in the way.
@@ -1781,7 +1784,6 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 		ammo_usage = f2fl(Weapon_info[weapon_id].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 		splash_radius = f2fl(Weapon_info[weapon_id].damage_radius);
 		wall_health = f2fl(Walls[wall_num].hps);
-		// Initialize the newly found weapon's stats.
 		if (weapon_id == FUSION_ID)
 			energy_usage = 2; // Fusion's energy_usage field is 0, so we have to manually set it.
 		else {  // Difficulty-based energy nerfs don't impact fusion.
@@ -1790,12 +1792,13 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 			if (Difficulty_level == 1) // Rookie has 0.75x energy consumption.
 				energy_usage *= 0.75;
 		}
+		// Assume accuracy is always 100% for walls. They're big and don't move lol.
 		int shots = wall_health / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID) {
 			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
-				thisWeaponCombatTime = 10000;
+				thisWeaponCombatTime = INFINITY; // Make vulcan's/gauss' time infinite so algo won't use it without ammo.
 		}
 		else
 			thisWeaponCombatTime = shots / fire_rate;
@@ -1846,6 +1849,233 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 	return lowestCombatTime + 1; // Give an extra second per wall to wait for the explosion to go down. Flying through it causes great damage.
 }
 
+double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_info, int weapon_id, object* obj, robot_info* robInfo, int robot_type)
+{
+	// Here we use various aspects of the combat situation to estimate what percentage of shots the player will hit.
+	// robot_type tells this function which data to look at to find the right enemy.
+	// 0 means a parent robot, 1 means a robot dropped from the obj data, 2 means a robot dropped from the robot data, 3 means a matcen robot.
+
+	// First initialize weapon and enemy stuff. This is gonna be a long section.
+	// Everything will be doubles due to the variables' involvement in division equations.
+
+	if (weapon_id == OMEGA_ID)
+		return 1; // Omega always hits (within a certain distance but we'll fudge it). It'll still rarely get used due to the ultra low DPS Algo perceives it to have, but we can at least give it this, right?
+
+	double gunpoints = 2;
+	if ((!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6) && state->hasQuads) { // Account for increased damage of quads.
+		if (weapon_id > LASER_ID_L4)
+			gunpoints = 4;
+		else
+			gunpoints = 3; // For some reason only quad 1-4 gets 25% damage reduction while quad 5-6 gets none.
+	}
+	if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
+		gunpoints = 1;
+	if (weapon_id == SPREADFIRE_ID)
+		gunpoints = 3;
+	if (weapon_id == HELIX_ID)
+		gunpoints = 5;
+	double damage = f2fl(Weapon_info[weapon_id].strength[Difficulty_level]) * gunpoints;
+	if (!robot_type && weapon_id == FUSION_ID && obj->type == OBJ_CNTRLCEN) // robot_type MUST be 0 here or else it might try to read object data when there is none!
+		damage *= 2; // Fusion's damage is doubled against reactors in Redux.
+	double fire_rate = (f1_0_double / Weapon_info[weapon_id].fire_wait);
+	double energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
+	double ammo_usage = f2fl(Weapon_info[weapon_id].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
+	double enemy_max_speed;
+	double enemy_evade_speed;
+	double enemy_health;
+	double projectile_speed = f2fl(Weapon_info[weapon_id].speed[Difficulty_level]);
+	double enemy_size;
+	double player_size = f2fl(ConsoleObject->size);
+	double projectile_size = 1;
+	if (weapon_info->render_type) {
+		if (weapon_info->render_type == 2)
+			projectile_size = f2fl(Polygon_models[weapon_info->model_num].rad) / f2fl(weapon_info->po_len_to_width_ratio);
+		else
+			projectile_size = f2fl(weapon_info->blob_size);
+	}
+	double enemy_weapon_speed;
+	double enemy_weapon_size;
+	double enemy_attack_type;
+	double enemy_circle_distance;
+	double enemy_weapon_homing_flag;
+	double enemy_behavior;
+	if (robot_type == 0) {
+		enemy_health = f2fl(obj->shields);
+		enemy_behavior = obj->ctype.ai_info.behavior;
+		if (robInfo->thief)
+			enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
+		if (obj->type == OBJ_CNTRLCEN) { // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
+			enemy_max_speed = 0;
+			enemy_evade_speed = 0;
+		}
+		else {
+			enemy_max_speed = f2fl(robInfo->max_speed[Difficulty_level]);
+			enemy_evade_speed = robInfo->evade_speed[Difficulty_level] * 32;
+				if (enemy_evade_speed > enemy_max_speed)
+					enemy_evade_speed *= 0.75;
+		}
+		enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
+		enemy_weapon_speed = f2fl(Weapon_info[robInfo->weapon_type].speed[Difficulty_level]);
+		enemy_weapon_size = 1;
+		if (Weapon_info[robInfo->weapon_type].render_type) {
+			if (Weapon_info[robInfo->weapon_type].render_type == 2)
+				enemy_weapon_size = f2fl(Polygon_models[Weapon_info[robInfo->weapon_type].model_num].rad) / f2fl(Weapon_info[robInfo->weapon_type].po_len_to_width_ratio);
+			else
+				enemy_weapon_size = f2fl(Weapon_info[robInfo->weapon_type].blob_size);
+		}
+		enemy_attack_type = robInfo->attack_type;
+		enemy_circle_distance = f2fl(robInfo->circle_distance[Difficulty_level]);
+		enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
+	}
+	if (robot_type == 1) {
+		enemy_health = f2fl(Robot_info[obj->contains_id].strength);
+		enemy_behavior = Robot_info[obj->contains_id].behavior;
+		if (Robot_info[obj->contains_id].thief)
+			enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
+		enemy_max_speed = f2fl(Robot_info[obj->contains_id].max_speed[Difficulty_level]);
+		enemy_evade_speed = Robot_info[obj->contains_id].evade_speed[Difficulty_level] * 32;
+		if (enemy_evade_speed > enemy_max_speed)
+			enemy_evade_speed *= 0.75;
+		enemy_size = f2fl(Polygon_models[Robot_info[obj->contains_id].model_num].rad);
+		enemy_weapon_speed = f2fl(Weapon_info[Robot_info[obj->contains_id].weapon_type].speed[Difficulty_level]);
+		enemy_weapon_size = 1;
+		if (Weapon_info[Robot_info[obj->contains_id].weapon_type].render_type) {
+			if (Weapon_info[Robot_info[obj->contains_id].weapon_type].render_type == 2)
+				enemy_weapon_size = f2fl(Polygon_models[Weapon_info[Robot_info[obj->contains_id].weapon_type].model_num].rad) / f2fl(Weapon_info[Robot_info[obj->contains_id].weapon_type].po_len_to_width_ratio);
+			else
+				enemy_weapon_size = f2fl(Weapon_info[Robot_info[obj->contains_id].weapon_type].blob_size);
+		}
+		enemy_attack_type = Robot_info[obj->contains_id].attack_type;
+		enemy_circle_distance = f2fl(Robot_info[obj->contains_id].circle_distance[Difficulty_level]);
+		enemy_weapon_homing_flag = Weapon_info[Robot_info[obj->contains_id].weapon_type].homing_flag;
+	}
+	if (robot_type == 2) {
+		enemy_health = f2fl(Robot_info[robInfo->contains_id].strength);
+		enemy_behavior = Robot_info[robInfo->contains_id].behavior;
+		if (Robot_info[robInfo->contains_id].thief)
+			enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
+		enemy_max_speed = f2fl(Robot_info[robInfo->contains_id].max_speed[Difficulty_level]);
+		enemy_evade_speed = Robot_info[robInfo->contains_id].evade_speed[Difficulty_level] * 32;
+		if (enemy_evade_speed > enemy_max_speed)
+			enemy_evade_speed *= 0.75;
+		enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
+		enemy_weapon_speed = f2fl(Weapon_info[Robot_info[robInfo->contains_id].weapon_type].speed[Difficulty_level]);
+		enemy_weapon_size = 1;
+		if (Weapon_info[Robot_info[robInfo->contains_id].weapon_type].render_type) {
+			if (Weapon_info[Robot_info[robInfo->contains_id].weapon_type].render_type == 2)
+				enemy_weapon_size = f2fl(Polygon_models[Weapon_info[Robot_info[robInfo->contains_id].weapon_type].model_num].rad) / f2fl(Weapon_info[Robot_info[robInfo->contains_id].weapon_type].po_len_to_width_ratio);
+			else
+				enemy_weapon_size = f2fl(Weapon_info[Robot_info[robInfo->contains_id].weapon_type].blob_size);
+		}
+		enemy_attack_type = Robot_info[robInfo->contains_id].attack_type;
+		enemy_circle_distance = f2fl(Robot_info[robInfo->contains_id].circle_distance[Difficulty_level]);
+		enemy_weapon_homing_flag = Weapon_info[Robot_info[robInfo->contains_id].weapon_type].homing_flag;
+	}
+	if (robot_type == 3) {
+		enemy_health = f2fl(robInfo->strength);
+		enemy_behavior = robInfo->behavior;
+		if (robInfo->thief)
+			enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
+		enemy_max_speed = f2fl(robInfo->max_speed[Difficulty_level]);
+		enemy_evade_speed = robInfo->evade_speed[Difficulty_level] * 32;
+		if (enemy_evade_speed > enemy_max_speed)
+			enemy_evade_speed *= 0.75;
+		enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
+		enemy_weapon_speed = f2fl(Weapon_info[robInfo->weapon_type].speed[Difficulty_level]);
+		enemy_weapon_size = 1;
+		if (Weapon_info[robInfo->weapon_type].render_type) {
+			if (Weapon_info[robInfo->weapon_type].render_type == 2)
+				enemy_weapon_size = f2fl(Polygon_models[Weapon_info[robInfo->weapon_type].model_num].rad) / f2fl(Weapon_info[robInfo->weapon_type].po_len_to_width_ratio);
+			else
+				enemy_weapon_size = f2fl(Weapon_info[robInfo->weapon_type].blob_size);
+		}
+		enemy_attack_type = robInfo->attack_type;
+		enemy_circle_distance = f2fl(robInfo->circle_distance[Difficulty_level]);
+		enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
+	}
+	
+	// Next, find the "optimal distance" for fighting the given enemy with the given weapon. This is the distance where the enemy's fire can be dodged off of pure reaction time, without any prediction.
+	// Once the player's ship can start moving 250ms (avg human reaction time) after the enemy shoots, and get far enough out of the way for the enemy's shots to miss, it's at the optimal distance.
+	// Any closer, and the player is put in too much danger. Any further, and the player faces potential accuracy loss due to the enemy having more time to dodge themselves.
+	double optimal_distance;
+	if (enemy_attack_type) // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
+		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
+	else
+		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed;
+	if (enemy_behavior == AIB_RUN_FROM) // We don't want snipe robots to use this, as they actually shoot things.
+		optimal_distance = 80; // In the case of enemies that run from you, we'll use this value to give generous "chase" times.
+
+	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
+	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation.
+	// The amount of distance required to move is based off of hard coded gunpoints on the ship, as well as the radius of the player projectile, so we'll have to set values per weapon ID.
+	// For spreading weapons, the offset technically depends on which projectile we're talking about, but we'll set it to that of the middle one's starting point for now, then account for decreasing accuracy over distance later.
+	double projectile_offsets[35] = { 2.2, 2.2, 2.2, 2.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.2, 2.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.2, 2.2, 0, 0, 2.2};
+	if (state->hasQuads) { // Quad lasers have a wider offset, making them a little harder to dodge. Account for this, but also consider them to be bigger so enemies still have to fit between the inner lasers.
+		projectile_offsets[LASER_ID_L1] *= 1.5;
+		projectile_offsets[LASER_ID_L2] *= 1.5;
+		projectile_offsets[LASER_ID_L3] *= 1.5;
+		projectile_offsets[LASER_ID_L4] *= 1.5;
+		projectile_offsets[LASER_ID_L5] *= 1.5;
+		projectile_offsets[LASER_ID_L6] *= 1.5;
+		if (!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6)
+			projectile_size += 1.1;
+	}
+	double dodge_distance = projectile_offsets[weapon_id] + projectile_size + enemy_size;
+
+	// Now we reduce accuracy over distance for spreading weapons. Since that's also hard coded, we can just apply enemy size based multipliers per weapon ID.
+	// At a certain distance, projectiles for Vulcan and Spreadfire will start missing from drifting so far off course.
+	// For Vulcan we scale accuracy by the probability of a shot landing at a given distance (since the spread is random), and for Spreadfire/Helix we use a binary outcome.
+	double accuracy_multiplier = 1;
+	if (weapon_id == VULCAN_ID) {
+		if (optimal_distance / 32 > enemy_size + projectile_size) // This is the distance where Vulcan's accuracy dropoff starts.
+			accuracy_multiplier *= (enemy_size + projectile_size) / (optimal_distance / 32);
+	}
+	if (weapon_id == GAUSS_ID) { // Gauss has 20% of Vulcan's spread... as if they thought it wasn't good enough or something. This is unlikely to ever influence the accuracy value but hey you never know.
+		if (optimal_distance / 160 > enemy_size + projectile_size) // This is the distance where Gauss' accuracy dropoff starts.
+			accuracy_multiplier *= (enemy_size + projectile_size) / (optimal_distance / 160);
+	}
+	if (weapon_id == SPREADFIRE_ID) {
+		if (optimal_distance / 16 > enemy_size + projectile_size) // Divisor is gotten because Spreadfire projectiles move one unit for every 16 units forward.
+			accuracy_multiplier /= 3;
+	}
+	if (weapon_id == HELIX_ID) {
+		if (optimal_distance / 8 > enemy_size + projectile_size) // Outer Helix projectiles move one unit for every eight units forward.
+			accuracy_multiplier *= 0.6;
+		if (optimal_distance / 16 > enemy_size + projectile_size) // Middle-left and middle-right Helix projectiles are equal to Spreadfire's outer projectiles in sideways movement.
+			accuracy_multiplier *= 0.2;
+	}
+	// There's also the chance that enemies can be too small to hit with all of a weapon's projectiles, so if it's small enough to fit between a weapon with a constant offset, only hit with half the projectiles.
+	// This makes Algo unlikely to use something like lasers against sidearm modula, which is good because it obeys real world expectations.
+	if (enemy_size < projectile_offsets[weapon_id] - projectile_size) // If the enemy is small enough to fit between projectiles, only one can hit at a time, so halve accuracy.
+		accuracy_multiplier *= 0.5;
+
+	double accuracy;
+	if ((enemy_behavior == AIB_RUN_FROM && enemy_max_speed) || (enemy_behavior != AIB_RUN_FROM && enemy_evade_speed)) {
+		if (optimal_distance > 80) { // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
+			if (enemy_behavior == AIB_RUN_FROM)
+				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed)) * accuracy_multiplier;
+			else
+				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed)) * accuracy_multiplier;
+		}
+		else {
+			if (enemy_behavior == AIB_RUN_FROM)
+				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed)) * accuracy_multiplier;
+			else
+				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed)) * accuracy_multiplier;
+		}
+	}
+	else
+		return accuracy_multiplier; // If the enemy doesn't move in the relevant way, guarantee all hits (assuming efficient size).
+	if (accuracy > 1) // Accuracy can't be greater than 100%.
+		return 1;
+	else if (enemy_behavior == AIB_SNIPE || enemy_behavior == AIB_RUN_FROM)
+		return accuracy;
+	else
+		return 0.5 + accuracy / 2;
+	// Enemies evade less and less linearly as their health goes down (Source: ai.c line 997), so return an average of 100% and the starting acc, except for fleeing enemies, who we want to return very low values.
+	// Gonna be honest, I'm actually not sure about that HP part for D2, but high difficulty times are way too easy if we don't have this so I'm keeping it anyway.
+}
+
 double calculate_combat_time(partime_calc_state* state, object* obj, robot_info* robInfo) // Tell algo to use the weapon that's fastest for the current enemy.
 {
 	int weapon_id = 0; // Just a shortcut for the relevant index in algo's inventory.
@@ -1853,14 +2083,14 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 	double lowestCombatTime = -1; // Track the time of the fastest weapon so far.
 	double energyUsed = 0; // To calculate energy cost.
 	double ammoUsed = 0; // Same thing but vulcan.
-	double chaseTime; // For individual enemies' chase time in debug balance testing.
-	double lowestDamage = 0; // Same here. ^
-	double lowestChaseTime = 0; // And here. ^
 	int topWeapon = -1; // So when depleting energy/ammo, the right one is depleted. Also so the console shows the right weapon.
 	double offspringHealth; // So multipliers done to offspring don't bleed into their parents' values.
+	double accuracy; // Players are NOT perfect, and it's usually not their fault. We need to account for this if we want all par times to be reachable.
+	double adjustedRobotHealthNoAccuracy;
 	// Weapon values converted to a format human beings in 2024 can understand.
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
+		weapon_info* weapon_info = &Weapon_info[weapon_id];
 		double gunpoints = 2;
 		if ((!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6) && state->hasQuads) { // Account for increased damage of quads.
 			if (weapon_id > LASER_ID_L4)
@@ -1874,17 +2104,16 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			gunpoints = 3;
 		if (weapon_id == HELIX_ID)
 			gunpoints = 5;
-		chaseTime = 0;
-		double damage = f2fl(Weapon_info[weapon_id].strength[Difficulty_level]) * gunpoints;
+		double damage = f2fl(weapon_info->strength[Difficulty_level]) * gunpoints;
 		if (weapon_id == FUSION_ID && obj->type == OBJ_CNTRLCEN)
 			damage *= 2; // Fusion's damage is doubled against reactors in Redux.
-		double fire_rate = (f1_0_double / Weapon_info[weapon_id].fire_wait);
-		double energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
-		double ammo_usage = f2fl(Weapon_info[weapon_id].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
-		double splash_radius = f2fl(Weapon_info[weapon_id].damage_radius);
+		double fire_rate = (f1_0_double / weapon_info->fire_wait);
+		double energy_usage = f2fl(weapon_info->energy_usage);
+		double ammo_usage = f2fl(weapon_info->ammo_usage) * 13; // The 13 is to scale with the ammo counter.
+		double splash_radius = f2fl(weapon_info->damage_radius);
 		double enemy_speed = f2fl(robInfo->max_speed[Difficulty_level]);
 		double enemy_health = f2fl(obj->shields);
-		double projectile_speed = f2fl(Weapon_info[weapon_id].speed[Difficulty_level]);
+		double projectile_speed = f2fl(weapon_info->speed[Difficulty_level]);
 		double enemy_spawn_health = f2fl(Robot_info[obj->contains_id].strength);
 		double enemy_size = f2fl(obj->size);
 		double player_size = f2fl(ConsoleObject->size);
@@ -1897,7 +2126,6 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 				if (!(weapon_id == VULCAN_ID || weapon_id == GAUSS_ID))
 					continue;
 		}
-		// Initialize the newly found weapon's stats.
 		if (weapon_id == GAUSS_ID && robInfo->boss_flag)
 			damage *= 1 - ((double)Difficulty_level * 0.1); // Damage of gauss on bosses goes down as difficulty goes up.
 		if (weapon_id == FUSION_ID)
@@ -1910,40 +2138,27 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		}
 		double adjustedRobotHealth = enemy_health;
 		adjustedRobotHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1; // Divide the health value of the enemy instead of increasing damage when accounting for splash damage, since we'll potentially have multiple damage values.
-		if ((obj->ctype.ai_info.behavior == AIB_SNIPE || obj->ctype.ai_info.behavior == AIB_RUN_FROM) || robInfo->thief) { // Give the player even more time to dispatch a robot if it runs away, since they will have to persue it.
-			double avg = ((SHIP_MOVE_SPEED / f1_0_double) + projectile_speed) / 2; // Take the average of the ship's movement speed and the current used weapon's speed, since both matter when chasing down robots.
-			chaseTime = ((adjustedRobotHealth * enemy_speed * 2) / avg) * (player_size / enemy_size); // Also scale chase time by enemy size, smaller = harder to hit. Things bigger than your ship give less time, smaller things give more.
-			if (robInfo->thief)
-				chaseTime = pow(chaseTime, 1.25); // Uberbuff chase bonus for thieves because chasing them takes forever. Yes, this is super arbitrary, but idk what else to do for it. Not like this affects many levels anyway.
-			adjustedRobotHealth += chaseTime;
-		}
-		robInfo = &Robot_info[obj->contains_id];
+		adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
+		adjustedRobotHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, 0);
 		enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 		enemy_speed = f2fl(robInfo->max_speed[Difficulty_level]);
 		enemy_spawn_health = f2fl(robInfo->strength);
+		if (robInfo->thief)
+			state->combatTime += 2.5; // To account for the death tantrum they throw when they get their comeuppance for stealing your stuff.
 		if (obj->contains_type == OBJ_ROBOT) { // Now we account for robots guaranteed to drop from this robot, if any.
 			offspringHealth = enemy_spawn_health * obj->contains_count;
 			offspringHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1;
-			if ((robInfo->behavior == AIB_SNIPE || robInfo->behavior == AIB_RUN_FROM) || robInfo->thief) {
-				double avg = ((SHIP_MOVE_SPEED / f1_0_double) + projectile_speed) / 2;
-				chaseTime = ((offspringHealth * enemy_speed * 2) / avg) * (player_size / enemy_size);
-				if (robInfo->thief)
-					chaseTime = pow(chaseTime, 1.25); // Uberbuff chase bonus for thieves because chasing them takes forever. Yes, this is super arbitrary, but idk what else to do for it. Not like this affects many levels anyway.
-				offspringHealth += chaseTime;
-			}
+			adjustedRobotHealthNoAccuracy += offspringHealth;
+			offspringHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, 1);
+			adjustedRobotHealth += offspringHealth;
 		}
-		else if (Robot_info[obj->id].contains_type == OBJ_ROBOT) { // Now account for robots that are hard coded to drop (EG spiders dropping spiderlings, obj stuff overwrites this).
-			offspringHealth = enemy_spawn_health * Robot_info[obj->id].contains_count;
-			if ((robInfo->behavior == AIB_SNIPE || robInfo->behavior == AIB_RUN_FROM) || robInfo->thief) {
-				double avg = ((SHIP_MOVE_SPEED / f1_0_double) + projectile_speed) / 2;
-				chaseTime = ((offspringHealth * enemy_speed * 2) / avg) * (player_size / enemy_size);
-				if (robInfo->thief)
-					chaseTime = pow(chaseTime, 1.25); // Uberbuff chase bonus for thieves because chasing them takes forever. Yes, this is super arbitrary, but idk what else to do for it. Not like this affects many levels anyway.
-				offspringHealth += chaseTime;
-			}
-			offspringHealth *= Robot_info[obj->id].contains_prob;
+		else if (robInfo->contains_type == OBJ_ROBOT) { // Now account for robots that are hard coded to drop (EG spiders dropping spiderlings, obj stuff overwrites this).
+			offspringHealth = enemy_spawn_health * robInfo->contains_count;
+			offspringHealth *= robInfo->contains_prob;
 			offspringHealth /= 16;
 			offspringHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1;
+			adjustedRobotHealthNoAccuracy += offspringHealth;
+			offspringHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, 2);
 			adjustedRobotHealth += offspringHealth;
 		}
 		// I'm not going any deeper than this (two layers), because you can have theoretically infinite. I've only seen three layers once (D1 level 13), and never beyond that, which would be asking for trouble on multiple fronts.
@@ -1952,17 +2167,16 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
-				thisWeaponCombatTime = 10000;
+				thisWeaponCombatTime = INFINITY; // Make vulcan's/gauss' time infinite so algo won't use it without ammo.
 		}
 		else
 			thisWeaponCombatTime = shots / fire_rate;
 		if (thisWeaponCombatTime < lowestCombatTime || lowestCombatTime == -1) { // If it should be used, update algo's weapon stats to the new one's for use in combat time calculation.
 			lowestCombatTime = thisWeaponCombatTime;
-			lowestChaseTime = chaseTime;
-			lowestDamage = damage;
 			energyUsed = energy_usage * shots * f1_0;
 			ammoUsed = ammo_usage * shots * f1_0;
 			topWeapon = weapon_id;
+			accuracy = (adjustedRobotHealthNoAccuracy / adjustedRobotHealth) * 100;
 		}
 	}
 	if (lowestCombatTime == -1)
@@ -1972,38 +2186,36 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 	else {
 		state->simulatedEnergy -= energyUsed;
 	}
-	lowestChaseTime /= lowestDamage;
 	if (!(topWeapon > LASER_ID_L4) || topWeapon == LASER_ID_L5 || topWeapon == LASER_ID_L6) {
 		if (state->hasQuads) {
 			if (!(topWeapon > LASER_ID_L4))
-				printf("Took %.3fs to fight robot type %i with quad laser %i, chased for %.3fs.\n", lowestCombatTime, obj->id, topWeapon + 1, lowestChaseTime);
+				printf("Took %.3fs to fight robot type %i with quad laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, accuracy);
 			else
-				printf("Took %.3fs to fight robot type %i with quad laser %i, chased for %.3fs\n", lowestCombatTime, obj->id, topWeapon - 25, lowestChaseTime);
+				printf("Took %.3fs to fight robot type %i with quad laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon - 25, accuracy);
 		}
 		else {
 			if (!(topWeapon > LASER_ID_L4))
-				printf("Took %.3fs to fight robot type %i with laser %i, chased for %.3fs.\n", lowestCombatTime, obj->id, topWeapon + 1, lowestChaseTime);
+				printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, accuracy);
 			else
-				printf("Took %.3fs to fight robot type %i with laser %i, chased for %.3fs\n", lowestCombatTime, obj->id, topWeapon - 25, lowestChaseTime);
+				printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon - 25, accuracy);
 		}
 	}
 	if (topWeapon == VULCAN_ID)
-		printf("Took %.3fs to fight robot type %i with vulcan, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == SPREADFIRE_ID)
-		printf("Took %.3fs to fight robot type %i with spreadfire, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with spreadfire, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == PLASMA_ID)
-		printf("Took %.3fs to fight robot type %i with plasma, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with plasma, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == FUSION_ID)
-		printf("Took %.3fs to fight robot type %i with fusion, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with fusion, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == GAUSS_ID)
-		printf("Took %.3fs to fight robot type %i with gauss, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with gauss, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == HELIX_ID)
-		printf("Took %.3fs to fight robot type %i with helix, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with helix, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == PHOENIX_ID)
-		printf("Took %.3fs to fight robot type %i with phoenix, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
+		printf("Took %.3fs to fight robot type %i with phoenix, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	if (topWeapon == OMEGA_ID)
-		printf("Took %.3fs to fight robot type %i with omega, chased for %.3fs\n", lowestCombatTime, obj->id, lowestChaseTime);
-	state->chaseTime += lowestChaseTime;
+		printf("Took %.3fs to fight robot type %i with omega, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
 	return lowestCombatTime;
 }
 
@@ -2012,15 +2224,18 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 	int weapon_id = 0; // Just a shortcut for the relevant index in algo's inventory.
 	double thisWeaponMatcenTime = -1; // How much damage worth of shooting to we have to do for this enemy in this matcen?
 	double lowestMatcenTime = -1; // Track the lowest amount so far.
+	double accuracy; // Players are NOT perfect, and it's usually not their fault. We need to account for this if we want all par times to be reachable.
+	double adjustedRobotHealthNoAccuracy;
 	// Weapon values converted to a format human beings in 2024 can understand.
 	double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
-		double damage = f2fl(Weapon_info[weapon_id].strength[Difficulty_level]);
-		double fire_rate = (f1_0_double / Weapon_info[weapon_id].fire_wait);
-		double energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
-		double ammo_usage = f2fl(Weapon_info[weapon_id].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
-		double splash_radius = f2fl(Weapon_info[weapon_id].damage_radius);
+		weapon_info* weapon_info = &Weapon_info[weapon_id];
+		double damage = f2fl(weapon_info->strength[Difficulty_level]);
+		double fire_rate = (f1_0_double / weapon_info->fire_wait);
+		double energy_usage = f2fl(weapon_info->energy_usage);
+		double ammo_usage = f2fl(weapon_info->ammo_usage) * 13; // The 13 is to scale with the ammo counter.
+		double splash_radius = f2fl(weapon_info->damage_radius);
 		double enemy_speed = f2fl(robInfo->max_speed[Difficulty_level]);
 		double enemy_health = f2fl(robInfo->strength);
 		double gunpoints = 2;
@@ -2036,7 +2251,6 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			gunpoints = 3;
 		if (weapon_id == HELIX_ID)
 			gunpoints = 5;
-		// Initialize the newly found weapon's stats.
 		if (weapon_id == FUSION_ID)
 			energy_usage = 2; // Fusion's energy_usage field is 0, so we have to manually set it.
 		else {  // Difficulty-based energy nerfs don't impact fusion.
@@ -2047,6 +2261,8 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 		}
 		double adjustedRobotHealth = enemy_health;
 		adjustedRobotHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1;
+		adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
+		adjustedRobotHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, NULL, robInfo, 3);
 		double offspringHealth; // So multipliers done to offspring don't bleed into their parents' values.
 		enemy_size = f2fl(Polygon_models[Robot_info[robInfo->contains_id].model_num].rad);
 		// Giving chase bonus for matcen enemies is kinda stupid since they're not required and will just flee from the player.
@@ -2055,6 +2271,8 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			offspringHealth *= robInfo->contains_count * robInfo->contains_prob;
 			offspringHealth /= 16;
 			offspringHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1;
+			adjustedRobotHealthNoAccuracy += offspringHealth;
+			offspringHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, NULL, robInfo, 2);
 			adjustedRobotHealth += offspringHealth;
 		}
 		int shots = adjustedRobotHealth / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
@@ -2062,7 +2280,7 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponMatcenTime = shots / fire_rate;
 			else
-				thisWeaponMatcenTime = 10000;
+				thisWeaponMatcenTime = INFINITY; // Make vulcan's/gauss' time infinite so algo won't use it without ammo.
 		}
 		else
 			thisWeaponMatcenTime = shots / fire_rate;
@@ -2076,16 +2294,16 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			}
 		}
 		// Now account for RNG energy/ammo drops from matcen bots and their robot spawn.
-		//if (robInfo->contains_type == OBJ_POWERUP && robInfo->contains_id == POW_ENERGY)
-			//state->energy_usage -= f2fl(((double)robInfo->contains_count * ((double)robInfo->contains_prob / 16)) * state->energy_gained_per_pickup);
-		//if (robInfo->contains_type == OBJ_POWERUP && robInfo->contains_id == POW_VULCAN_AMMO)
-			//state->ammo_usage -= f2fl(((double)robInfo->contains_count * ((double)robInfo->contains_prob / 16)) * state->energy_gained_per_pickup);
-		//if (robInfo->contains_type == OBJ_ROBOT) {
-			//if (Robot_info[robInfo->contains_id].contains_type == OBJ_POWERUP && Robot_info[robInfo->contains_id].contains_id == POW_ENERGY)
-				//state->energy_usage -= f2fl(((double)Robot_info[robInfo->contains_id].contains_count * ((double)Robot_info[robInfo->contains_id].contains_prob / 16)) * (STARTING_VULCAN_AMMO / 2));
-			//if (Robot_info[robInfo->contains_id].contains_type == OBJ_POWERUP && Robot_info[robInfo->contains_id].contains_id == POW_VULCAN_AMMO)
-				//state->ammo_usage -= f2fl(((double)Robot_info[robInfo->contains_id].contains_count * ((double)Robot_info[robInfo->contains_id].contains_prob / 16)) * (STARTING_VULCAN_AMMO / 2));
-		//}
+		if (robInfo->contains_type == OBJ_POWERUP && robInfo->contains_id == POW_ENERGY)
+			state->energy_usage -= f2fl(((double)robInfo->contains_count * ((double)robInfo->contains_prob / 16)) * state->energy_gained_per_pickup);
+		if (robInfo->contains_type == OBJ_POWERUP && robInfo->contains_id == POW_VULCAN_AMMO)
+			state->ammo_usage -= f2fl(((double)robInfo->contains_count * ((double)robInfo->contains_prob / 16)) * state->energy_gained_per_pickup);
+		if (robInfo->contains_type == OBJ_ROBOT) {
+			if (Robot_info[robInfo->contains_id].contains_type == OBJ_POWERUP && Robot_info[robInfo->contains_id].contains_id == POW_ENERGY)
+				state->energy_usage -= f2fl(((double)Robot_info[robInfo->contains_id].contains_count * ((double)Robot_info[robInfo->contains_id].contains_prob / 16)) * (STARTING_VULCAN_AMMO / 2));
+			if (Robot_info[robInfo->contains_id].contains_type == OBJ_POWERUP && Robot_info[robInfo->contains_id].contains_id == POW_VULCAN_AMMO)
+				state->ammo_usage -= f2fl(((double)Robot_info[robInfo->contains_id].contains_count * ((double)Robot_info[robInfo->contains_id].contains_prob / 16)) * (STARTING_VULCAN_AMMO / 2));
+		}
 	}
 	return lowestMatcenTime;
 }
@@ -2391,8 +2609,13 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 	for (i = 0; i < objectiveListSize; i++) {
 		objective = objectiveList[i];
 		// Draw a path as far as we can to the objective, avoiding currently locked doors. If we don't make it all the way, ignore any closed walls. Primarily for shooting through grates, but prevents a softlock on actual uncompletable levels.
-		if (!create_path_partime(start_seg, getObjectiveSegnum(objective), path_start, path_count, state, objective, inaccessibleObjectives, 1))
-			continue; // We can't reach this objective right now; find the next one.
+		if (objective.type == OBJECTIVE_TYPE_ENERGY) {
+			if (!create_path_partime(start_seg, getObjectiveSegnum(objective), path_start, path_count, state, objective, inaccessibleObjectives, 0))
+				continue; // We can't reach this objective right now; find the next one.
+		} else {
+			if (!create_path_partime(start_seg, getObjectiveSegnum(objective), path_start, path_count, state, objective, inaccessibleObjectives, 1))
+				continue; // We can't reach this objective right now; find the next one.
+		}
 		double pathLength = calculate_path_length_partime(state, *path_start, *path_count, objective);
 		if (pathLength < shortestPathLength || shortestPathLength < 0) {
 			shortestPathLength = pathLength;
@@ -2497,7 +2720,8 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 									double totalAmmoUsage = 0;
 									for (n = 0; n < num_types; n++) {
 										robot_info* robInfo = &Robot_info[legal_types[n]];
-										totalMatcenTime += calculate_combat_time_matcen(state, robInfo);
+										if (!(robInfo->behavior == AIB_RUN_FROM || robInfo->thief)) // Skip running bots and thieves.
+											totalMatcenTime += calculate_combat_time_matcen(state, robInfo);
 										totalEnergyUsage += state->energy_usage;
 										totalAmmoUsage += state->ammo_usage;
 									}
@@ -2521,6 +2745,42 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 		state->matcenTime += matcenTime;
 	}
 }
+
+void update_energy_for_path_partime(partime_calc_state* state, point_seg* path, int path_count)
+{
+	// How much energy do we pick up while following this path?
+	for (int i = 0; i < path_count; i++) {
+		// If this segment is an energy center, recharge to 100
+		//if (Segments[path[i].segnum].special == SEGMENT_IS_FUELCEN && state->simulatedEnergy < 100 * F1_0)
+			//state->simulatedEnergy = 100 * F1_0;
+		// We don't increment energy time here, because we don't actually know if we'd end up needing this fuelcen, as required visits are calculated later. Also long enough fuelcens could shorten the actual time spent.
+		// If there are energy powerups in this segment, collect them
+		for (int objNum = 0; objNum <= Highest_object_index; objNum++) { // This next if line's gonna be long. Basically making sure any of the weapons in the condition only give energy if we already have them.
+			if (Objects[objNum].type == OBJ_POWERUP && (Objects[objNum].id == POW_ENERGY || Objects[objNum].id == POW_VULCAN_AMMO || (Objects[objNum].id == POW_VULCAN_WEAPON && do_we_have_this_weapon(state, 1)) || (Objects[objNum].id == POW_SPREADFIRE_WEAPON && do_we_have_this_weapon(state, 2)) || (Objects[objNum].id == POW_PLASMA_WEAPON && do_we_have_this_weapon(state, 3)) || (Objects[objNum].id == POW_FUSION_WEAPON && do_we_have_this_weapon(state, 4)) || (Objects[objNum].id == POW_LASER && state->heldWeapons[0] < LASER_ID_L4) || (Objects[objNum].id == POW_SUPER_LASER && state->heldWeapons[0] < LASER_ID_L6) || (Objects[objNum].id == POW_QUAD_FIRE && !state->hasQuads)) && Objects[objNum].segnum == path[i].segnum) {
+				// ...make sure we didn't already get this one
+				int thisSourceCollected = 0;
+				for (int j = 0; j < state->doneListSize; j++)
+					if (state->doneList[j].type == OBJECTIVE_TYPE_OBJECT && state->doneList[j].ID == objNum) {
+						thisSourceCollected = 1;
+						break;
+					}
+				if (!thisSourceCollected) {
+					if (Objects[objNum].id == POW_VULCAN_AMMO || Objects[objNum].id == POW_VULCAN_WEAPON)
+						state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
+					else
+						state->simulatedEnergy += state->energy_gained_per_pickup;
+					if (state->simulatedEnergy > MAX_ENERGY)
+						state->simulatedEnergy = MAX_ENERGY;
+					if (state->vulcanAmmo > STARTING_VULCAN_AMMO * 4)
+						state->vulcanAmmo = STARTING_VULCAN_AMMO * 4;
+					partime_objective energyObjective = { OBJECTIVE_TYPE_OBJECT, objNum };
+					addObjectiveToList(state->doneList, &state->doneListSize, energyObjective, 1);
+				}
+			}
+		}
+	}
+}
+
 
 void update_energy_for_objective_partime(partime_calc_state* state, partime_objective objective)
 {
@@ -2649,14 +2909,14 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 					addEnergy *= 0.5;
 				else if (state->simulatedEnergy >= i2f(150))
 					addEnergy *= 0.25;
-				//state->simulatedEnergy += addEnergy;
+				state->simulatedEnergy += addEnergy;
 			}
 			if (obj->contains_type == OBJ_POWERUP && obj->contains_id == POW_VULCAN_AMMO) { // Now repeat with ammo.
 				state->vulcanAmmo* (STARTING_VULCAN_AMMO / 2)* obj->contains_count;
 			}
 			else if (Robot_info[obj->id].contains_type == OBJ_POWERUP && Robot_info[obj->id].contains_id == POW_VULCAN_AMMO) {
 				double addAmmo = (((double)robInfo->contains_count * (double)robInfo->contains_prob) / 16) * (STARTING_VULCAN_AMMO / 2); // We have to do this because data loss.
-				//state->vulcanAmmo += addAmmo;
+				state->vulcanAmmo += addAmmo;
 			}
 			if (obj->contains_type == OBJ_POWERUP && (obj->contains_id == POW_LASER || obj->contains_id == POW_QUAD_FIRE || obj->contains_id == POW_VULCAN_WEAPON || obj->contains_id == POW_SPREADFIRE_WEAPON || obj->contains_id == POW_PLASMA_WEAPON || obj->contains_id == POW_FUSION_WEAPON || obj->contains_id == POW_SUPER_LASER || obj->contains_id == POW_GAUSS_WEAPON || obj->contains_id == POW_HELIX_WEAPON || obj->contains_id == POW_PHOENIX_WEAPON || obj->contains_id == POW_OMEGA_WEAPON)) {
 				int weapon_id = 0;
@@ -2729,9 +2989,57 @@ int getParTimeWeaponID(int index)
 	return weaponIDs[index];
 }
 
+double findEnergyTime(partime_calc_state* state, partime_objective* objectiveList, int startIndex) // Props to Sirius for help with energy time optimization.
+{
+	int objectiveSegments[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	double objectiveEnergies[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X. With this, we don't have to do thousands of expensive pathfinding operations.
+	double pathLength; // Store create_path_partime's result in pathLength to compare to current shortest.
+	point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
+	int path_count; // The number of segments in the path we're looking at.
+	double increaseEnergiesBy;
+	for (int i = 0; i < state->objectives; i++) { // Now let's set our local arrays to match the official ones, filling in the trip times for all of the segments Algo visited.
+		objectiveSegments[i] = state->objectiveSegments[i];
+		objectiveEnergies[i] = state->objectiveEnergies[i];
+		if (Segments[objectiveSegments[i]].special == SEGMENT_IS_FUELCEN) // No need to measure distance to a fuelcen if we're already at a fuelcen.
+			objectiveFuelcenTripTimes[i] = 0;
+		else {
+			find_nearest_objective_partime(&state, 0, objectiveSegments[i], state->energyCenters, state->inaccessibleObjectives, state->numEnergyCenters, &path_start, &path_count, &pathLength);
+			objectiveFuelcenTripTimes[i] = (pathLength / SHIP_MOVE_SPEED) * 2; // Doing *2 here to account for the trip back, so it doesn't have to be done even more outside of this.
+		}
+	}
+	double minTime = INFINITY;
+	double energyTime = 0;
+	int refuel = 0;
+	for (int i = 0; i < state->objectives; i++)
+		if (objectiveEnergies[i] <= 0)
+			refuel = 1;
+	if (!refuel)
+		return 0; // we don't need to refuel
+	for (int refillIndex = startIndex; refillIndex < state->objectives; refillIndex++) {
+		if (objectiveEnergies[refillIndex] < 100) { // Only attempt a simulated refill where energy at the given point is low enough.
+			increaseEnergiesBy = 100 - objectiveEnergies[refillIndex];
+			if (increaseEnergiesBy > 100)
+				increaseEnergiesBy = 100; // Cap the increase at 100 because player energy can't actually be negative. Also to handle super negative energy values as multiple required visits at the same objective (having to refill multiple times to defeat an ungodly beefy robot).
+			for (int i = refillIndex; i < state->objectives; i++) {
+				objectiveEnergies[i] += increaseEnergiesBy;
+				if (objectiveEnergies[i] > 200)
+					objectiveEnergies[i] = 200; // Energy can't be above 200 at any point.
+			}
+			energyTime = objectiveFuelcenTripTimes[refillIndex] + (increaseEnergiesBy * 0.04) + findEnergyTime(&state, objectiveList, refillIndex + 1); // increaseEnergiesBy * 0.04 is the time spent sitting in the fuelcen recharging.
+			if (energyTime < minTime)
+				minTime = energyTime;
+		}
+		else if (startIndex < state->objectives) // If it's not, skip ahead and try again as long as there's still stuff left.
+			continue;
+	}
+	if (minTime < 0)
+		return 0; // Failsafe until fuelcen time works properly.
+	return minTime;
+}
 
 double calculateParTime() // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
-{ // January me would crap himself if he saw this actually working lol.
+{ // January 2024 me would crap himself if he saw this actually working lol.
 	partime_calc_state state = { 0 }; // Initialize the algorithm's state. We'll call it Algo for short.
 	state.movementTime = 0; // Variable to track how much distance it's travelled.
 	int initialSegnum = ConsoleObject->segnum; // Version of segnum that stays at its initial value, to ensure the player is put in the right spot.
@@ -2750,7 +3058,6 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 	fix64 start_timer_value, end_timer_value; // For tracking how long this algorithm takes to run.
 	state.doneWallsSize = 0;
 	state.numInaccessibleObjectives = 0;
-	state.chaseTime = 0;
 	state.num_weapons = 1;
 	state.heldWeapons[0] = 0;
 	state.hasQuads = 0;
@@ -2806,7 +3113,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		// Collect our objectives at this stage...
 		if (state.loops == 0) {
 			for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all robots, hostages, weapons, and laser powerups. Ignore robots not worth over zero, as the player isn't gonna go for those. This should never happen, but it's just a failsafe. Also ignore any thieves that aren't carrying keys.
-				if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag && !(Robot_info[Objects[i].id].thief && !(Objects[i].contains_type == OBJ_POWERUP && (Objects[i].contains_id == POW_KEY_BLUE || Objects[i].contains_id == POW_KEY_GOLD || Objects[i].contains_id == POW_KEY_RED)))) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON || Objects[i].id == POW_SUPER_LASER || Objects[i].id == POW_GAUSS_WEAPON || Objects[i].id == POW_HELIX_WEAPON || Objects[i].id == POW_PHOENIX_WEAPON || Objects[i].id == POW_OMEGA_WEAPON))) {
+				if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag && !(Robot_info[Objects[i].id].thief && !(Objects[i].contains_type == OBJ_POWERUP && (Objects[i].contains_id == POW_KEY_BLUE || Objects[i].contains_id == POW_KEY_GOLD || Objects[i].contains_id == POW_KEY_RED)))) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON || Objects[i].id == POW_SUPER_LASER || Objects[i].id == POW_GAUSS_WEAPON || Objects[i].id == POW_HELIX_WEAPON || Objects[i].id == POW_PHOENIX_WEAPON || Objects[i].id == POW_OMEGA_WEAPON))) {
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 				}
@@ -2909,8 +3216,10 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 					hasThisWeapon = 1;
 			}
 			if (!hasThisWeapon) {
-				if (path_start != NULL)
+				if (path_start != NULL) {
 					check_for_walls_and_matcens_partime(&state, path_start, path_count);
+					update_energy_for_path_partime(&state, path_start, path_count);
+				}
 				update_energy_for_objective_partime(&state, nearestObjective); // Do energy stuff.
 				// Cap algo's energy and ammo like the player's.
 				if (state.simulatedEnergy > MAX_ENERGY)
@@ -2924,6 +3233,9 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				// Now move ourselves to the objective for the next pathfinding iteration, unless the objective wasn't reachable with just flight, in which case move ourselves as far as we COULD fly.
 				state.movementTime += (pathLength - state.shortestPathObstructionTime) / SHIP_MOVE_SPEED;
 				lastSegnum = state.segnum;
+				state.objectiveSegments[state.objectives] = state.segnum;
+				state.objectiveEnergies[state.objectives] = f2fl(state.simulatedEnergy);
+				state.objectives++;
 			}
 		}
 		state.loops++;
@@ -2933,13 +3245,14 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 	// Calculate end time.
 	timer_update();
 	end_timer_value = timer_query();
-
-	printf("Par time: %.3fs (%.3f movement, %.3f combat) Matcen time: %.3fs, Chase time: %.3fs\nCalculation time: %.3fs\n",
+	state.energyTime = findEnergyTime(&state, &state.toDoList, 0); // Time to calculate the minimum time spent going to fuelcens for the level.
+	state.movementTime += state.energyTime; // Ultimately energy time is a subsect of movement time because we're, well, moving to and from the energy centers.
+	printf("Par time: %.3fs (%.3f movement, %.3f combat) Matcen time: %.3fs, Fuelcen time: %.3fs\nCalculation time: %.3fs\n",
 		state.movementTime + state.combatTime,
 		state.movementTime,
 		state.combatTime,
 		state.matcenTime,
-		state.chaseTime,
+		state.energyTime,
 		f2fl(end_timer_value - start_timer_value));
 	
 	// Store Algo's weapon info to use for secret levels predeterminately so players can't abuse their par times.
@@ -3099,6 +3412,8 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 				Ranking.secretMaxScore += HOSTAGE_SCORE;
 				Ranking.hostages_secret_level++;
 			}
+			if (Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_EXTRA_LIFE)
+				Ranking.secretMaxScore += 10000;
 		}
 		Ranking.secretMaxScore = (int)(Ranking.secretMaxScore * 3);
 		for (i = 0; i <= Num_triggers; i++) {
@@ -3915,8 +4230,9 @@ void StartNewLevel(int level_num)
 	for (i = 0; i <= Highest_object_index; i++) {
 		// It has been decided that thieves will not count toward max score (AKA they won't be required for S-ranks). They're just too annoying and unfun to kill, but will give you a considerable point advantage if you manage to take one down quickly.
 		// However, we can't do that here. We have to let them slide for now so the "remains" counter stays accurate. Let's instead count them, then use that number to subtract the points when the level's over.
-		if (Objects[i].type == OBJ_ROBOT && !Robot_info[Objects[i].id].boss_flag) { // Ignore bosses, we already decided which one to count before.
-			Ranking.maxScore += Robot_info[Objects[i].id].score_value;
+		if (Objects[i].type == OBJ_ROBOT) {
+			if (!Robot_info[Objects[i].id].boss_flag) // Ignore bosses for score. We already decided which one to count before.
+				Ranking.maxScore += Robot_info[Objects[i].id].score_value;
 			if (Robot_info[Objects[i].id].thief)
 				Ranking.num_thief_points += Robot_info[Objects[i].id].score_value;
 			if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) { // So points in infinite robot drop loops aren't counted past the parent bot.
@@ -3924,6 +4240,8 @@ void StartNewLevel(int level_num)
 				if (Robot_info[Objects[i].contains_id].thief)
 					Ranking.num_thief_points += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
 			}
+			if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
+				Ranking.maxScore += Objects[i].contains_count * 10000;
 		}
 		else if (Robot_info[Objects[i].id].boss_flag)
 			Ranking.isRankable = 1; // A boss is present, this level is beatable.
@@ -3933,6 +4251,8 @@ void StartNewLevel(int level_num)
 		}
 		if (Objects[i].type == OBJ_HOSTAGE)
 			Ranking.maxScore += HOSTAGE_SCORE;
+		if (Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_EXTRA_LIFE)
+			Ranking.maxScore += 10000;
 	}
 	Ranking.maxScore = (int)(Ranking.maxScore * 3);
 	for (i = 0; i <= Num_triggers; i++) {
