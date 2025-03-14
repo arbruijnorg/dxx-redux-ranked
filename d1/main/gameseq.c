@@ -1881,6 +1881,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 	double wall_health;
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
+		energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
 		double gunpoints = 2;
 		if (!(weapon_id > LASER_ID_L4) && state->hasQuads)
 			gunpoints = 4;
@@ -1889,10 +1890,9 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 		if (weapon_id == SPREADFIRE_ID)
 			gunpoints = 3;
 		damage = f2fl(Weapon_info[weapon_id].strength[Difficulty_level]) * gunpoints;
-		if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's actual damage comes from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
-			damage = f2fl(Weapon_info[12].strength[Difficulty_level]) * gunpoints;
+		if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's energy usage come from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
+			energy_usage = f2fl(Weapon_info[12].energy_usage);
 		fire_rate = (f1_0_double / Weapon_info[weapon_id].fire_wait);
-		energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
 		if (!(weapon_id > LASER_ID_L4)) { // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rate and energy usage in theirs.
 			fire_rate = (f1_0_double / Weapon_info[0].fire_wait);
 			energy_usage = f2fl(Weapon_info[0].energy_usage);
@@ -1911,7 +1911,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 		// Assume accuracy is always 100% for walls. They're big and don't move lol.
 		int shots = wall_health / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (weapon_id == VULCAN_ID) {
-			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this wall before using vulcan.
+			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this wall before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
 				thisWeaponCombatTime = INFINITY; // Make vulcan's time infinite so algo won't use it without ammo.
@@ -1950,6 +1950,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 
 double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_info, int weapon_id, object* obj, robot_info* robInfo, int robot_type)
 {
+	//return 1; // For if I ever want to disable this.
 	// Here we use various aspects of the combat situation to estimate what percentage of shots the player will hit.
 	// robot_type tells this function which data to look at to find the right enemy.
 	// 0 means a parent robot, 1 means a robot dropped from the obj data, 2 means a robot dropped from the robot data, 3 means a matcen robot.
@@ -1967,10 +1968,8 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	if (!robot_type && weapon_id == FUSION_ID && obj->type == OBJ_CNTRLCEN) // robot_type MUST be 0 here or else it might try to read object data when there is none!
 		damage *= 2; // Fusion's damage is doubled against reactors in Redux.
 	double projectile_speed = f2fl(weapon_info->speed[Difficulty_level]);
-	if (weapon_id == SPREADFIRE_ID) { // In D1, Spreadfire's actual damage and speed comes from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
-		damage = f2fl(Weapon_info[12].strength[Difficulty_level]) * gunpoints;
+	if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's speed comes from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
 		projectile_speed = f2fl(Weapon_info[12].speed[Difficulty_level]);
-	}
 	double fire_rate = (f1_0_double / weapon_info->fire_wait);
 	double energy_usage = f2fl(weapon_info->energy_usage);
 	if (!(weapon_id > LASER_ID_L4)) { // For some reason, D1 always uses laser 1's weapon data, even though other levels have a different fire rate, energy usage and speed in theirs.
@@ -2005,6 +2004,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	double enemy_circle_distance;
 	double enemy_weapon_homing_flag;
 	double enemy_runs = 0;
+	double enemy_splash_radius;
 	if (robot_type == 0) {
 		enemy_health = f2fl(obj->shields);
 		if (obj->ctype.ai_info.behavior == AIB_RUN_FROM)
@@ -2031,6 +2031,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		enemy_attack_type = robInfo->attack_type;
 		enemy_circle_distance = f2fl(robInfo->circle_distance[Difficulty_level]);
 		enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
+		enemy_splash_radius = f2fl(Weapon_info[robInfo->weapon_type].damage_radius);
 	}
 	if (robot_type == 1) {
 		enemy_health = f2fl(Robot_info[obj->contains_id].strength);
@@ -2050,6 +2051,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		enemy_attack_type = Robot_info[obj->contains_id].attack_type;
 		enemy_circle_distance = f2fl(Robot_info[obj->contains_id].circle_distance[Difficulty_level]);
 		enemy_weapon_homing_flag = Weapon_info[Robot_info[obj->contains_id].weapon_type].homing_flag;
+		enemy_splash_radius = f2fl(Weapon_info[Robot_info[obj->contains_id].weapon_type].damage_radius);
 	}
 	if (robot_type == 2) {
 		enemy_health = f2fl(Robot_info[robInfo->contains_id].strength);
@@ -2069,6 +2071,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		enemy_attack_type = Robot_info[robInfo->contains_id].attack_type;
 		enemy_circle_distance = f2fl(Robot_info[robInfo->contains_id].circle_distance[Difficulty_level]);
 		enemy_weapon_homing_flag = Weapon_info[Robot_info[robInfo->contains_id].weapon_type].homing_flag;
+		enemy_splash_radius = f2fl(Weapon_info[Robot_info[robInfo->contains_id].weapon_type].damage_radius);
 	}
 	if (robot_type == 3) {
 		enemy_health = f2fl(robInfo->strength);
@@ -2088,6 +2091,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		enemy_attack_type = robInfo->attack_type;
 		enemy_circle_distance = f2fl(robInfo->circle_distance[Difficulty_level]);
 		enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
+		enemy_splash_radius = f2fl(Weapon_info[robInfo->weapon_type].damage_radius);
 	}
 	
 	// Next, find the "optimal distance" for fighting the given enemy with the given weapon. This is the distance where the enemy's fire can be dodged off of pure reaction time, without any prediction.
@@ -2099,7 +2103,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	else
 		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed;
 	if (enemy_runs)
-		optimal_distance = 80; // In the case of enemies that run from you, the optimal distance will be the distance at which their AI activates, because anything closer and they run before you can shoot.
+		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
 	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation.
@@ -2126,7 +2130,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 			accuracy_multiplier *= (enemy_size + projectile_size) / (optimal_distance / 32);
 	}
 	if (weapon_id == SPREADFIRE_ID) {
-		if (optimal_distance / 16 > enemy_size + projectile_size) // Divisor is gotten because Spreadfire projectiles move one unit for every 16 units forward.
+		if (optimal_distance / 16 > enemy_size + projectile_size) // Divisor is gotten because Spreadfire projectiles move one unit outward for every 16 units forward.
 			accuracy_multiplier /= 3;
 	}
 	if (enemy_size < projectile_offsets[weapon_id] - projectile_size) // If the enemy is small enough to fit between projectiles, only one can hit at a time, so halve accuracy.
@@ -2168,12 +2172,13 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 	int topWeapon; // So when depleting energy/ammo, the right one is depleted. Also so the console shows the right weapon.
 	double offspringHealth;
 	double accuracy; // Players are NOT perfect, and it's usually not their fault. We need to account for this if we want all par times to be reachable.
+	double topAccuracy; // The percentage shown on debug console.
 	double adjustedRobotHealthNoAccuracy;
 	// Weapon values converted to a format human beings in 2024 can understand.
-	double enemy_size = f2fl(obj->size);
-	double player_size = f2fl(ConsoleObject->size);
+	double enemy_size;
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
+		enemy_size = f2fl(obj->size);
 		weapon_info* weapon_info = &Weapon_info[weapon_id];
 		double gunpoints = 2;
 		if (!(weapon_id > LASER_ID_L4) && state->hasQuads)
@@ -2185,13 +2190,10 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		double damage = f2fl(weapon_info->strength[Difficulty_level]) * gunpoints;
 		if (weapon_id == FUSION_ID && obj->type == OBJ_CNTRLCEN)
 			damage *= 2; // Fusion's damage is doubled against reactors in Redux.
-		double projectile_speed = f2fl(weapon_info->speed[Difficulty_level]);
-		if (weapon_id == SPREADFIRE_ID) { // In D1, Spreadfire's actual damage and speed comes from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
-			damage = f2fl(Weapon_info[12].strength[Difficulty_level]) * gunpoints;
-			projectile_speed = f2fl(Weapon_info[12].speed[Difficulty_level]);
-		}
-		double fire_rate = (f1_0_double / weapon_info->fire_wait);
 		double energy_usage = f2fl(weapon_info->energy_usage);
+		if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's energy usage come from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
+			energy_usage = f2fl(Weapon_info[12].energy_usage);
+		double fire_rate = (f1_0_double / weapon_info->fire_wait);
 		if (!(weapon_id > LASER_ID_L4)) { // For some reason, D1 always uses laser 1's weapon data, even though other levels have a different fire rate and energy usage in theirs.
 			fire_rate = (f1_0_double / Weapon_info[0].fire_wait);
 			energy_usage = f2fl(Weapon_info[0].energy_usage);
@@ -2206,15 +2208,14 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		}
 		double ammo_usage = f2fl(weapon_info->ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 		double splash_radius = f2fl(weapon_info->damage_radius);
-		double enemy_speed = f2fl(robInfo->max_speed[Difficulty_level]);
 		double enemy_health = f2fl(obj->shields);
 		double enemy_spawn_health = f2fl(Robot_info[obj->contains_id].strength);
 		double adjustedRobotHealth = enemy_health;
 		adjustedRobotHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1; // Divide the health value of the enemy instead of increasing damage when accounting for splash damage, since we'll potentially have multiple damage values.
 		adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
 		adjustedRobotHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, 0);
-		enemy_size = f2fl(Polygon_models[Robot_info[obj->contains_id].model_num].rad);
 		if (obj->contains_type == OBJ_ROBOT) { // Now we account for robots guaranteed to drop from this robot, if any.
+			enemy_size = f2fl(Polygon_models[Robot_info[obj->contains_id].model_num].rad);
 			offspringHealth = enemy_spawn_health * obj->contains_count;
 			offspringHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1;
 			adjustedRobotHealthNoAccuracy += offspringHealth;
@@ -2222,6 +2223,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			adjustedRobotHealth += offspringHealth;
 		}
 		else if (robInfo->contains_type == OBJ_ROBOT) { // Now account for robots that are hard coded to drop (EG spiders dropping spiderlings, obj stuff overwrites this).
+			enemy_size = f2fl(Polygon_models[Robot_info[robInfo->contains_id].model_num].rad);
 			offspringHealth = f2fl(Robot_info[robInfo->contains_id].strength);
 			offspringHealth *= robInfo->contains_count * robInfo->contains_prob;
 			offspringHealth /= 16;
@@ -2231,9 +2233,10 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			adjustedRobotHealth += offspringHealth;
 		}
 		// I'm not going any deeper than this (two layers), because you can have theoretically infinite. I've only seen three layers once (D1 level 13), and never beyond that, which would be asking for trouble on multiple fronts.
-		int shots = adjustedRobotHealth / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
+		int shots = (adjustedRobotHealthNoAccuracy / damage + 1) / accuracy + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (weapon_id == VULCAN_ID) {
-			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
+			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
 				thisWeaponCombatTime = INFINITY; // Set vulcan's time to some absurdly high amount that'll never happen, so algo won't use it without ammo.
@@ -2245,7 +2248,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			energyUsed = energy_usage * shots * f1_0;
 			ammoUsed = ammo_usage * shots * f1_0;
 			topWeapon = weapon_id;
-			accuracy = (adjustedRobotHealthNoAccuracy / adjustedRobotHealth) * 100;
+			topAccuracy = accuracy * 100;
 		}
 	}
 	if (topWeapon == VULCAN_ID)
@@ -2254,18 +2257,18 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		state->simulatedEnergy -= energyUsed;
 	if (!(topWeapon > LASER_ID_L4)) {
 		if (state->hasQuads)
-			printf("Took %.3fs to fight robot type %i with quad laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, accuracy);
+			printf("Took %.3fs to fight robot type %i with quad laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, topAccuracy);
 		else
-			printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, accuracy);
+			printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, topAccuracy);
 	}
 	if (topWeapon == VULCAN_ID)
-		printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
+		printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 	if (topWeapon == SPREADFIRE_ID)
-		printf("Took %.3fs to fight robot type %i with spreadfire, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
+		printf("Took %.3fs to fight robot type %i with spreadfire, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 	if (topWeapon == PLASMA_ID)
-		printf("Took %.3fs to fight robot type %i with plasma, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
+		printf("Took %.3fs to fight robot type %i with plasma, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 	if (topWeapon == FUSION_ID)
-		printf("Took %.3fs to fight robot type %i with fusion, %.2f accuracy\n", lowestCombatTime, obj->id, accuracy);
+		printf("Took %.3fs to fight robot type %i with fusion, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 	return lowestCombatTime;
 }
 
@@ -2277,9 +2280,10 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 	double accuracy;
 	double adjustedRobotHealthNoAccuracy;
 	// Weapon values converted to a format human beings in 2024 can understand.
-	double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
+	double enemy_size;
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
+		enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 		weapon_info* weapon_info = &Weapon_info[weapon_id];
 		double gunpoints = 2;
 		if (!(weapon_id > LASER_ID_L4) && state->hasQuads)
@@ -2289,10 +2293,10 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 		if (weapon_id == SPREADFIRE_ID)
 			gunpoints = 3;
 		double damage = f2fl(weapon_info->strength[Difficulty_level]) * gunpoints;
-		if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's actual damage comes from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
-			damage = f2fl(Weapon_info[12].strength[Difficulty_level]) * gunpoints;
-		double fire_rate = (f1_0_double / weapon_info->fire_wait);
 		double energy_usage = f2fl(weapon_info->energy_usage);
+		if (weapon_id == SPREADFIRE_ID) // In D1, Spreadfire's energy usage come from ID 12, while everything else we use here comes from 20. Don't ask me why... I don't know.
+			energy_usage = f2fl(Weapon_info[12].energy_usage);
+		double fire_rate = (f1_0_double / weapon_info->fire_wait);
 		if (!(weapon_id > LASER_ID_L4)) { // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rate and energy usage in theirs.
 			fire_rate = (f1_0_double / Weapon_info[0].fire_wait);
 			energy_usage = f2fl(Weapon_info[0].energy_usage);
@@ -2324,9 +2328,10 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			offspringHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, NULL, robInfo, 2);
 			adjustedRobotHealth += offspringHealth;
 		}
-		int shots = adjustedRobotHealth / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
+		int shots = (adjustedRobotHealthNoAccuracy / damage + 1) / accuracy + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (weapon_id == VULCAN_ID) {
-			if (state->vulcanAmmo >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
+			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponMatcenTime = shots / fire_rate;
 			else
 				thisWeaponMatcenTime = INFINITY; // Make vulcan's time infinite so algo won't use it without ammo.
@@ -2529,13 +2534,17 @@ void initLockedWalls(partime_calc_state* state)
 					}
 				}
 			}
-			//if (!wallInfo->unlockedBy.type) {// An unlock type never got assigned for this wall, meaning its neighboring side could be what unlocks it if it's a door.
+			//if (!wallInfo->unlockedBy.type) { // An unlock type never got assigned for this wall, meaning its neighboring side could be what unlocks it if it's a door.
+				//int wall_num;
 				//for (int n = 0; n < 5; n++) { // Check each of this wall's segnum's children for a connected side that matches it. We'll know the other wall is there.
 					//int side_num = find_connecting_side(Walls[wallInfo->wallID].segnum, Segments[Walls[wallInfo->wallID].segnum].children[n]);
 					//if (side_num == Walls[wallInfo->wallID].sidenum) // Did we find the adjacent side?
-						//int wall_num == Segmenmts[Segments[Walls[wallInfo->wallID].segnum].children[n]].sides;
+						//wall_num = Segments[Segments[Walls[wallInfo->wallID].segnum].children[n]].sides;
 				//}
-				//if (Walls[wallInfo->wallID].type == WALL_DOOR) // If the other side of this wall is a door...
+				//if (Walls[wallInfo->wallID].type == WALL_DOOR) { // If the other side of this wall is a door...
+					//if (Walls[wallInfo->wallID].flags != WALL_DOOR_LOCKED || Walls[wallInfo->wallID].keys) // If the other side of the wall 
+						
+				//}
 			//}
 		}
 	}
@@ -2995,9 +3004,16 @@ int getParTimeWeaponID(int index)
 
 double findEnergyTime(partime_calc_state* state, partime_objective* objectiveList, int startIndex) // Props to Sirius for help with energy time optimization.
 {
+	// This function is in charge of determining the mimimum time a player needs to refill their energy in a given level, then adding that to its par time.
+	// It should be noted before we get started that this function does NOT consider whether a fuelcen path is actually available at the time it's taken.
+	// The energy Algo uses is an estimate based on limited information, and it assumes the level is designed in a way where a fuelcen is always accessible.
+	// The fuelcen path could also be unneeded due to energy saves Algo doesn't see, locked behind a door the player can't enter yet, guarded by robots, or superceded by a more optimal route.
+	// Accounting for every single factor is unrealistic. This function's job is simply attempting to ensure that the player has enough time for energy detours, assuming they repeat the exact actions Algo does, which isn't always the case.
+	//return 0; // This line can be uncommented at any time if this feature needs to be disabled.
 	int objectiveSegments[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	double objectiveEnergies[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
-	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X. With this, we don't have to do thousands of expensive pathfinding operations.
+	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X.
+	// With that, we don't have to do thousands of expensive pathfinding operations.
 	double pathLength; // Store create_path_partime's result in pathLength to compare to current shortest.
 	point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
 	int path_count; // The number of segments in the path we're looking at.
