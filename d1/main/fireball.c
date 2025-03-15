@@ -134,9 +134,9 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 								if ( obj0p->shields >= 0 ) {
 									if (apply_damage_to_robot(obj0p, damage, parent))
 										if (objp != NULL) {
-											if (obj0p->matcen_creator || obj0p->flags & OF_ROBOT_DROPPED) {
+											if (obj0p->matcen_creator || obj0p->flags & OF_OBJECT_DROPPED) {
 												Ranking.excludePoints += Robot_info[obj0p->id].score_value;
-												if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+												if (!obj0p->matcen_creator && (obj0p->flags & OF_OBJECT_DROPPED))
 													Ranking.missedRngSpawn += Robot_info[obj0p->id].score_value;
 											}
 											if (!(parent == Players[Player_num].objnum)) {
@@ -912,6 +912,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 #endif
 
 				obj = &Objects[objnum];
+				if (fireball_flag_hack)
+					Objects[objnum].flags |= OF_OBJECT_DROPPED;
 
 				obj->mtype.phys_info.velocity = new_velocity;
 
@@ -971,8 +973,6 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 //				new_pos.z += (d_rand()-16384)*6;
 
 				objnum = obj_create(OBJ_ROBOT, id, segnum, &new_pos, &vmd_identity_matrix, Polygon_models[Robot_info[ObjId[type]].model_num].rad, CT_AI, MT_PHYSICS, RT_POLYOBJ);
-				if (fireball_flag_hack == 1)
-				Objects[objnum].flags |= OF_ROBOT_DROPPED;
 
 				if ( objnum < 0 ) {
 					Int3();
@@ -987,6 +987,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 #endif
 
 				obj = &Objects[objnum];
+				if (fireball_flag_hack || obj->id == Robot_info[obj->id].contains_id) // To prevent most infinite robot drop loops.
+					obj->flags |= OF_OBJECT_DROPPED;
 
 				obj->matcen_creator = fireball_matcen_hack;
 

@@ -104,7 +104,7 @@ enum object_type_t
 #define OF_ATTACHED         16  // this object is a fireball attached to another object
 #define OF_HARMLESS         32  // this object does no damage.  Added to make quad lasers do 1.5 damage as normal lasers.
 #define OF_PLAYER_DROPPED   64  // this object was dropped by the player...
-#define OF_ROBOT_DROPPED    128 // this object was dropped by a robot (scripted drops do not get this flag)
+#define OF_OBJECT_DROPPED    128 // this object was dropped by a robot (scripted drops do not get this flag)
 
 // Different Weapon ID types...
 #define WEAPON_ID_LASER         0

@@ -1594,7 +1594,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime,
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		if (isParTime) {
+		if (isParTime == 1) {
 			if (Ranking.parTimePathCompletable) {
 				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED) && !(((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) || Walls[wall_num].type == WALL_CLOSED) && !thisWallUnlocked(wall_num)))
 					return 1;
@@ -1606,7 +1606,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime,
 			}
 			else
 			{
-				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)) { // && !((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) && !thisWallUnlocked(wall_num))) // Now ignoring locked doors too since those can also be shot through (EG: MN1998).
+				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)) { // && !((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) && !thisWallUnlocked(wall_num))) { // Now ignoring locked doors too since those can also be shot through (EG: MN1998).
 					if (Walls[wall_num].type == WALL_CLOSED)
 						Ranking.parTimeStateSegnum = Walls[wall_num].segnum; // Since we're about to go through a closed wall, set Algo's segnum to before it so it doesn't actually fly through it. In actual gameplay this is for shooting through walls.
 					return 1;
@@ -1615,8 +1615,14 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime,
 		}
 		else
 		{
-			if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || (Walls[wall_num].type == WALL_CLOSED && !thisWallUnlocked(wall_num))) // Since no closed wall will be unlocked at the time objects are considered accessible or not, we can use that function.
-				return 1;
+			if (isParTime == 2) { // In the case of the energy function, literally nothing is off limits.
+				if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)
+					return 1;
+			}
+			else {
+				if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || (Walls[wall_num].type == WALL_CLOSED && !thisWallUnlocked(wall_num))) // Since no closed wall will be unlocked at the time objects are considered accessible or not, we can use that function.
+					return 1;
+			}
 		}
 	}
 

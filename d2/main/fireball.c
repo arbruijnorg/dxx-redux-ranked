@@ -179,15 +179,15 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 
 									if (apply_damage_to_robot(obj0p, damage, parent))
 										if (objp != NULL) {
-											if (obj0p->matcen_creator || obj0p->flags & OF_ROBOT_DROPPED) {
+											if (obj0p->matcen_creator || obj0p->flags & OF_OBJECT_DROPPED) {
 												if (Current_level_num > 0) {
 													Ranking.excludePoints += Robot_info[obj0p->id].score_value;
-													if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+													if (!obj0p->matcen_creator && (obj0p->flags & OF_OBJECT_DROPPED))
 														Ranking.missedRngSpawn += Robot_info[obj0p->id].score_value;
 												}
 												else {
 													Ranking.secretExcludePoints += Robot_info[obj0p->id].score_value;
-													if (!obj0p->matcen_creator && (obj0p->flags & OF_ROBOT_DROPPED))
+													if (!obj0p->matcen_creator && (obj0p->flags & OF_OBJECT_DROPPED))
 														Ranking.secretMissedRngSpawn += Robot_info[obj0p->id].score_value;
 												}
 											}
@@ -1009,6 +1009,8 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 #endif
 
 				obj = &Objects[objnum];
+				if (fireball_flag_hack)
+					Objects[objnum].flags |= OF_OBJECT_DROPPED;
 
 				obj->mtype.phys_info.velocity = new_velocity;
 
@@ -1083,7 +1085,7 @@ int drop_powerup(int type, int id, int num, vms_vector *init_vel, vms_vector *po
 
 				obj = &Objects[objnum];
 				if (fireball_flag_hack || obj->id == Robot_info[obj->id].contains_id) // To prevent most infinite robot drop loops.
-					obj->flags |= OF_ROBOT_DROPPED;
+					obj->flags |= OF_OBJECT_DROPPED;
 
 				//@@Took out this ugly hack 1/12/96, because Mike has added code
 				//@@that should fix it in a better way.
