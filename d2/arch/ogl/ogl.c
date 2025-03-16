@@ -108,7 +108,7 @@ static inline float minf(float x, float y) { return x < y ? x : y; }
 extern GLubyte *pixels;
 extern GLubyte *texbuf;
 void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width, int height, int dxo, int dyo, int twidth, int theight, int type, int bm_flags, int data_format);
-void ogl_loadbmtexture(grs_bitmap* bm);
+void ogl_loadbmtexture(grs_bitmap *bm);
 int ogl_loadtexture(unsigned char *data, int dxo, int dyo, ogl_texture *tex, int bm_flags, int data_format, int texfilt);
 void ogl_freetexture(ogl_texture *gltexture);
 extern void loadRankImages();
@@ -1291,6 +1291,37 @@ void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width
 	if ((width > max(grd_curscreen->sc_w, 1024)) || (height > max(grd_curscreen->sc_h, 1024)))
 		Error("Texture is too big: %ix%i", width, height);
 
+	if (data_format) { // true color bitmap?
+		if (width == truewidth && width == twidth) {
+			memcpy(texp, data, data_format * width * height);
+		} else {
+			for (y = 0; y < height; y++) {
+				memcpy(texp + twidth * y * data_format,
+					data + truewidth * y * data_format,
+					width * data_format);
+				if (width < twidth) { // repeat last pixel, clear rest
+					memcpy(texp + (y * twidth + width) * data_format,
+						data + (y * truewidth + width - 1) * data_format,
+						data_format);
+					if (width + 1 < twidth)
+						memset(texp + (y * twidth + width + 1) * data_format,
+							0, (twidth - width - 1) * data_format);
+				}
+			}
+		}
+		if (height < theight) { // repeat last row, clear rest
+			memcpy(texp + height * twidth * data_format,
+				data + (height - 1) * truewidth * data_format,
+				width * data_format);
+			memset(texp + (height * twidth + width) * data_format,
+				0, (twidth - width) * data_format);
+			if (height + 1 < theight)
+				memset(texp + (height + 1) * twidth * data_format,
+					0, (theight - height - 1) * twidth * data_format);
+		}
+		return;
+	}
+
 	i=0;
 	for (y=0;y<theight;y++)
 	{
@@ -1299,19 +1330,7 @@ void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width
 		{
 			if (x<width && y<height)
 			{
-				if (data_format)
-				{
-					int j;
-
-					for (j = 0; j < data_format; ++j)
-						(*(texp++)) = data[i * data_format + j];
-					i++;
-					continue;
-				}
-				else
-				{
-					c = data[i++];
-				}
+				c = data[i++];
 			}
 			else if (x == width && y < height) // end of bitmap reached - fill this pixel with last color to make a clean border when filtering this texture
 			{
@@ -1766,9 +1785,9 @@ void ogl_loadbmtexture_f(grs_bitmap *bm, int texfilt)
 				}
 
 				char is_blue_tex2 = bitmapname && !strcmp(bitmapname, "ship1-5");
-				if (is_blue_tex2) {
-					static const int lower_bound[24] = { 28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8 }; //bos
-					static const int upper_bound[24] = { 57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23 }; // fos
+				if(is_blue_tex2) {
+					static const int lower_bound[24]   = {28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8}; //bos
+					static const int upper_bound[24]   = {57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23}; // fos
 					for(i=0; i < bm->bm_h * bm->bm_w; i++) {
 						int r = i / bm->bm_w;
 						int c = i % bm->bm_w; 

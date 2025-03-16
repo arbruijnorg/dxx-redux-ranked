@@ -782,8 +782,12 @@ void LoadLevel(int level_num,int page_in_textures)
 
 	load_level_robots(level_num);
 
-	if ( page_in_textures )
+	if ( page_in_textures ) {
 		piggy_load_level_data();
+#ifdef OGL
+		ogl_cache_level_textures();
+#endif
+	}
 
 #ifdef NETWORK
 	my_segments_checksum = netmisc_calc_checksum();
@@ -3616,7 +3620,7 @@ void show_order_form();
 void DoEndGame(void)
 {
 	if ((Newdemo_state == ND_STATE_RECORDING) || (Newdemo_state == ND_STATE_PAUSED))
-		newdemo_stop_recording();
+		newdemo_stop_recording(0);
 
 	set_screen_mode( SCREEN_MENU );
 
@@ -3927,6 +3931,16 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 	}
    BigWindowSwitch=0;
 
+	if (GameArg.GameLogSplit) {
+		// Include the mission name, level number and timestamp in the log filename
+		char log_filename[PATH_MAX];
+		time_t now = time(NULL);
+		struct tm *t = localtime(&now);
+		snprintf(log_filename, SDL_arraysize(log_filename), "gamelog-%s-%d-%04d%02d%02d-%02d%02d%02d.txt",
+			Current_mission_filename, level_num, t->tm_year + 1900, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+
+		con_switch_log(log_filename);
+	}
 
 	if (Newdemo_state == ND_STATE_PAUSED)
 		Newdemo_state = ND_STATE_RECORDING;
@@ -4024,7 +4038,6 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 
 #ifdef OGL
 	gr_remap_mono_fonts();
-	ogl_cache_level_textures();
 #endif
 
 
@@ -4044,7 +4057,6 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 	reset_respawnable_bots();
 
 	set_homing_update_rate(Game_mode & GM_MULTI ? Netgame.HomingUpdateRate : 25);
-	set_constant_homing_speed(Game_mode & GM_MULTI ? Netgame.ConstantHomingSpeed : 0);
 
 	//	Say player can use FLASH cheat to mark path to exit.
 	Last_level_path_created = -1;
@@ -4054,8 +4066,11 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 	if (!((Game_mode & GM_MULTI) && (Newdemo_state != ND_STATE_PLAYBACK)))
 		full_palette_save();
 
-	if(Game_mode & GM_MULTI && PlayerCfg.AutoDemo && Newdemo_state != ND_STATE_RECORDING) {
-		newdemo_start_recording();
+	int autodemo_enabled_for_game_mode =
+		(!(Game_mode & GM_MULTI) && PlayerCfg.AutoDemoSp) ||
+		((Game_mode & GM_MULTI) && PlayerCfg.AutoDemoMp);
+	if (autodemo_enabled_for_game_mode && Newdemo_state != ND_STATE_RECORDING) {
+		newdemo_start_recording(1);
 	}
 
 	if (!Game_wind)

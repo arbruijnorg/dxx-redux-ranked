@@ -875,9 +875,9 @@ int HandleSystemKey(int key)
 		KEY_MAC(case KEY_COMMAND+KEY_5:)
 		case KEY_F5:
 			if ( Newdemo_state == ND_STATE_RECORDING )
-				newdemo_stop_recording();
+				newdemo_stop_recording(1);
 			else if ( Newdemo_state == ND_STATE_NORMAL )
-				newdemo_start_recording();
+				newdemo_start_recording(0);
 			break;
 #ifdef NETWORK
 		KEY_MAC(case KEY_COMMAND+KEY_ALTED+KEY_4:)
@@ -1980,8 +1980,9 @@ int ReadControls(d_event *event)
 
 				// If we're observing at a distance, move the camera accordingly.achieved_state
 				if (Obs_at_distance == 1) {
+					int dist = PlayerCfg.ObsIncreaseThirdPersonDist[get_observer_game_mode()] ? -30 : -20;
 					vms_vector move = ZERO_VECTOR;
-					vm_vec_copy_scale(&move, &Real_orient.fvec, F1_0 * -20);
+					vm_vec_copy_scale(&move, &Real_orient.fvec, F1_0 * dist);
 					Real_pos.x += move.x;
 					Real_pos.y += move.y;
 					Real_pos.z += move.z;

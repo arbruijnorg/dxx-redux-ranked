@@ -108,7 +108,7 @@ static inline float minf(float x, float y) { return x < y ? x : y; }
 extern GLubyte *pixels;
 extern GLubyte *texbuf;
 void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width, int height, int dxo, int dyo, int twidth, int theight, int type, int bm_flags, int data_format);
-void ogl_loadbmtexture(grs_bitmap* bm);
+void ogl_loadbmtexture(grs_bitmap *bm, int filter_blueship_wing);
 int ogl_loadtexture(unsigned char *data, int dxo, int dyo, ogl_texture *tex, int bm_flags, int data_format, int texfilt);
 void ogl_freetexture(ogl_texture *gltexture);
 extern void loadRankImages();
@@ -362,13 +362,173 @@ void ogl_texwrap(ogl_texture *gltexture,int state)
 
 void ogl_cache_level_textures(void)
 {
+	polymodel *po;
 	int i;
+
+	if (model_num < 0)
+		return;
+	po = &Polygon_models[model_num];
+	
+	for (i=0,ec=Effects;i<Num_effects;i++,ec++) {
+		ogl_cache_vclipn_textures(Effects[i].dest_vclip);
+		if ((Effects[i].changing_wall_texture == -1) && (Effects[i].changing_object_texture==-1) )
+			continue;
+		if (ec->vc.num_frames>max_efx)
+			max_efx=ec->vc.num_frames;
+	}
+	glmprintf((0,"max_efx:%i\n",max_efx));
+	for (ef=0;ef<max_efx;ef++){
+		for (i=0,ec=Effects;i<Num_effects;i++,ec++) {
+			if ((Effects[i].changing_wall_texture == -1) && (Effects[i].changing_object_texture==-1) )
+				continue;
+			ec->time_left=-1;
+		}
+		do_special_effects();
+
+		for (seg=0;seg<Num_segments;seg++){
+			for (side=0;side<MAX_SIDES_PER_SEGMENT;side++){
+				sidep=&Segments[seg].sides[side];
+				tmap1=sidep->tmap_num;
+				tmap2=sidep->tmap_num2;
+				if (tmap1<0 || tmap1>=NumTextures){
+					glmprintf((0,"ogl_cache_level_textures %i %i %i %i\n",seg,side,tmap1,NumTextures));
+					//				tmap1=0;
+					continue;
+				}
+				PIGGY_PAGE_IN(Textures[tmap1]);
+				bm = &GameBitmaps[Textures[tmap1].index];
+				if (tmap2 != 0){
+					PIGGY_PAGE_IN(Textures[tmap2&0x3FFF]);
+					bm2 = &GameBitmaps[Textures[tmap2&0x3FFF].index];
+					if (GameArg.DbgAltTexMerge == 0
+#ifndef OGL_MERGE
+						|| (bm2->bm_flags & BM_FLAG_SUPER_TRANSPARENT)
+#endif
+						)
+						bm = texmerge_get_cached_bitmap( tmap1, tmap2 );
+					else
+						ogl_loadbmtexture(bm2, 0);
+				}
+				ogl_loadbmtexture(bm, 0);
+			}
+		}
+		glmprintf((0,"finished ef:%i\n",ef));
+	}
+	reset_special_effects();
+	init_special_effects();
+	{
+		// always have lasers, concs, flares.  Always shows player appearance, and at least concs are always available to disappear.
+		ogl_cache_weapon_textures(Primary_weapon_to_weapon_info[LASER_INDEX]);
+		ogl_cache_weapon_textures(Secondary_weapon_to_weapon_info[CONCUSSION_INDEX]);
+		ogl_cache_weapon_textures(FLARE_ID);
+		ogl_cache_vclipn_textures(VCLIP_PLAYER_APPEARANCE);
+		ogl_cache_vclipn_textures(VCLIP_POWERUP_DISAPPEARANCE);
+		ogl_cache_polymodel_textures(Player_ship->model_num);
+		ogl_cache_vclipn_textures(Player_ship->expl_vclip_num);
+		if (ec->vc.num_frames>max_efx)
+			max_efx=ec->vc.num_frames;
+	}
+	glmprintf((0,"max_efx:%i\n",max_efx));
+	for (ef=0;ef<max_efx;ef++){
+		for (i=0,ec=Effects;i<Num_effects;i++,ec++) {
+			if ((Effects[i].changing_wall_texture == -1) && (Effects[i].changing_object_texture==-1) )
+				continue;
+			ec->time_left=-1;
+		}
+		do_special_effects();
+
+		for (seg=0;seg<Num_segments;seg++){
+			for (side=0;side<MAX_SIDES_PER_SEGMENT;side++){
+				sidep=&Segments[seg].sides[side];
+				tmap1=sidep->tmap_num;
+				tmap2=sidep->tmap_num2;
+				if (tmap1<0 || tmap1>=NumTextures){
+					glmprintf((0,"ogl_cache_level_textures %i %i %i %i\n",seg,side,tmap1,NumTextures));
+					//				tmap1=0;
+					continue;
+				}
+				PIGGY_PAGE_IN(Textures[tmap1]);
+				bm = &GameBitmaps[Textures[tmap1].index];
+				if (tmap2 != 0){
+					PIGGY_PAGE_IN(Textures[tmap2&0x3FFF]);
+					bm2 = &GameBitmaps[Textures[tmap2&0x3FFF].index];
+					if (GameArg.DbgAltTexMerge == 0
+#ifndef OGL_MERGE
+						|| (bm2->bm_flags & BM_FLAG_SUPER_TRANSPARENT)
+#endif
+						)
+						bm = texmerge_get_cached_bitmap( tmap1, tmap2 );
+					else
+						ogl_loadbmtexture(bm2, 0);
+				}
+				ogl_loadbmtexture(bm, 0);
+			}
+		}
+		glmprintf((0,"finished ef:%i\n",ef));
+	}
+	reset_special_effects();
+	init_special_effects();
+	{
+		// always have lasers, concs, flares.  Always shows player appearance, and at least concs are always available to disappear.
+		ogl_cache_weapon_textures(Primary_weapon_to_weapon_info[LASER_INDEX]);
+		ogl_cache_weapon_textures(Secondary_weapon_to_weapon_info[CONCUSSION_INDEX]);
+		ogl_cache_weapon_textures(FLARE_ID);
+		ogl_cache_vclipn_textures(VCLIP_PLAYER_APPEARANCE);
+		ogl_cache_vclipn_textures(VCLIP_POWERUP_DISAPPEARANCE);
+		ogl_cache_polymodel_textures(Player_ship->model_num);
+		ogl_cache_vclipn_textures(Player_ship->expl_vclip_num);
+			ogl_loadbmtexture(&GameBitmaps[ObjBitmaps[ObjBitmapPtrs[po->first_texture+i]].index], 0);
+		}
+	}
+}
+
+void ogl_cache_vclip_textures(vclip *vc){
+	int i;
+	for (i=0;i<vc->num_frames;i++){
+		PIGGY_PAGE_IN(vc->frames[i]);
+		ogl_loadbmtexture(&GameBitmaps[vc->frames[i].index], 0);
+	}
+}
+
+void ogl_cache_vclipn_textures(int i)
+{
+	if (i >= 0 && i < VCLIP_MAXNUM)
+		ogl_cache_vclip_textures(&Vclip[i]);
+}
+
+void ogl_cache_weapon_textures(int weapon_type)
+{
+	weapon_info *w;
+
+	if (weapon_type < 0)
+		return;
+	w = &Weapon_info[weapon_type];
+	ogl_cache_vclipn_textures(w->flash_vclip);
+	ogl_cache_vclipn_textures(w->robot_hit_vclip);
+	ogl_cache_vclipn_textures(w->wall_hit_vclip);
+	if (w->render_type==WEAPON_RENDER_VCLIP)
+		ogl_cache_vclipn_textures(w->weapon_vclip);
+	else if (w->render_type == WEAPON_RENDER_POLYMODEL)
+	{
+		ogl_cache_polymodel_textures(w->model_num);
+		ogl_cache_polymodel_textures(w->model_num_inner);
+	}
+}
+
+void ogl_cache_level_textures(void)
+{
+	int seg,side,i;
+	eclip *ec;
+	short tmap1,tmap2;
+	grs_bitmap *bm,*bm2;
+	struct side *sidep;
+	int max_efx=0,ef;
 	
 	ogl_reset_texture_stats_internal();//loading a new lev should reset textures
 
 	if (!ogl_allow_png())
 		ogl_smash_png_textures();
-	
+
 	for (i = 0; i < Num_bitmap_files; i++) {
 		if (!(GameBitmaps[i].bm_flags & BM_FLAG_PAGED_OUT))
 			ogl_loadbmtexture(&GameBitmaps[i]);
@@ -1277,6 +1437,37 @@ void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width
 	if ((width > max(grd_curscreen->sc_w, 1024)) || (height > max(grd_curscreen->sc_h, 1024)))
 		Error("Texture is too big: %ix%i", width, height);
 
+	if (data_format) { // true color bitmap?
+		if (width == truewidth && width == twidth) {
+			memcpy(texp, data, data_format * width * height);
+		} else {
+			for (y = 0; y < height; y++) {
+				memcpy(texp + twidth * y * data_format,
+					data + truewidth * y * data_format,
+					width * data_format);
+				if (width < twidth) { // repeat last pixel, clear rest
+					memcpy(texp + (y * twidth + width) * data_format,
+						data + (y * truewidth + width - 1) * data_format,
+						data_format);
+					if (width + 1 < twidth)
+						memset(texp + (y * twidth + width + 1) * data_format,
+							0, (twidth - width - 1) * data_format);
+				}
+			}
+		}
+		if (height < theight) { // repeat last row, clear rest
+			memcpy(texp + height * twidth * data_format,
+				data + (height - 1) * truewidth * data_format,
+				width * data_format);
+			memset(texp + (height * twidth + width) * data_format,
+				0, (twidth - width) * data_format);
+			if (height + 1 < theight)
+				memset(texp + (height + 1) * twidth * data_format,
+					0, (theight - height - 1) * twidth * data_format);
+		}
+		return;
+	}
+
 	i=0;
 	for (y=0;y<theight;y++)
 	{
@@ -1285,19 +1476,7 @@ void ogl_filltexbuf(unsigned char *data, GLubyte *texp, int truewidth, int width
 		{
 			if (x<width && y<height)
 			{
-				if (data_format)
-				{
-					int j;
-
-					for (j = 0; j < data_format; ++j)
-						(*(texp++)) = data[i * data_format + j];
-					i++;
-					continue;
-				}
-				else
-				{
-					c = data[i++];
-				}
+				c = data[i++];
 			}
 			else if (x == width && y < height) // end of bitmap reached - fill this pixel with last color to make a clean border when filtering this texture
 			{
@@ -1591,9 +1770,9 @@ int ogl_loadtexture (unsigned char *data, int dxo, int dyo, ogl_texture *tex, in
 			GL_TEXTURE_2D, 0, tex->internalformat,
 			tex->tw, tex->th, 0, tex->format, // RGBA textures.
 			GL_UNSIGNED_BYTE, // imageData is a GLubyte pointer.
-			bufP);
-	}
-
+			int lower_bound[24]   = {28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8}; //bos
+			int upper_bound[24]   = {57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23}; // fos
+			if(filter_blueship_wing && bm->bm_h == 64 && bm->bm_w == 64) {
 	tex_set_size (tex);
 	r_texcount++;
 	return 0;
@@ -1646,167 +1825,6 @@ void ogl_loadbmtexture_f(grs_bitmap *bm, int texfilt)
 		png_data pdata;
 
 		sprintf(filename, /*"textures/"*/ "%s.png", bitmapname);
-		if (read_png(filename, &pdata))
-		{
-			con_printf(CON_DEBUG,"%s: %ux%ux%i p=%i(%i) c=%i a=%i chans=%i\n", filename, pdata.width, pdata.height, pdata.depth, pdata.paletted, pdata.num_palette, pdata.color, pdata.alpha, pdata.channels);
-			if (pdata.depth == 8 && pdata.color)
-			{
-				if (bm->gltexture == NULL)
-					ogl_init_texture(bm->gltexture = ogl_get_free_texture(), pdata.width, pdata.height, ((pdata.alpha || bm->bm_flags & BM_FLAG_TRANSPARENT) ? OGL_FLAG_ALPHA : 0));
-				ogl_loadtexture(pdata.data, 0, 0, bm->gltexture, bm->bm_flags, pdata.paletted ? 0 : pdata.channels, texfilt);
-				#ifdef OGL_MERGE
-				if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT)
-					ogl_loadpngmask(&pdata, bm, texfilt);
-				#endif
-				free(pdata.data);
-				if (pdata.palette)
-					free(pdata.palette);
-				bm->gltexture->is_png = 1;
-				return;
-			}
-			else
-			{
-				con_printf(CON_DEBUG,"%s: unsupported texture format: must be rgb, rgba, or paletted, and depth 8\n", filename);
-				free(pdata.data);
-				if (pdata.palette)
-					free(pdata.palette);
-			}
-		}
-	}
-#endif
-	if (bm->gltexture == NULL){
- 		ogl_init_texture(bm->gltexture = ogl_get_free_texture(), bm->bm_w, bm->bm_h, ((bm->bm_flags & (BM_FLAG_TRANSPARENT | BM_FLAG_SUPER_TRANSPARENT))? OGL_FLAG_ALPHA : 0));
-	}
-	else {
-		if (bm->gltexture->handle>0)
-			return;
-		if (bm->gltexture->w==0){
-			bm->gltexture->lw=bm->bm_w;
-			bm->gltexture->w=bm->bm_w;
-			bm->gltexture->h=bm->bm_h;
-		}
-	}
-
-	if (bm->bm_flags & BM_FLAG_RLE){
-		unsigned char * dbits;
-		unsigned char * sbits;
-		int i, data_offset;
-
-		data_offset = 1;
-		if (bm->bm_flags & BM_FLAG_RLE_BIG)
-			data_offset = 2;
-
-		sbits = &bm->bm_data[4 + (bm->bm_h * data_offset)];
-		dbits = decodebuf;
-
-		for (i=0; i < bm->bm_h; i++ )    {
-			//con_printf(CON_NORMAL, "RLE decoding bitmap %d\n", bm->bm_handle); 
-			gr_rle_decode(sbits,dbits);
-			if ( bm->bm_flags & BM_FLAG_RLE_BIG )
-				sbits += (int)INTEL_SHORT(*((short *)&(bm->bm_data[4+(i*data_offset)])));
-			else
-				sbits += (int)bm->bm_data[4+i];
-			dbits += bm->bm_w;
-		}
-		buf=decodebuf;
-
-		if(Game_mode & GM_MULTI && Netgame.BlackAndWhitePyros) {
-			char is_purple_tex1 = bitmapname && !strcmp(bitmapname, "ship6-4");
-			char is_purple_tex2 = bitmapname && !strcmp(bitmapname, "ship6-5");
-
-			if(is_purple_tex1 || is_purple_tex2) {
-				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
-					ubyte r = gr_current_pal[buf[i]*3];
-					ubyte g = gr_current_pal[buf[i]*3+1];
-					ubyte b = gr_current_pal[buf[i]*3+2];
-
-					ubyte max = r;
-					if(g > max) { max = g; }
-					if(b > max) { max = b; }
-
-					if(r > g && g > b) {
-						int replace = gr_find_closest_color(max/4,max/10,max/3);
-						buf[i] = replace;
-					}
-				}
-			}
-
-			char is_white_tex1 = bitmapname && !strcmp(bitmapname, "ship7-4");
-			char is_white_tex2 = bitmapname && !strcmp(bitmapname, "ship7-5");
-
-			if(is_white_tex1 || is_white_tex2) {
-				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
-					ubyte r = gr_current_pal[buf[i]*3];
-					ubyte g = gr_current_pal[buf[i]*3+1];
-					ubyte b = gr_current_pal[buf[i]*3+2];
-
-					ubyte max = r;
-					if(g > max) { max = g; }
-					if(b > max) { max = b; }
-
-					if(g > r && g > b) {
-						int replace = gr_find_closest_color(max,max,max);
-						buf[i] = replace;
-					}
-				}
-			}
-
-			char is_blue_tex2 = bitmapname && !strcmp(bitmapname, "ship1-5");
-			if (is_blue_tex2) {
-				static const int lower_bound[24] = { 28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8 }; //bos
-				static const int upper_bound[24] = { 57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23 }; // fos
-				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
-					int r = i / bm->bm_w;
-					int c = i % bm->bm_w; 
-
-					int in_filter_area_1 = 0;
-					int in_filter_area_2 = 0;
-
-					if(r >= 2 && r <= 6) {
-						in_filter_area_1 = 1;
-					}
-
-					if(r >= 36 && r <= 58) {
-						if(lower_bound[r-36] <= c && c <= upper_bound[r-36]) {
-							in_filter_area_2 = 1;
-						}
-					}
-
-					if(in_filter_area_1) {
-						ubyte b = gr_current_pal[buf[i]*3+2];
-						int replace = gr_find_closest_color(b/2,b/2,b); 
-						buf[i] = replace; 
-					}
-
-					if(in_filter_area_2) {
-						ubyte b = gr_current_pal[buf[i]*3+2];
-						int replace = gr_find_closest_color(b,b,b*2); 
-						buf[i] = replace; 
-					}					
-				}
-			}			
-		}
-
-	}
-	ogl_loadtexture(buf, 0, 0, bm->gltexture, bm->bm_flags, 0, texfilt);
-
-#ifdef OGL_MERGE
-	if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT) {
-		unsigned char *mask;
-		int size = bm->bm_w * bm->bm_h;
-
-		if (bm->gltexture_mask == NULL)
-			ogl_init_texture(bm->gltexture_mask = ogl_get_free_texture(), bm->bm_w, bm->bm_h, OGL_FLAG_ALPHA);
-
-		MALLOC(mask, unsigned char, size);
-		for (int i = 0; i < size; i++)
-			mask[i] = buf[i] == 254 ? 255 : 0;
-		ogl_loadtexture(mask, 0, 0, bm->gltexture_mask, BM_FLAG_TRANSPARENT, 0, texfilt);
-		d_free(mask);
-	}
-#endif
-}
-
 void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int rank) // An alternate version of ogl_loadbmtexture_f that loads a rank image instead of a bitmap from the pig.
 { // Is it a bit redundant copying this much? Yes, but that's fine.
 	unsigned char* buf;
@@ -2001,6 +2019,166 @@ void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int rank) // An alternate 
 }
 
 void ogl_loadbmtexture(grs_bitmap *bm)
+		{
+			con_printf(CON_DEBUG,"%s: %ux%ux%i p=%i(%i) c=%i a=%i chans=%i\n", filename, pdata.width, pdata.height, pdata.depth, pdata.paletted, pdata.num_palette, pdata.color, pdata.alpha, pdata.channels);
+			if (pdata.depth == 8 && pdata.color)
+			{
+				if (bm->gltexture == NULL)
+					ogl_init_texture(bm->gltexture = ogl_get_free_texture(), pdata.width, pdata.height, ((pdata.alpha || bm->bm_flags & BM_FLAG_TRANSPARENT) ? OGL_FLAG_ALPHA : 0));
+				ogl_loadtexture(pdata.data, 0, 0, bm->gltexture, bm->bm_flags, pdata.paletted ? 0 : pdata.channels, texfilt);
+				#ifdef OGL_MERGE
+				if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT)
+					ogl_loadpngmask(&pdata, bm, texfilt);
+				#endif
+				free(pdata.data);
+				if (pdata.palette)
+					free(pdata.palette);
+				bm->gltexture->is_png = 1;
+				return;
+			}
+			else
+			{
+				con_printf(CON_DEBUG,"%s: unsupported texture format: must be rgb, rgba, or paletted, and depth 8\n", filename);
+				free(pdata.data);
+				if (pdata.palette)
+					free(pdata.palette);
+			}
+		}
+	}
+#endif
+	if (bm->gltexture == NULL){
+ 		ogl_init_texture(bm->gltexture = ogl_get_free_texture(), bm->bm_w, bm->bm_h, ((bm->bm_flags & (BM_FLAG_TRANSPARENT | BM_FLAG_SUPER_TRANSPARENT))? OGL_FLAG_ALPHA : 0));
+	}
+	else {
+		if (bm->gltexture->handle>0)
+			return;
+		if (bm->gltexture->w==0){
+			bm->gltexture->lw=bm->bm_w;
+			bm->gltexture->w=bm->bm_w;
+			bm->gltexture->h=bm->bm_h;
+		}
+	}
+
+	if (bm->bm_flags & BM_FLAG_RLE){
+		unsigned char * dbits;
+		unsigned char * sbits;
+		int i, data_offset;
+
+		data_offset = 1;
+		if (bm->bm_flags & BM_FLAG_RLE_BIG)
+			data_offset = 2;
+
+		sbits = &bm->bm_data[4 + (bm->bm_h * data_offset)];
+		dbits = decodebuf;
+
+		for (i=0; i < bm->bm_h; i++ )    {
+			//con_printf(CON_NORMAL, "RLE decoding bitmap %d\n", bm->bm_handle); 
+			gr_rle_decode(sbits,dbits);
+			if ( bm->bm_flags & BM_FLAG_RLE_BIG )
+				sbits += (int)INTEL_SHORT(*((short *)&(bm->bm_data[4+(i*data_offset)])));
+			else
+				sbits += (int)bm->bm_data[4+i];
+			dbits += bm->bm_w;
+		}
+		buf=decodebuf;
+
+		if(Game_mode & GM_MULTI && Netgame.BlackAndWhitePyros) {
+			char is_purple_tex1 = bitmapname && !strcmp(bitmapname, "ship6-4");
+			char is_purple_tex2 = bitmapname && !strcmp(bitmapname, "ship6-5");
+
+			if(is_purple_tex1 || is_purple_tex2) {
+				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
+					ubyte r = gr_current_pal[buf[i]*3];
+					ubyte g = gr_current_pal[buf[i]*3+1];
+					ubyte b = gr_current_pal[buf[i]*3+2];
+
+					ubyte max = r;
+					if(g > max) { max = g; }
+					if(b > max) { max = b; }
+
+					if(r > g && g > b) {
+						int replace = gr_find_closest_color(max/4,max/10,max/3);
+						buf[i] = replace;
+					}
+				}
+			}
+
+			char is_white_tex1 = bitmapname && !strcmp(bitmapname, "ship7-4");
+			char is_white_tex2 = bitmapname && !strcmp(bitmapname, "ship7-5");
+
+			if(is_white_tex1 || is_white_tex2) {
+				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
+					ubyte r = gr_current_pal[buf[i]*3];
+					ubyte g = gr_current_pal[buf[i]*3+1];
+					ubyte b = gr_current_pal[buf[i]*3+2];
+
+					ubyte max = r;
+					if(g > max) { max = g; }
+					if(b > max) { max = b; }
+
+					if(g > r && g > b) {
+						int replace = gr_find_closest_color(max,max,max);
+						buf[i] = replace;
+					}
+				}
+			}
+
+			int lower_bound[24]   = {28,27,26,25,24,23,22,21,20,19,19,18,17,16,15,14,13,13,12,11,10,9,8}; //bos
+			int upper_bound[24]   = {57,55,54,52,50,49,48,47,45,44,42,41,39,38,36,35,33,32,30,29,27,25,23}; // fos
+			if(filter_blueship_wing && bm->bm_h == 64 && bm->bm_w == 64) {
+				for(i=0; i < bm->bm_h * bm->bm_w; i++) {
+					int r = i / bm->bm_w;
+					int c = i % bm->bm_w; 
+
+					int in_filter_area_1 = 0;
+					int in_filter_area_2 = 0;
+
+					if(r >= 2 && r <= 6) {
+						in_filter_area_1 = 1;
+					}
+
+					if(r >= 36 && r <= 58) {
+						if(lower_bound[r-36] <= c && c <= upper_bound[r-36]) {
+							in_filter_area_2 = 1;
+						}
+					}
+
+					if(in_filter_area_1) {
+						ubyte b = gr_current_pal[buf[i]*3+2];
+						int replace = gr_find_closest_color(b/2,b/2,b); 
+						buf[i] = replace; 
+					}
+
+					if(in_filter_area_2) {
+						ubyte b = gr_current_pal[buf[i]*3+2];
+						int replace = gr_find_closest_color(b,b,b*2); 
+						buf[i] = replace; 
+					}					
+				}
+			}			
+		}
+
+	}
+	ogl_loadtexture(buf, 0, 0, bm->gltexture, bm->bm_flags, 0, texfilt);
+
+#ifdef OGL_MERGE
+	if (bm->bm_flags & BM_FLAG_SUPER_TRANSPARENT) {
+		unsigned char *mask;
+		int size = bm->bm_w * bm->bm_h;
+
+		if (bm->gltexture_mask == NULL)
+			ogl_init_texture(bm->gltexture_mask = ogl_get_free_texture(), bm->bm_w, bm->bm_h, OGL_FLAG_ALPHA);
+
+		MALLOC(mask, unsigned char, size);
+		for (int i = 0; i < size; i++)
+			mask[i] = buf[i] == 254 ? 255 : 0;
+		ogl_loadtexture(mask, 0, 0, bm->gltexture_mask, BM_FLAG_TRANSPARENT, 0, texfilt);
+		d_free(mask);
+	}
+#endif
+}
+
+void ogl_loadbmtexture(grs_bitmap *bm, int filter_blueship_wing)
 {
 	ogl_loadbmtexture_f(bm, GameCfg.TexFilt);
 }

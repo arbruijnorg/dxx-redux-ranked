@@ -41,12 +41,16 @@ build_app() {
     cp -p $srcdir/arch/cocoa/${name}.icns $contents/Resources
     echo -n "APPL${appltag}" > $contents/PkgInfo
 
-    dylibbundler -ns -od -b -x $contents/MacOS/$name -d $contents/libs
+    dylibbundler -ns -od -b -x $contents/MacOS/$name -d $contents/libs \
+        -s $builddir/../_deps/sdl_mixer-1.2-cmake-build
 
     # SDL2 is loaded dynamically by sdl12-compat
     sdl2=libSDL2-2.0.0.dylib
     cp -p $(find_lib $builddir/$name $sdl2) $contents/libs
     dylibbundler -ns -of -b -x $contents/libs/$sdl2 -d $contents/libs
+
+    find $contents/libs -name '*.dylib' -exec codesign -f -s - '{}' \;
+    codesign -f -s - $contents/MacOS/$name
 
     # zip up and output to top level dir
     zip -r -X ${zipfilename} ${prettyname}.app

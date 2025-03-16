@@ -111,7 +111,9 @@ int new_player_config()
 	PlayerCfg.SelectAfterFire = 1;  /* SelectAfterFire */
 	PlayerCfg.VulcanAmmoWarnings = 1; 
 	PlayerCfg.ShieldWarnings = 0; 
-	PlayerCfg.AutoDemo = 1; 
+	PlayerCfg.AutoDemoSp = 0;
+	PlayerCfg.AutoDemoMp = 0;
+	PlayerCfg.AutoDemoHideUi = 0;
 	PlayerCfg.ShowCustomColors = 1; 
 	PlayerCfg.PreferMyTeamColors = 0;
 	PlayerCfg.QuietPlasma = 1; 
@@ -144,8 +146,12 @@ int new_player_config()
 		PlayerCfg.ObsChat[obs_mode] = 1;
 		PlayerCfg.ObsPlayerChat[obs_mode] = 1;
 		PlayerCfg.ObsShowBombTimes[obs_mode] = 0;
+		PlayerCfg.ObsTransparentThirdPerson[obs_mode] = 0;
+		PlayerCfg.ObsIncreaseThirdPersonDist[obs_mode] = 0;
+		PlayerCfg.ObsHideEnergyWeaponMuzzle[obs_mode] = 0;
 	}
 	PlayerCfg.NoChatSound = 0;
+	PlayerCfg.ClassicAutoselectWeapon = 0;
 
 	// Default taunt macros
 	#ifdef NETWORK
@@ -437,7 +443,13 @@ int read_player_d1x(char *filename)
 				if(!strcmp(word,"SHIELDWARNINGS"))
 					PlayerCfg.ShieldWarnings = atoi(line);	
 				if(!strcmp(word,"AUTODEMO"))
-					PlayerCfg.AutoDemo = atoi(line);	
+					PlayerCfg.AutoDemoMp = atoi(line);
+				if(!strcmp(word,"AUTODEMOSP"))
+					PlayerCfg.AutoDemoSp = atoi(line);
+				if(!strcmp(word,"AUTODEMOMP"))
+					PlayerCfg.AutoDemoMp = atoi(line);
+				if(!strcmp(word,"AUTODEMOHIDEUI"))
+					PlayerCfg.AutoDemoHideUi = atoi(line);
 				if(!strcmp(word,"SHOWCUSTOMCOLORS"))
 					PlayerCfg.ShowCustomColors = atoi(line);	
 				if(!strcmp(word,"SHIPCOLOR"))
@@ -463,6 +475,8 @@ int read_player_d1x(char *filename)
 				}
 				if(!strcmp(word,"NOCHATSOUND"))
 					PlayerCfg.NoChatSound = atoi(line);
+				if(!strcmp(word,"CLASSICAUTOSELECTWEAPON"))
+					PlayerCfg.ClassicAutoselectWeapon = atoi(line);
 
 				// Observer settings - migrate from old version
 				// If migrating from an older version, set all observer modes to the same value
@@ -796,6 +810,9 @@ void read_observer_setting(int obs_mode, char* line, char* word)
 	READ_OBS_SETTING("OBSCHAT", ObsChat);
 	READ_OBS_SETTING("OBSPLAYERCHAT", ObsPlayerChat);
 	READ_OBS_SETTING("OBSSHOWBOMBTIMES", ObsShowBombTimes);
+	READ_OBS_SETTING("OBSTRANSPARENTTHIRDPERSON", ObsTransparentThirdPerson);
+	READ_OBS_SETTING("OBSINCREASETHIRDPERSONDIST", ObsIncreaseThirdPersonDist);
+	READ_OBS_SETTING("OBSHIDEENERGYWEAPONMUZZLE", ObsHideEnergyWeaponMuzzle);
 }
 
 int write_player_d1x(char *filename)
@@ -902,7 +919,9 @@ int write_player_d1x(char *filename)
 		PHYSFSX_printf(fout,"cycleautoselectonly=%i\n",PlayerCfg.CycleAutoselectOnly);
 		PHYSFSX_printf(fout,"vulcanammowarnings=%i\n",PlayerCfg.VulcanAmmoWarnings);		
 		PHYSFSX_printf(fout,"shieldwarnings=%i\n",PlayerCfg.ShieldWarnings);				
-		PHYSFSX_printf(fout,"autodemo=%i\n",PlayerCfg.AutoDemo);					
+		PHYSFSX_printf(fout,"autodemosp=%i\n",PlayerCfg.AutoDemoSp);
+		PHYSFSX_printf(fout,"autodemomp=%i\n",PlayerCfg.AutoDemoMp);
+		PHYSFSX_printf(fout,"autodemohideui=%i\n",PlayerCfg.AutoDemoHideUi);
 		PHYSFSX_printf(fout,"showcustomcolors=%i\n",PlayerCfg.ShowCustomColors);	
 		PHYSFSX_printf(fout,"shipcolor=%i\n",PlayerCfg.ShipColor);	
 		PHYSFSX_printf(fout,"missilecolor=%i\n",PlayerCfg.MissileColor);
@@ -912,8 +931,7 @@ int write_player_d1x(char *filename)
 		//PHYSFSX_printf(fout,"quietplasma=%i\n",PlayerCfg.QuietPlasma);	
 		PHYSFSX_printf(fout,"maxfps=%i\n",PlayerCfg.maxFps);	
 		PHYSFSX_printf(fout,"nochatsound=%i\n",PlayerCfg.NoChatSound);
-		PHYSFSX_printf(fout, "rankshowplusminus=%i\n", PlayerCfg.RankShowPlusMinus);
-		PHYSFSX_printf(fout, "speedometer=%i\n", PlayerCfg.Speedometer);
+		PHYSFSX_printf(fout,"classicautoselectweapon=%i\n",PlayerCfg.ClassicAutoselectWeapon);
 		PHYSFSX_printf(fout,"[end]\n");
 		PHYSFSX_printf(fout, "[observer]\n");
 		PHYSFSX_printf(fout, "obssharesettings=%i\n", PlayerCfg.ObsShareSettings);
@@ -939,6 +957,9 @@ int write_player_d1x(char *filename)
 			PHYSFSX_printf(fout, "obschat=%i\n", PlayerCfg.ObsChat[0]);
 			PHYSFSX_printf(fout, "obsplayerchat=%i\n", PlayerCfg.ObsPlayerChat[0]);
 			PHYSFSX_printf(fout, "obsshowbombtimes=%i\n", PlayerCfg.ObsShowBombTimes[0]);
+			PHYSFSX_printf(fout, "obstransparentthirdperson=%i\n", PlayerCfg.ObsTransparentThirdPerson[0]);
+			PHYSFSX_printf(fout, "obsincreasethirdpersondist=%i\n", PlayerCfg.ObsIncreaseThirdPersonDist[0]);
+			PHYSFSX_printf(fout, "obshideenergyweaponmuzzle=%i\n", PlayerCfg.ObsHideEnergyWeaponMuzzle[0]);
 		} else {
 			// Write separate observer settings for each game mode
 			for (int obs_mode = 0; obs_mode < NUM_OBS_MODES; obs_mode++) {
@@ -968,6 +989,9 @@ int write_player_d1x(char *filename)
 				PHYSFSX_printf(fout, "obschat=%i\n", PlayerCfg.ObsChat[obs_mode]);
 				PHYSFSX_printf(fout, "obsplayerchat=%i\n", PlayerCfg.ObsPlayerChat[obs_mode]);
 				PHYSFSX_printf(fout, "obsshowbombtimes=%i\n", PlayerCfg.ObsShowBombTimes[obs_mode]);
+				PHYSFSX_printf(fout, "obstransparentthirdperson=%i\n", PlayerCfg.ObsTransparentThirdPerson[obs_mode]);
+				PHYSFSX_printf(fout, "obsincreasethirdpersondist=%i\n", PlayerCfg.ObsIncreaseThirdPersonDist[obs_mode]);
+				PHYSFSX_printf(fout, "obshideenergyweaponmuzzle=%i\n", PlayerCfg.ObsHideEnergyWeaponMuzzle[obs_mode]);
 				PHYSFSX_printf(fout, "[end]\n");
 			}
 		}
@@ -1454,8 +1478,8 @@ int read_netgame_settings_file(const char *filename, netgame_info *ng, int no_na
 				ng->obs_min = strtol(value, NULL, 10);
 			else if (!strcmp(token, "HomingUpdateRate"))
 				ng->HomingUpdateRate = strtol(value, NULL, 10);
-			else if (!strcmp(token, "ConstantHomingSpeed"))
-				ng->ConstantHomingSpeed = strtol(value, NULL, 10);
+			else if (!strcmp(token, "RemoteHitSpark"))
+				ng->RemoteHitSpark = strtol(value, NULL, 10);
 			else if (!strcmp(token, "AllowCustomModelsTextures"))
 				ng->AllowCustomModelsTextures = strtol(value, NULL, 10);
 			else if (!strcmp(token, "ReducedFlash"))
@@ -1526,7 +1550,7 @@ int write_netgame_settings_file(const char *filename, netgame_info *ng, int no_n
 	PHYSFSX_printf(file, "obs_delay=%i\n", ng->obs_delay);
 	PHYSFSX_printf(file, "obs_min=%i\n", ng->obs_min);
 	PHYSFSX_printf(file, "HomingUpdateRate=%i\n", ng->HomingUpdateRate);
-	PHYSFSX_printf(file, "ConstantHomingSpeed=%i\n", ng->ConstantHomingSpeed);
+	PHYSFSX_printf(file, "RemoteHitSpark=%i\n", ng->RemoteHitSpark);
 	PHYSFSX_printf(file, "AllowCustomModelsTextures=%i\n", ng->AllowCustomModelsTextures);
 	PHYSFSX_printf(file, "ReducedFlash=%i\n", ng->ReducedFlash);
 #ifdef USE_TRACKER

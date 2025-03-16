@@ -50,8 +50,6 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 
 #define NEWHOMER
 
-int Constant_homing_speed = 0;
-
 int Network_laser_track = -1;
 
 int find_homing_object_complete(vms_vector *curpos, object *tracker, int track_obj_type1, int track_obj_type2);
@@ -319,7 +317,8 @@ int Laser_create_new( vms_vector * direction, vms_vector * position, int segnum,
 	if ((obj->render_type == RT_POLYOBJ) || (Weapon_info[obj->id].homing_flag))
 		vm_vector_2_matrix( &obj->orient,direction, &Objects[parent].orient.uvec ,NULL);
 
-	if (( &Objects[parent] != Viewer ) && (Objects[parent].type != OBJ_WEAPON))	{
+	if (( &Objects[parent] != Viewer ) && (Objects[parent].type != OBJ_WEAPON) &&
+		(!is_observer() || !PlayerCfg.ObsHideEnergyWeaponMuzzle[get_observer_game_mode()] || weapon_type == VULCAN_ID || Weapon_info[weapon_type].damage_radius)) {
 		// Muzzle flash
 		if (Weapon_info[obj->id].flash_vclip > -1 )
 			object_create_muzzle_flash( obj->segnum, &obj->pos, Weapon_info[obj->id].flash_size, Weapon_info[obj->id].flash_vclip );
@@ -696,7 +695,7 @@ int track_track_goal(int track_goal, object *tracker, fix *dot, unsigned int hom
 #ifdef NEWHOMER
 	if (object_is_trackable(track_goal, tracker, dot)) {  // CED -- && (tracker - Objects) is useless
 		return track_goal;
-	} else if ((((tracker-Objects) ^ homerFrameCount) % 4) == 0) // CED -- Reverted to 1994 original release code, with homer frame count
+	} else if (((homerFrameCount - tracker->ctype.laser_info.creation_framecount) % 4) == 0) // CED -- Reverted to 1994 original release code, with homer frame count
 #else
 	//	Every 8 frames for each object, scan all objects.
 	if (object_is_trackable(track_goal, tracker, dot) && ((((tracker-Objects) ^ d_tick_count) % 8) != 0)) {
@@ -1003,7 +1002,7 @@ void Laser_do_weapon_sequence(object *obj, int doHomerFrame, fix idealHomerFrame
 
 				vm_vec_normalize_quick(&vector_to_object);
 				temp_vec = obj->mtype.phys_info.velocity;
-				speed = Constant_homing_speed ? vm_vec_normalize(&temp_vec) : vm_vec_normalize_quick(&temp_vec);
+				speed = vm_vec_normalize_quick(&temp_vec);
 				max_speed = Weapon_info[obj->id].speed[Difficulty_level];
 				if (speed+F1_0 < max_speed) {
 					speed += fixmul(max_speed, idealHomerFrameTime/2);  // CED 
@@ -1019,7 +1018,7 @@ void Laser_do_weapon_sequence(object *obj, int doHomerFrame, fix idealHomerFrame
 				//	The boss' smart children track better...
 				if (Weapon_info[obj->id].render_type != WEAPON_RENDER_POLYMODEL)
 					vm_vec_add2(&temp_vec, &vector_to_object);
-				Constant_homing_speed ? vm_vec_normalize(&temp_vec) : vm_vec_normalize_quick(&temp_vec);
+				vm_vec_normalize_quick(&temp_vec);
 				vm_vec_scale(&temp_vec, speed);
 				obj->mtype.phys_info.velocity = temp_vec;
 
@@ -1627,9 +1626,5 @@ void net_missile_firing(int player, int gun, int flags, vms_vector shot_orientat
 
 }
 #endif
-
-void set_constant_homing_speed(int value) {
-	Constant_homing_speed = value;
-}
 
 

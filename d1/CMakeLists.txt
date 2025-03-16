@@ -2,7 +2,7 @@
 # project specific logic here.
 #
 cmake_minimum_required (VERSION 3.21)
-project(d1x-redux VERSION 1.0)
+project(d1x-redux VERSION 1.1)
 
 option(OPENGL "Build with OpenGL support [default: ON]" ON)
 option(SDLMIXER "Build with SDL_Mixer support for sound and music (includes external music support) [default: ON]" ON)
@@ -38,6 +38,18 @@ elseif(ASM)
 endif()
 if(SDLMIXER)
     add_definitions(/DUSE_SDLMIXER)
+    if (APPLE)
+        include(FetchContent)
+        FetchContent_Declare(
+            SDL_mixer-1.2-cmake
+            GIT_REPOSITORY https://github.com/arbruijn/SDL_mixer-1.2-cmake
+            GIT_TAG master
+        )
+        FetchContent_MakeAvailable(SDL_mixer-1.2-cmake)
+        set(SDL_MIXER_LIBRARY SDL_mixer-1.2-cmake::SDL_mixer-1.2-cmake)
+    else()
+        find_package(SDL_mixer REQUIRED)
+    endif()
 endif()
 if(EDITOR)
     add_definitions(/DEDITOR)
@@ -63,6 +75,10 @@ if(WIN32)
     # memory corruption when Windows headers are compiled with non-default packing (set in
     # include/pstypes.h). This may actually be a problem that warrants fixing; keep an eye on that.
     add_definitions(/DWINDOWS /DHAVE_STRUCT_TIMEVAL /DWINDOWS_IGNORE_PACKING_MISMATCH)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        add_compile_options(-gcodeview -fms-extensions -fseh-exceptions)
+        add_link_options(-fuse-ld=lld -Wl,--pdb=)
+    endif()
 elseif(APPLE)
     add_definitions(/DHAVE_STRUCT_TIMESPEC /DHAVE_STRUCT_TIMEVAL /D__unix__)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -70,7 +86,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 if(NOT WIN32)
-    add_compile_definitions(SHAREPATH="/usr/share/games/d1x-rebirth")
+    add_compile_definitions(SHAREPATH="/usr/share/games/d1x-redux")
 endif()
 
 add_subdirectory(2d)

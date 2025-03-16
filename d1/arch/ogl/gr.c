@@ -426,7 +426,7 @@ int ogl_init_window(int x, int y)
 #endif
 	if (Game_wind)
 		ogl_cache_level_textures();
-	loadRankImages();
+
 	linedotscale = ((x/640<y/480?x/640:y/480)<1?1:(x/640<y/480?x/640:y/480));
 
 	gl_initialized=1;
@@ -484,7 +484,6 @@ int gr_toggle_fullscreen(void)
 #endif
 		if (Game_wind)
 			ogl_cache_level_textures();
-		loadRankImages();
 	}
 	GameCfg.WindowMode = (sdl_video_flags & SDL_FULLSCREEN)?0:1;
 	return (sdl_video_flags & SDL_FULLSCREEN)?1:0;

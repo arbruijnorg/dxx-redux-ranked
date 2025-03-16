@@ -289,6 +289,25 @@ int standard_handler(d_event *event)
 	return 0;
 }
 
+// Use SEH for catching exceptions on Windows, this is needed because of the SDL parachute
+// But only on MSVC/64-bit clang (SEH is broken on 32-bit clang https://github.com/llvm/llvm-project/issues/25753)
+#if defined(WIN32) && (!defined(__clang__) || !defined(__i386__))
+int inner_main(int argc, char *argv[]);
+LONG WINAPI win32_exception_handler(EXCEPTION_POINTERS* exceptionPointers);
+
+int main(int argc, char *argv[])
+{
+	__try {
+		return inner_main(argc, argv);
+	} __except (win32_exception_handler(GetExceptionInformation())) {
+		return 1;
+	}
+}
+
+#undef main
+#define main inner_main
+#endif
+
 jmp_buf LeaveEvents;
 #define PROGNAME argv[0]
 
@@ -322,18 +341,28 @@ int main(int argc, char *argv[])
 	if (!PHYSFSX_checkSupportedArchiveTypes())
 		return(0);
 
-	if (! PHYSFSX_contfile_init("descent2.hog", 1)) {
-		if (! PHYSFSX_contfile_init("d2demo.hog", 1))
+	if (! PHYSFSX_contfile_init("descent2.hog", 1) &&
+		! PHYSFSX_contfile_init("d2demo.hog", 1)) {
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s", PHYSFS_getWriteDir());
+		size_t len = strlen(path);
+		if (len >= 3 && (strcmp(path + len - 3, "\\.\\") == 0 || strcmp(path + len - 3, "/./") == 0))
+			path[len - 3] = 0;
+		else if (len && (path[len - 1] == '/' || path[len - 1] == '\\'))
+			path[len - 1] = 0;
 #define DXX_NAME_NUMBER	"2"
 #define DXX_HOGFILE_NAMES	"descent2.hog or d2demo.hog"
-#if defined(__unix__) && !defined(__APPLE__)
+#if defined(__APPLE__)
 #define DXX_HOGFILE_PROGRAM_DATA_DIRECTORY	\
-			      "\t$HOME/.d" DXX_NAME_NUMBER "x-rebirth\n"	\
+			      "\t%s\n" \
+			      "\tDirectory containing D" DXX_NAME_NUMBER "X-Redux\n"
+#elif defined(__unix__)
+#define DXX_HOGFILE_PROGRAM_DATA_DIRECTORY	\
+			      "\t%s\n"	\
 			      "\t" SHAREPATH "\n"
-#else
+#else // Windows
 #define DXX_HOGFILE_PROGRAM_DATA_DIRECTORY	\
-				  "\tDirectory containing D" DXX_NAME_NUMBER "X-Redux\n" \
-				  "\t~/Library/Preferences/D" DXX_NAME_NUMBER "X-Rebirth/Data\n"
+			      "\t%s\n"
 #endif
 #if (defined(__APPLE__) && defined(__MACH__)) || defined(macintosh)
 #define DXX_HOGFILE_APPLICATION_BUNDLE	\
@@ -347,7 +376,7 @@ int main(int argc, char *argv[])
 		"\tIn a subdirectory called 'Data'\n"	\
 		DXX_HOGFILE_APPLICATION_BUNDLE	\
 		"Or use the -hogdir option to specify an alternate location."
-		Error(DXX_MISSING_HOGFILE_ERROR_TEXT);
+		Error(DXX_MISSING_HOGFILE_ERROR_TEXT, path);
 	}
 
 	load_text();

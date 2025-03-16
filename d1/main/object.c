@@ -390,7 +390,7 @@ void draw_polygon_object(object *obj)
 
 	//	If option set for bright players in netgame, brighten them!
 #ifdef NETWORK
-	if (Game_mode & GM_MULTI)
+	if ((Newdemo_state == ND_STATE_PLAYBACK ? Newdemo_game_mode : Game_mode) & GM_MULTI)
 		if (Netgame.BrightPlayers)
 			light.r = light.g = light.b = F1_0*2;
 #endif
@@ -460,6 +460,9 @@ void draw_polygon_object(object *obj)
 							   alt_textures);
 			}
 
+			int observed = is_observer() && Obs_at_distance && obj->type == OBJ_PLAYER && is_observing_player() && Players[Current_obs_player].objnum == obj - Objects;
+			if (observed && PlayerCfg.ObsTransparentThirdPerson[get_observer_game_mode()])
+				gr_settransblend(CLOAKED_FADE_LEVEL*2/3, GR_BLEND_NORMAL);
 			draw_polygon_model(&obj->pos,
 					   &obj->orient,
 					   obj->rtype.pobj_info.anim_angles,obj->rtype.pobj_info.model_num,
@@ -467,6 +470,8 @@ void draw_polygon_object(object *obj)
 					   light,
 					   engine_glow_value,
 					   alt_textures);
+			if (observed && PlayerCfg.ObsTransparentThirdPerson[get_observer_game_mode()])
+				gr_settransblend(GR_FADE_OFF, GR_BLEND_NORMAL);
 
 #ifndef OGL // in software rendering must draw inner model last
 			if (obj->type == OBJ_WEAPON && (Weapon_info[obj->id].model_num_inner > -1 )) {
@@ -1264,6 +1269,7 @@ int obj_create(enum object_type_t type, ubyte id,int segnum,vms_vector *pos,
 	if (obj->type == OBJ_WEAPON) {
 		obj->mtype.phys_info.flags |= (Weapon_info[obj->id].persistent*PF_PERSISTENT);
 		obj->ctype.laser_info.creation_time = GameTime64;
+		obj->ctype.laser_info.creation_framecount = homerFrameCount;
 		obj->ctype.laser_info.last_hitobj = -1;
 		memset(&obj->ctype.laser_info.hitobj_list, 0, sizeof(ubyte)*MAX_OBJECTS);
 		obj->ctype.laser_info.multiplier = F1_0;

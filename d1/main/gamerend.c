@@ -215,7 +215,7 @@ void show_netplayerinfo()
 	char hom_string[16];
 	snprintf(hom_string, sizeof(hom_string), "Hom %d", Netgame.HomingUpdateRate);
 	draw_flag(hom_string, Netgame.HomingUpdateRate != 25,                          base_flags_left + word_spacing*0, y);
-	draw_flag("RetroHom", Netgame.ConstantHomingSpeed,                             base_flags_left + word_spacing*1, y);
+	draw_flag("ConfrSprk", Netgame.RemoteHitSpark,                                  base_flags_left + word_spacing*1, y);
 	draw_flag("CustMod",  Netgame.AllowCustomModelsTextures,                       base_flags_left + word_spacing*2, y);
 
 	set_font_newline();
@@ -429,7 +429,8 @@ void game_draw_hud_stuff()
 		if (is_observer() && can_draw_observer_cockpit() && PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
 			y = grd_curcanv->cv_bitmap.bm_h / 1.2 ;
 
-		if (PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW) {
+		if (PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW &&
+			(!PlayerCfg.AutoDemoHideUi || !Newdemo_is_autorecord)) {
 			if (PlayerCfg.DemoRecordingIndicator == 0) {
 				gr_string(0x8000, y, message );
 			} else if (PlayerCfg.DemoRecordingIndicator == 1) {
