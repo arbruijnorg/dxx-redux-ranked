@@ -670,7 +670,7 @@ void do_best_ranks_menu()
 	int numlines = Current_mission->last_level - Current_mission->last_secret_level;
 	char** list = (char**)malloc(sizeof(char*) * numlines);
 	char message[256];
-	sprintf(message, "%s's %s records\n<Ctrl-D> deletes", Players[Player_num].callsign, Current_mission->mission_name);
+	sprintf(message, "%s's %s records\nSelect views details, <Ctrl-D> deletes\n* = Warm start", Players[Player_num].callsign, Current_mission->mission_name);
 	char filename[256];
 	char** items = (char**)malloc(sizeof(char*) * numlines);
 	int* ranks = (int*)malloc(sizeof(int) * numlines);
@@ -718,10 +718,18 @@ void do_best_ranks_menu()
 				getLevelNameFromRankFile(i + 1, buffer);
 				snprintf(level_name, LEVEL_NAME_LEN, buffer);
 				if (Ranking.rank > 0) {
-					if (i < Current_mission->last_level)
-						snprintf(list[i], 64, "%i. %s\t%.0f    ", i + 1, level_name, Ranking.calculatedScore);
-					else
-						snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+					if (Ranking.warmStart) {
+						if (i < Current_mission->last_level)
+							snprintf(list[i], 64, "%i. %s\t* %.0f    ", i + 1, level_name, Ranking.calculatedScore);
+						else
+							snprintf(list[i], 64, "S%i. %s\t* %.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+					}
+					else {
+						if (i < Current_mission->last_level)
+							snprintf(list[i], 64, "%i. %s\t%.0f    ", i + 1, level_name, Ranking.calculatedScore);
+						else
+							snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+					}
 				}
 				else {
 					if (i < Current_mission->last_level)

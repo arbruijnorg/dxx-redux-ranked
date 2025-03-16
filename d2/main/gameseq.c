@@ -881,6 +881,10 @@ int calculateRank(int level_num)
 			deathCount = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
 			missedRngSpawn = atof(buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			PHYSFSX_getsTerminated(fp, buffer);
+			Ranking.warmStart = atoi(buffer);
 		}
 	}
 	PHYSFS_close(fp);
@@ -999,7 +1003,7 @@ int endlevel_current_rank;
 extern grs_bitmap nm_background1;
 grs_bitmap transparent;
 int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
-	if (!Ranking.quickload) {
+	if (!((Current_level_num > 0 && Ranking.quickload) || (Current_level_num < 0 && Ranking.secretQuickload))) {
 		switch (event->type) {
 		case EVENT_WINDOW_DRAW:
 			gr_palette_load(gr_palette);
@@ -1154,7 +1158,7 @@ void DoEndLevelScoreGlitz(int network)
 		else
 			strcpy(m_str[c++], "\n");
 		if (Ranking.warmStart)
-			sprintf(m_str[c++], "Total score*\t%0.0f", Ranking.rankScore);
+			sprintf(m_str[c++], "Total score\t* %0.0f", Ranking.rankScore);
 		else
 			sprintf(m_str[c++], "Total score\t%0.0f", Ranking.rankScore);
 
@@ -1539,7 +1543,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	else
 		strcpy(m_str[c++], "\n");
 	if (warmStart)
-		sprintf(m_str[c++], "Total score*\t%0.0f", score);
+		sprintf(m_str[c++], "Total score\t* %0.0f", score);
 	else
 		sprintf(m_str[c++], "Total score\t%0.0f", score);
 	double rankPoints = (score / maxScore) * 12;
@@ -1687,6 +1691,8 @@ int find_connecting_side(point_seg* from, point_seg* to) // Sirius' function.
 	Int3();
 	return -1;
 }
+
+// - - - - - - - - - - START OF PAR TIME ALGORITHM STUFF - - - - - - - - - - \\
 
 typedef struct
 {
@@ -1863,25 +1869,6 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	if (weapon_id == OMEGA_ID)
 		return 1; // Omega always hits (within a certain distance but we'll fudge it). It'll still rarely get used due to the ultra low DPS Algo perceives it to have, but we can at least give it this, right?
 
-	double gunpoints = 2;
-	if ((!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6) && state->hasQuads) { // Account for increased damage of quads.
-		if (weapon_id > LASER_ID_L4)
-			gunpoints = 4;
-		else
-			gunpoints = 3; // For some reason only quad 1-4 gets 25% damage reduction while quad 5-6 gets none.
-	}
-	if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
-		gunpoints = 1;
-	if (weapon_id == SPREADFIRE_ID)
-		gunpoints = 3;
-	if (weapon_id == HELIX_ID)
-		gunpoints = 5;
-	double damage = f2fl(Weapon_info[weapon_id].strength[Difficulty_level]) * gunpoints;
-	if (!robot_type && weapon_id == FUSION_ID && obj->type == OBJ_CNTRLCEN) // robot_type MUST be 0 here or else it might try to read object data when there is none!
-		damage *= 2; // Fusion's damage is doubled against reactors in Redux.
-	double fire_rate = (f1_0_double / Weapon_info[weapon_id].fire_wait);
-	double energy_usage = f2fl(Weapon_info[weapon_id].energy_usage);
-	double ammo_usage = f2fl(Weapon_info[weapon_id].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 	double enemy_max_speed;
 	double enemy_evade_speed;
 	double enemy_health;
@@ -2112,15 +2099,18 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		double enemy_size = f2fl(obj->size);
 		// If we're fighting a boss that's immune to the weapon we're about to calculate, skip the weapon.
 		if (robInfo->boss_flag) {
-			if (Boss_invulnerable_energy[robInfo->boss_flag - BOSS_D2])
-				if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
-					continue;
-			if (Boss_invulnerable_matter[robInfo->boss_flag - BOSS_D2])
+			if (weapon_id == GAUSS_ID)
+				damage *= 1 - ((double)Difficulty_level * 0.1); // Damage of gauss on bosses goes down as difficulty goes up.
+			if (Boss_invulnerable_energy[robInfo->boss_flag - BOSS_D2]) {
 				if (!(weapon_id == VULCAN_ID || weapon_id == GAUSS_ID))
 					continue;
+				else
+					ammo_usage = 0; // Give Algo infinite vulcan ammo so it doesn't softlock fighting a boss that's immune to energy weapons. Do remember that Algo doesn't have access to missiles!
+			}
+			if (Boss_invulnerable_matter[robInfo->boss_flag - BOSS_D2])
+				if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
+					continue;
 		}
-		if (weapon_id == GAUSS_ID && robInfo->boss_flag)
-			damage *= 1 - ((double)Difficulty_level * 0.1); // Damage of gauss on bosses goes down as difficulty goes up.
 		if (weapon_id == FUSION_ID)
 			energy_usage = 2; // Fusion's energy_usage field is 0, so we have to manually set it.
 		else {  // Difficulty-based energy nerfs don't impact fusion.
@@ -2760,14 +2750,10 @@ void update_energy_for_path_partime(partime_calc_state* state, point_seg* path, 
 						break;
 					}
 				if (!thisSourceCollected) {
-					if (Objects[objNum].id == POW_VULCAN_AMMO || Objects[objNum].id == POW_VULCAN_WEAPON)
+					if (Objects[objNum].id == POW_VULCAN_AMMO || Objects[objNum].id == POW_VULCAN_WEAPON || Objects[objNum].id == POW_GAUSS_WEAPON)
 						state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
 					else
 						state->simulatedEnergy += state->energy_gained_per_pickup;
-					if (state->simulatedEnergy > MAX_ENERGY)
-						state->simulatedEnergy = MAX_ENERGY;
-					if (state->vulcanAmmo > STARTING_VULCAN_AMMO * 4)
-						state->vulcanAmmo = STARTING_VULCAN_AMMO * 4;
 					partime_objective energyObjective = { OBJECTIVE_TYPE_OBJECT, objNum };
 					addObjectiveToList(state->doneList, &state->doneListSize, energyObjective, 1);
 				}
@@ -2775,7 +2761,6 @@ void update_energy_for_path_partime(partime_calc_state* state, point_seg* path, 
 		}
 	}
 }
-
 
 void update_energy_for_objective_partime(partime_calc_state* state, partime_objective objective)
 {
@@ -2810,8 +2795,8 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 				else {
 					state->heldWeapons[state->num_weapons] = weapon_id;
 					state->num_weapons++;
-					if ((weapon_id == VULCAN_ID || weapon_id == GAUSS_ID) && !state->vulcanAmmo)
-						state->vulcanAmmo = STARTING_VULCAN_AMMO;
+					if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
+						state->vulcanAmmo += STARTING_VULCAN_AMMO;
 				}
 			}
 			else {
@@ -2907,7 +2892,7 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 				state->simulatedEnergy += addEnergy;
 			}
 			if (obj->contains_type == OBJ_POWERUP && obj->contains_id == POW_VULCAN_AMMO) { // Now repeat with ammo.
-				state->vulcanAmmo* (STARTING_VULCAN_AMMO / 2)* obj->contains_count;
+				state->vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
 			}
 			else if (Robot_info[obj->id].contains_type == OBJ_POWERUP && Robot_info[obj->id].contains_id == POW_VULCAN_AMMO) {
 				double addAmmo = (((double)robInfo->contains_count * (double)robInfo->contains_prob) / 16) * (STARTING_VULCAN_AMMO / 2); // We have to do this because data loss.
@@ -2941,8 +2926,8 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 					else {
 						state->heldWeapons[state->num_weapons] = weapon_id;
 						state->num_weapons++;
-						if ((weapon_id == VULCAN_ID || weapon_id == GAUSS_ID) && !state->vulcanAmmo)
-							state->vulcanAmmo = STARTING_VULCAN_AMMO;
+						if (weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)
+							state->vulcanAmmo += STARTING_VULCAN_AMMO;
 					}
 				}
 				else {
@@ -2986,9 +2971,11 @@ int getParTimeWeaponID(int index)
 
 double findEnergyTime(partime_calc_state* state, partime_objective* objectiveList, int startIndex) // Props to Sirius for help with energy time.
 {
+	return 0; // Disabled for now.
 	// This function is in charge of determining the mimimum time a player needs to refill their energy in a given level, then adding that to its par time.
 	// Keep in mind this function isn't perfect lol. It assumes all fuelcens are accessible and unguarded at any time, and that the player follows Algo's exact actions, only refueling from and back to objective nodes.
-	return 0; // Disabled for now.
+	if (!state->numEnergyCenters)
+		return 0; // This level has no fuelcens. Can't spend any time travelling to or refilling in one.
 	int objectiveSegments[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	double objectiveEnergies[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X.
@@ -3018,14 +3005,15 @@ double findEnergyTime(partime_calc_state* state, partime_objective* objectiveLis
 	for (int refillIndex = startIndex; refillIndex < state->objectives; refillIndex++) {
 		if (objectiveEnergies[refillIndex] < 100) { // Only attempt a simulated refill where energy at the given point is low enough.
 			increaseEnergiesBy = 100 - objectiveEnergies[refillIndex];
+			// Cap the increase at 100 because player energy can't actually be negative. Also to handle super negative energy values as multiple required visits at the same objective (having to refill multiple times to defeat an ungodly beefy robot).
 			if (increaseEnergiesBy > 100)
-				increaseEnergiesBy = 100; // Cap the increase at 100 because player energy can't actually be negative. Also to handle super negative energy values as multiple required visits at the same objective (having to refill multiple times to defeat an ungodly beefy robot).
+				increaseEnergiesBy = 100;
 			for (int i = refillIndex; i < state->objectives; i++) {
 				objectiveEnergies[i] += increaseEnergiesBy;
 				if (objectiveEnergies[i] > 200)
 					objectiveEnergies[i] = 200; // Energy can't be above 200 at any point.
 			}
-			energyTime += objectiveFuelcenTripTimes[refillIndex] + (increaseEnergiesBy / 25) + findEnergyTime(&state, objectiveList, refillIndex + 1); // increaseEnergiesBy / 25 is the time spent sitting in the fuelcen recharging.
+			energyTime = objectiveFuelcenTripTimes[refillIndex] + (increaseEnergiesBy / 25) + findEnergyTime(&state, objectiveList, refillIndex + 1); // increaseEnergiesBy / 25 is the time spent sitting in the fuelcen recharging.
 			if (energyTime < minTime)
 				minTime = energyTime;
 		}
@@ -3203,7 +3191,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 			int hasThisWeapon = 0; // If the next object is a weapon/laser level/quads, and algo already has it/is maxed out, skip it. We don't wanna waste time getting redundant powerups.
 			if (Objects[nearestObjective.ID].type == OBJ_POWERUP) { // I'm splitting up the if conditions this time.
 				for (int n = 1; n < 5; n++) {
-					if (Objects[nearestObjective.ID].id == n + 12 && do_we_have_this_weapon(&state, n)) // Check for vulcan, spreadfire, plasma, then fusion.
+					if (Objects[nearestObjective.ID].id == n + 12 && do_we_have_this_weapon(&state, n))
 						hasThisWeapon = 1;
 				}
 				if (Objects[nearestObjective.ID].id == POW_LASER && state.heldWeapons[0] > LASER_ID_L3)
@@ -3222,8 +3210,8 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				// Cap algo's energy and ammo like the player's.
 				if (state.simulatedEnergy > MAX_ENERGY)
 					state.simulatedEnergy = MAX_ENERGY;
-				if (state.vulcanAmmo > STARTING_VULCAN_AMMO * 4)
-					state.vulcanAmmo = STARTING_VULCAN_AMMO * 4;
+				if (state.vulcanAmmo > STARTING_VULCAN_AMMO * 8)
+					state.vulcanAmmo = STARTING_VULCAN_AMMO * 8;
 				printf("Now at %.3f energy, %.0f vulcan ammo\n", f2fl(state.simulatedEnergy), f2fl(state.vulcanAmmo));
 
 				int nearestObjectiveSegnum = getObjectiveSegnum(nearestObjective);
@@ -3265,7 +3253,8 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 	// Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
 }
 
-//	-----------------------------------------------------------------------------------------------------
+// - - - - - - - - - -  END OF PAR TIME ALGORITHM STUFF  - - - - - - - - - - \\
+
 // called when the player is starting a new level for normal game mode and restore state
 //	Need to deal with whether this is the first time coming to this level or not.  If not the
 //	first time, instead of initializing various things, need to do a game restore for all the
@@ -3399,6 +3388,8 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 					if (Robot_info[Objects[i].contains_id].thief)
 						Ranking.num_secret_thief_points += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
 				}
+				if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
+					Ranking.secretMaxScore += Objects[i].contains_count * 10000;
 			}
 			else if (Robot_info[Objects[i].id].boss_flag)
 				Ranking.secretIsRankable = 1; // A boss is present, this level is beatable.
@@ -3677,6 +3668,22 @@ void DoEndGame(void)
 		window_close(Game_wind);		// Exit out of game loop
 }
 
+int checkForWarmStart()
+{
+	// First, check for too much shields, energy, concussion missiles, vulcan ammo or laser level. Also check for quads.
+	if (f2fl(Players[Player_num].shields) > 100 || f2fl(Players[Player_num].energy) > 100 || Players[Player_num].secondary_ammo[CONCUSSION_INDEX] > 7 - Difficulty_level || Players[Player_num].primary_ammo[VULCAN_INDEX] || Players[Player_num].laser_level || Players[Player_num].flags & PLAYER_FLAGS_QUAD_LASERS)
+		return 1;
+	// Next, check for the presence of any weapon besides lasers.
+	for (int i = 1; i < 10; i++)
+		if (Players[Player_num].primary_weapon_flags & HAS_FLAG(i))
+			return 1;
+	// Last, check for the presence of any missiles besides concussions.
+	for (int i = 1; i < 10; i++)
+		if (Players[Player_num].secondary_ammo[i])
+			return 1;
+	return 0; // Didn't find anything, not a warm start.
+}
+
 //called to go to the next level (if there is one)
 //if secret_flag is true, advance to secret level, else next normal one
 //	Return true if game over.
@@ -3744,7 +3751,8 @@ void AdvanceLevel(int secret_flag)
 			// END NMN
 
 			StartNewLevel(Next_level_num);
-			Ranking.warmStart = 1;
+			if (checkForWarmStart()) // Don't consider the player to be warm starting unless they actually have more than the default loadout.
+				Ranking.warmStart = 1;
 		}
 	}
 }

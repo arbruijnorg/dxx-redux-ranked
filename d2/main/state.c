@@ -1183,7 +1183,6 @@ int state_restore_all(int in_game, int secret_restore, char *filename_override)
 	if (!secret_restore) {
 		Ranking.quickload = 1;
 		Ranking.secretQuickload = 1;
-		Ranking.warmStart = 1;
 		int	rval;
 		char	temp_fname[PATH_MAX], fc;
 
@@ -1353,9 +1352,9 @@ int state_restore_all_sub(char* filename, int secret_restore)
 
 	{
 		StartNewLevelSub(current_level, 1, secret_restore);
-		player	dummy_player;
 		int old_score = Players[Player_num].score;
 		if (secret_restore) {
+				player  dummy_player;
 				player_rw* pl_rw;
 				MALLOC(pl_rw, player_rw, 1);
 				PHYSFS_read(fp, pl_rw, sizeof(player_rw), 1);
@@ -1388,7 +1387,7 @@ int state_restore_all_sub(char* filename, int secret_restore)
 				MALLOC(pl_rw, player_rw, 1);
 				PHYSFS_read(fp, pl_rw, sizeof(player_rw), 1);
 				player_rw_swap(pl_rw, swap);
-				state_player_rw_to_player(pl_rw, &dummy_player);
+				state_player_rw_to_player(pl_rw, &Players[Player_num]);
 				d_free(pl_rw);
 		}
 	}
