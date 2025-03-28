@@ -1577,7 +1577,7 @@ int thisWallUnlocked(int wall_num)
 //	Return true if door can be flown through by a suitable type robot.
 //	Brains, avoid robots, companions can open doors.
 //	objp == NULL means treat as buddy.
-int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime, int currentObjectiveID)
+int ai_door_is_openable(object *objp, segment *segp, int sidenum, int allowPhasing, int currentObjectiveID)
 {
 	int	wall_num;
 	wall	*wallp;
@@ -1594,7 +1594,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime,
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		if (isParTime == 1) {
+		if (allowPhasing == 1) {
 			if (Ranking.parTimePathCompletable) {
 				if ((Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED) && !(((Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].keys > 1) || Walls[wall_num].type == WALL_CLOSED) && !thisWallUnlocked(wall_num)))
 					return 1;
@@ -1615,7 +1615,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int isParTime,
 		}
 		else
 		{
-			if (isParTime == 2) { // In the case of the energy function, literally nothing is off limits.
+			if (allowPhasing == 2) { // In the case of the energy function, literally nothing is off limits.
 				if (Walls[wall_num].type == WALL_DOOR || Walls[wall_num].type == WALL_BLASTABLE || Walls[wall_num].type == WALL_CLOSED)
 					return 1;
 			}

@@ -745,11 +745,10 @@ int load_mission_by_name_aggregate(mle* mission_list) // Version of load_mission
 	int rankPoints;
 	int currentRank;
 	for (i = 0; i < num_missions; i++) {
-		//if (!d_stricmp(mission_name, mission_list[i].filename))
 		found = load_mission(mission_list + i);
 		rankPoints = 0;
 		for (int c = 1; c <= Current_mission->last_level - Current_mission->last_secret_level; c++) {
-			currentRank = calculateRank(c);
+			currentRank = calculateRank(c, 0, 0, 0);
 			if (currentRank)
 				rankPoints += currentRank;
 			else {
@@ -821,8 +820,10 @@ int mission_menu_handler(listbox* lb, d_event* event, mission_menu* mm)
 		break;
 
 	case EVENT_WINDOW_DRAW:
-		if (Ranking.fromBestRanksButton)
+		if (Ranking.fromBestRanksButton) {
+			nm_draw_background1("menuh.pcx");
 			return drawSmallRankImages(Ranking.missionRanks, lb);
+		}
 	default:
 		break;
 	}

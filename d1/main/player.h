@@ -28,6 +28,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "weapon.h"
 #include "fuelcen.h"
 #include "wall.h"
+#include "mission.h"
 
 #define MAX_PLAYERS 8
 #define OBSERVER_PLAYER_ID 7
@@ -125,32 +126,32 @@ typedef struct player {
 } __pack__ player;
 
 typedef struct ranking { // This struct contains variables for the ranking system mod. Most of them don't have to be doubles. It's either for math compatibility or consistency.
-	double     deathCount;                         // Number of times the player died during the level.
-	double     rankScore;                          // The version of score used for this mod, as to not disturb the vanilla score system.
-	double     excludePoints;                      // Number of points gotten from sources we still want to contribute to vanilla score, but not count toward rank calculation.
-	double     maxScore;				           // The current level's S-rank score. Won't include hostage points until the result screen, to make calculation of other bonuses easier.
-	double     level_time;                         // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
-	double     parTime;                            // The algorithmically-generated required time for the current level.
-	int        quickload;				           // Whether the player has quickloaded into the current level.
-	double     calculatedScore;		               // Stores the score determined in calculateRank.
-	int        rank;					           // Stores the rank determined in calculateRank.
-	double     missedRngSpawn;					   // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
-	int        alreadyBeaten;                      // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
-	int		   fromBestRanksButton;                // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
-	int        startingLevel;                      // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
-	int        lastSelectedItem;                   // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
-	int        missionRanks[5000];                 // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
-	int        warmStart;                          // If the player enters a level from a previous one, this becomes 1. If this is 1 when a result screen comes up, total score will have an asterisk next to it. This does nothing else. It's just informative for those who care.
+	double     deathCount;                 // Number of times the player died during the level.
+	double     rankScore;                  // The version of score used for this mod, as to not disturb the vanilla score system.
+	double     excludePoints;              // Number of points gotten from sources we still want to contribute to vanilla score, but not count toward rank calculation.
+	double     maxScore;                   // The current level's S-rank score. Won't include hostage points until the result screen, to make calculation of other bonuses easier.
+	double     level_time;                 // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
+	int        quickload;                  // Whether the player has quickloaded into the current level.
+	double     parTime;                    // The algorithmically-generated required time for the current level.
+	double     calculatedScore;            // Stores the score determined in calculateRank.
+	int        rank;                       // Stores the rank determined in calculateRank.
+	double     missedRngSpawn;             // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	int        alreadyBeaten;              // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
+	int		   fromBestRanksButton;        // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
+	int        startingLevel;              // I hate making a ranking variable for this, but endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have to use this for when levels are started from the record details screen.
+	int        lastSelectedItem;           // So the best ranks listbox doesn't keep putting you back at level 1 when you're retrying stuff.
+	int        missionRanks[MAX_MISSIONS]; // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+	int        warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
 
 	// Below are the variables from the par time algorithm that are better off globally stored for the sake of convenience or ease of access by code.
 	// I hate how I had to put so many things here, but I would have to change countless function parameters if I tried to put as many things in state as possible. I've already done that enough as it is.
-
-	int        parTimePathCompletable;
-	int        parTimeStateSegnum;
 	int        currentlyLockedWalls[MAX_WALLS];
 	int        numCurrentlyLockedWalls;
 	int        parTimeUnlockIDs[MAX_WALLS];
 	int        parTimeUnlockTypes[MAX_WALLS];
+	int		   inaccessibleObjectiveTypes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	int        inaccessibleObjectiveIDs[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	int        numInaccessibleObjectives;
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.
@@ -165,7 +166,7 @@ typedef struct restartLevel { // Recreate and store certain info from player to 
 	ushort  secondary_weapon_flags;
 	ushort  primary_ammo[MAX_PRIMARY_WEAPONS];
 	ushort  secondary_ammo[MAX_PRIMARY_WEAPONS];
-	int     restarts; // Used for whether to skip briefings or not.
+	int     restarts; // Used for the restart counter, and whether to skip briefings or not.
 	int     restartsCache; // Just one of the many hoops needed to keep the restart counter accurate when restarting at result screen.
 	int     isResults; // So pressing R on a wide array of menus doesn't try to restart a level you aren't on.
 	int     updateRestartStuff; // Self explanatory.

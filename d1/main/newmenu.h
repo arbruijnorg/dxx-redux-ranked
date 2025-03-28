@@ -76,6 +76,9 @@ extern newmenu *newmenu_dotiny(char * title, char * subtitle, int nitems, newmen
 // Basically the same as do2 but sets reorderitems flag for weapon priority menu a bit redundant to get lose of a global variable but oh well...
 extern int newmenu_doreorder(char * title, char * subtitle, int nitems, newmenu_item *item, int (*subfunction)(newmenu *menu, d_event *event, void *userdata), void *userdata);
 
+// So the correct background is drawn when swapping between title/ranks menu stuff.
+extern void nm_draw_background1(char* filename);
+
 // Sample Code:
 /*
 {

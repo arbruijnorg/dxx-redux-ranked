@@ -207,8 +207,6 @@ static inline const char* get_placement_slot_string(const unsigned position)
 
 void scores_maybe_add_player(int abort_flag)
 {
-	if (cheats.enabled)
-		Players[Player_num].score = 0;
 	char text1[COOL_MESSAGE_LEN + 10];
 	newmenu_item m[10];
 	int i, position;

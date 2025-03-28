@@ -107,10 +107,10 @@ void editor_reset_stuff_on_level();
 
 // Show endlevel bonus scores
 extern void DoEndLevelScoreGlitz(int network);
-extern void DoBestRanksScoreGlitz(int level_num);
+extern void DoBestRanksScoreGlitz(int level_num, int warm_start);
 
 // Calculate scores and ranks based on saved performance data
-extern int calculateRank(int level_num);
+extern int calculateRank(int level_num, int update_warm_start_status, int check_for_warm_start, int check_for_record);
 extern int truncateRanks(int rank);
 
 extern void getLevelNameFromRankFile(int level_num, char* buffer);

@@ -229,9 +229,16 @@ int ranks_menu_keycommand(listbox* lb, d_event* event)
 		delete = nm_messagebox(NULL, 2, TXT_YES, TXT_NO, "Delete record for this level?");
 		if (delete == 0)
 		{
-			sprintf(filename, "ranks/%s/%s/level%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
-			if (citem >= Current_mission->last_level)
-				sprintf(filename, "ranks/%s/%s/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+			if (calculateRank(citem + 1, 1, 1, 0)) {
+				sprintf(filename, "ranks/%s/%s/warmstart/level%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+				if (citem >= Current_mission->last_level)
+					sprintf(filename, "ranks/%s/%s/warmstart/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+			}
+			else {
+				sprintf(filename, "ranks/%s/%s/coldstart/level%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+				if (citem >= Current_mission->last_level)
+					sprintf(filename, "ranks/%s/%s/coldstart/levelS%d.hi", Players[Player_num].callsign, Current_mission->filename, citem + 1);
+			}
 			if (PHYSFS_exists(filename)) {
 				PHYSFS_delete(filename);
 				nm_messagebox(NULL, 1, "Ok", "Record deleted, refresh levels list");
@@ -615,8 +622,8 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 		Players[Player_num].lives = 3;
 		Difficulty_level = PlayerCfg.DefaultDifficulty;
 		if (citem < Current_mission->last_level) {
-			if (calculateRank(citem + 1))
-				DoBestRanksScoreGlitz(citem + 1);
+			if (calculateRank(citem + 1, 1, 0, 0))
+				DoBestRanksScoreGlitz(citem + 1, calculateRank(citem + 1, 1, 1, 0));
 			else {
 				if (!do_difficulty_menu())
 					return 1;
@@ -624,12 +631,11 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 			}
 		}
 		else {
-			if (calculateRank(citem + 1))
-				DoBestRanksScoreGlitz(citem + 1);
+			if (calculateRank(citem + 1, 1, 0, 0))
+				DoBestRanksScoreGlitz(citem + 1, calculateRank(citem + 1, 1, 1, 0));
 			else {
-				if (!do_difficulty_menu())
-					return 1;
-				StartNewGame(Current_mission->last_level - citem - 1);
+				nm_messagebox(NULL, 1, "Ok", "Find and clear the secret level first!");
+				return 1;
 			}
 		}
 		break;
@@ -653,6 +659,22 @@ void do_best_ranks_menu()
 	char filename[256];
 	char** items = (char**)malloc(sizeof(char*) * numlines);
 	int* ranks = (int*)malloc(sizeof(int) * numlines);
+	char** Rank = (char**)malloc(sizeof(char*) * 15);
+	Rank[0] = "N/A";
+	Rank[1] = "E";
+	Rank[2] = "D-";
+	Rank[3] = "D";
+	Rank[4] = "D+";
+	Rank[5] = "C-";
+	Rank[6] = "C";
+	Rank[7] = "C+";
+	Rank[8] = "B-";
+	Rank[9] = "B";
+	Rank[10] = "B+";
+	Rank[11] = "A-";
+	Rank[12] = "A";
+	Rank[13] = "A+";
+	Rank[14] = "S";
 	int i;
 	for (i = 0; i < numlines; i++)
 	{
@@ -661,23 +683,64 @@ void do_best_ranks_menu()
 			snprintf(list[i], 64, "Not a single player mission.");
 		}
 		else {
-			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
+			char level_name[36];
+			char buffer[LEVEL_NAME_LEN];
+			sprintf(filename, "ranks/%s/%s/coldstart/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
 			if (i >= Current_mission->last_level)
-				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
+				sprintf(filename, "ranks/%s/%s/coldstart/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
 			PHYSFS_file* fp = PHYSFS_openRead(filename);
 			list[i] = (char*)malloc(sizeof(char) * 64);
 			if (fp == NULL) {
-				if (i < Current_mission->last_level)
-					snprintf(list[i], 64, "%i. ???\tN/A    ", i + 1);
-				else
-					snprintf(list[i], 64, "S%i. ???\tN/A    ", i - Current_mission->last_level + 1);
-				ranks[i] = 0;
+				if (PlayerCfg.ShowWarmStartScores) {
+					sprintf(filename, "ranks/%s/%s/warmstart/level%i.hi", Players[Player_num].callsign, Current_mission->filename, i + 1);
+					if (i >= Current_mission->last_level)
+						sprintf(filename, "ranks/%s/%s/warmstart/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, i - Current_mission->last_level + 1);
+					PHYSFS_file* fp = PHYSFS_openRead(filename);
+					if (fp == NULL) {
+						if (i < Current_mission->last_level)
+							snprintf(list[i], 64, "%i. ???\tN/A    ", i + 1);
+						else
+							snprintf(list[i], 64, "S%i. ???\tN/A    ", i - Current_mission->last_level + 1);
+						ranks[i] = 0;
+					}
+					else {
+						calculateRank(i + 1, 1, 0, 0);
+						ranks[i] = Ranking.rank;
+						getLevelNameFromRankFile(i + 1, buffer);
+						snprintf(level_name, LEVEL_NAME_LEN, buffer);
+						if (Ranking.rank > 0) {
+							if (Ranking.warmStart) {
+								if (i < Current_mission->last_level)
+									snprintf(list[i], 64, "%i. %s\t* %.0f    ", i + 1, level_name, Ranking.calculatedScore);
+								else
+									snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+							}
+							else {
+								if (i < Current_mission->last_level)
+									snprintf(list[i], 64, "%i. %s\t%.0f    ", i + 1, level_name, Ranking.calculatedScore);
+								else
+									snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+							}
+						}
+						else {
+							if (i < Current_mission->last_level)
+								snprintf(list[i], 64, "%i. %s\tN/A    ", i + 1, level_name);
+							else
+								snprintf(list[i], 64, "S%i. %s\tN/A    ", i - Current_mission->last_level + 1, level_name);
+						}
+					}
+				}
+				else {
+					if (i < Current_mission->last_level)
+						snprintf(list[i], 64, "%i. ???\tN/A    ", i + 1);
+					else
+						snprintf(list[i], 64, "S%i. ???\tN/A    ", i - Current_mission->last_level + 1);
+					ranks[i] = 0;
+				}
 			}
 			else {
-				calculateRank(i + 1);
+				calculateRank(i + 1, 1, 0, 0);
 				ranks[i] = Ranking.rank;
-				char level_name[36];
-				char buffer[LEVEL_NAME_LEN];
 				getLevelNameFromRankFile(i + 1, buffer);
 				snprintf(level_name, LEVEL_NAME_LEN, buffer);
 				if (Ranking.rank > 0) {
@@ -685,7 +748,7 @@ void do_best_ranks_menu()
 						if (i < Current_mission->last_level)
 							snprintf(list[i], 64, "%i. %s\t* %.0f    ", i + 1, level_name, Ranking.calculatedScore);
 						else
-							snprintf(list[i], 64, "S%i. %s\t* %.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+							snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
 					}
 					else {
 						if (i < Current_mission->last_level)
@@ -977,10 +1040,15 @@ int do_new_game_menu()
 		int n_items;
 		int valid = 0;
 
-		if (PLAYING_BUILTIN_MISSION) {
-			if ((new_level_num = solarmap_show(-100)) == -1)
-				return 0;
-		} else
+		if (PlayerCfg.UsePsxSolarmap) {
+			if (PLAYING_BUILTIN_MISSION) {
+				if ((new_level_num = solarmap_show(-100)) == -1)
+					return 0;
+			}
+			else
+				new_level_num = -2;
+		}
+		else
 			new_level_num = -2;
 		if (new_level_num < 0) {
 		new_level_num = 1;
@@ -2213,13 +2281,15 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[36];
+	newmenu_item m[40];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	do {
-		ADD_CHECK(31, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
-		ADD_CHECK(32, "Show Speedometer", PlayerCfg.Speedometer);
+		ADD_CHECK(36, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
+		ADD_CHECK(37, "Show Speedometer", PlayerCfg.Speedometer);
+		ADD_CHECK(38, "Use PSX world map", PlayerCfg.UsePsxSolarmap);
+		ADD_CHECK(39, "Show warm start records", PlayerCfg.ShowWarmStartScores);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Persistent Debris", PlayerCfg.PersistentDebris);
 		ADD_CHECK(2, "Screenshots w/o HUD", PlayerCfg.PRShot);
@@ -2358,7 +2428,10 @@ void do_misc_menu()
 		PlayerCfg.NoChatSound = m[25].value;
 		PlayerCfg.ShowCustomColors = m[30].value;
 		PlayerCfg.PreferMyTeamColors = (PlayerCfg.MyTeamColor == 8 && PlayerCfg.OtherTeamColor == 8) ? 0 : m[35].value;
-
+		PlayerCfg.RankShowPlusMinus = m[36].value;
+		PlayerCfg.Speedometer = m[37].value;
+		PlayerCfg.UsePsxSolarmap = m[38].value;
+		PlayerCfg.ShowWarmStartScores = m[39].value;
 	} while (i > -1);
 
 	// Update team colors if they were changed during a game

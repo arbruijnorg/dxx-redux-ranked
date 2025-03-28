@@ -26,6 +26,7 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "vecmat.h"
 #include "weapon.h"
 #include "wall.h"
+#include "mission.h"
 
 #define MAX_PLAYERS 8
 #define OBSERVER_PLAYER_ID 7
@@ -135,26 +136,26 @@ typedef struct player {
 } __pack__ player;
 
 typedef struct ranking { // This struct contains variables for the ranking system mod. Most of them don't have to be doubles. It's either for math compatibility or consistency.
-	double  deathCount;              // Number of times the player died during the level.
-	double  rankScore;               // The version of score used for this mod, as to not disturb the vanilla score system.
-	double  excludePoints;           // Number of points gotten from sources we want to not count toward rank calculation, but still contribute to vanilla score.
-	double  maxScore;				 // The current level's S-rank score.
-	double  level_time;              // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
-	int     quickload;				 // Whether the player has quickloaded into the current level.
-	double  parTime;                 // The algorithmically-generated required time for the current level.
-	double  freezeTimer;             // Tells normal levels' in-game timer whether it should be frozen or not.
-	double  calculatedScore;		 // Stores the score determined in calculateRank.
-	int     rank;				     // Stores the rank determined in calculateRank.
-	double  missedRngSpawn;	     	 // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
-	int     alreadyBeaten;           // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
-	int	    fromBestRanksButton;     // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting.
-	int     startingLevel;           // As much as I hate to make a ranking variable over this, endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have no choice but to use this for when levels are started from the record details screen.
-	int     lastSelectedItem;        // So the best ranks levels listbox doesn't keep putting you back at 1 when you're retrying stuff.
-	int     missionRanks[5000];      // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
-	int     num_thief_points;        // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
-	int     warmStart;               // If the player enters a level from a previous one, this becomes 1. If this is 1 when a result screen comes up, total score will have an asterisk next to it. This does nothing else. It's just informative for those who care.
-	int     isRankable;              // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.
-	int     cheated;                 // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
+	double  deathCount;                 // Number of times the player died during the level.
+	double  rankScore;                  // The version of score used for this mod, as to not disturb the vanilla score system.
+	double  excludePoints;              // Number of points gotten from sources we want to not count toward rank calculation, but still contribute to vanilla score.
+	double  maxScore;			        // The current level's S-rank score. Won't include hostage points until the result screen, to make calculation of other bonuses easier.
+	double  level_time;                 // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
+	int     quickload;			       	// Whether the player has quickloaded into the current level.
+	double  parTime;                    // The algorithmically-generated required time for the current level.
+	double  calculatedScore;	       	// Stores the score determined in calculateRank.
+	int     rank;				        // Stores the rank determined in calculateRank.
+	double  missedRngSpawn;	            // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
+	int     alreadyBeaten;              // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
+	int	    fromBestRanksButton;        // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
+	int     startingLevel;              // I hate making a ranking variable for this, but endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have to use this for when levels are started from the record details screen.
+	int     lastSelectedItem;           // So the best ranks listbox doesn't keep putting you back at level 1 when you're retrying stuff.
+	int     missionRanks[MAX_MISSIONS]; // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
+	int     warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
+	int     isRankable;                 // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.
+	int     cheated;                    // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
+	double  freezeTimer;                // Tells normal levels' in-game timer whether it should be frozen or not.
+	int     num_thief_points;           // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
 	
@@ -162,12 +163,12 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  secretExcludePoints;
 	double	secretMaxScore;
 	double	secretlevel_time;
-	double  secretlast_score;		  // Secret equivalent of Players[Player_num].last_score.
-	int		secret_hostages_on_board; // Since Players[Player_num].hostages_on_board carries over, and we don't want base level hostages' points counting for secret levels and vice versa.
-	double  secretDeathCount;         // We don't want starting a new base level to remove the secret level's death penalty, or vise versa, so increment this alongside deathCount, but only reset it upon starting a new secret level.
-	int     secretQuickload;		  // Same thing as secretDeathCount, but with quickloading.
+	double  secretlast_score;		    // Secret equivalent of Players[Player_num].last_score.
+	int		secret_hostages_on_board;   // Since Players[Player_num].hostages_on_board carries over, and we don't want base level hostages' points counting for secret levels and vice versa.
+	double  secretDeathCount;           // We don't want starting a new base level to remove the secret level's death penalty, or vise versa, so increment this alongside deathCount, but only reset it upon starting a new secret level.
+	int     secretQuickload;		    // Same thing as secretDeathCount, but with quickloading.
 	double  secretParTime;
-	double  hostages_secret_level;    // Secret equivalent of Players[Player_num].hostages_level.
+	double  hostages_secret_level;      // Secret equivalent of Players[Player_num].hostages_level.
 	double  secretMissedRngSpawn;
 	int     secretAlreadyBeaten;
 	int     num_secret_thief_points;

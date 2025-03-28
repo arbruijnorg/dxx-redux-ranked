@@ -147,6 +147,7 @@ int new_player_config()
 	PlayerCfg.ObsShareSettings = 1;
 	PlayerCfg.RankShowPlusMinus = 1;
 	PlayerCfg.Speedometer = 1;
+	PlayerCfg.ShowWarmStartScores = 1;
 	for (int obs_mode = 0; obs_mode < NUM_OBS_MODES; obs_mode++) {
 		PlayerCfg.ObsTurbo[obs_mode] = 0;
 		PlayerCfg.ObsShowCockpit[obs_mode] = 1;
@@ -437,6 +438,8 @@ int read_player_d2x(char *filename)
 					PlayerCfg.RankShowPlusMinus = atoi(line);
 				if (!strcmp(word, "SPEEDOMETER"))
 					PlayerCfg.Speedometer = atoi(line);
+				if (!strcmp(word, "SHOWWARMSTARTSCORES"))
+					PlayerCfg.ShowWarmStartScores = atoi(line);
 				//if(!strcmp(word,"QUIETPLASMA"))
 				//	PlayerCfg.QuietPlasma = atoi(line);
 				if(!strcmp(word,"MAXFPS")) {
@@ -714,6 +717,9 @@ int write_player_d2x(char *filename)
 		PHYSFSX_printf(fout, "overrideteamcolors=%i\n", PlayerCfg.PreferMyTeamColors);
 		PHYSFSX_printf(fout, "myteamcolor=%i\n", PlayerCfg.MyTeamColor);
 		PHYSFSX_printf(fout, "otherteamcolor=%i\n", PlayerCfg.OtherTeamColor);
+		PHYSFSX_printf(fout, "rankshowplusminus=%i\n", PlayerCfg.RankShowPlusMinus);
+		PHYSFSX_printf(fout, "speedometer=%i\n", PlayerCfg.Speedometer);
+		PHYSFSX_printf(fout, "showwarmstartscores=%i\n", PlayerCfg.ShowWarmStartScores);
 		//PHYSFSX_printf(fout,"quietplasma=%i\n",PlayerCfg.QuietPlasma);	
 		PHYSFSX_printf(fout,"maxfps=%i\n",PlayerCfg.maxFps);	
 		PHYSFSX_printf(fout,"nochatsound=%i\n",PlayerCfg.NoChatSound);
