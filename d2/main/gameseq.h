@@ -86,7 +86,8 @@ extern void input_name (int place);
 extern int reset_high_scores();
 extern void init_player_stats_level(int secret_flag);
 
-extern int calculateRank(int level_num, int update_warm_start_status, int check_for_warm_start, int check_for_record);
+extern int calculateRank(int level_num, int update_warm_start_status);
+extern int calculateProjectedRank();
 extern int truncateRanks(int rank);
 extern void getLevelNameFromRankFile(int level_num, char* buffer);
 
@@ -106,6 +107,9 @@ void editor_reset_stuff_on_level();
 extern void DoEndLevelScoreGlitz(int network);
 extern void DoEndSecretLevelScoreGlitz();
 extern void DoBestRanksScoreGlitz(int level_num, int warm_start);
+
+// Check if a wall is unlocked/accessible in par time.
+extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID);
 
 // stuff for multiplayer
 extern int NumNetPlayerPositions;

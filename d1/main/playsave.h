@@ -113,7 +113,6 @@ typedef struct player_config
 	ubyte RankShowPlusMinus;
 	ubyte Speedometer;
 	ubyte UsePsxSolarmap;
-	ubyte ShowWarmStartScores;
 	ubyte ObsShareSettings;
 	ubyte ObsTurbo[NUM_OBS_MODES];
 	ubyte ObsShowCockpit[NUM_OBS_MODES];

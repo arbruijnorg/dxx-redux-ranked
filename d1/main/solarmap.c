@@ -16,6 +16,8 @@
 #include "args.h"
 #include "solarmap.h"
 #include "u_mem.h"
+#include "player.h"
+#include "menu.h"
 
 #define BMS_MAP 0
 #define BMS_SHIP 3
@@ -23,6 +25,8 @@
 #define BMS_NUM 5
 
 static const char *bms_files[] = { "map01.pcx", "map02.pcx", "map03.pcx", "ship01.pcx", "ship02.pcx" };
+
+ranking Ranking;
 
 struct solarmap {
 	struct window *wind;
@@ -159,6 +163,7 @@ static void draw_solarmap(struct solarmap *sm)
 
 	int next_idx = sm->next_idx;
 	if (sm->select) {
+		char buffer[256];
 		int idx = sm->ship_idx;
 		if (lvlinfo[idx].level < 0) // secret or transition
 			idx += sm->reversed ? -1 : 1;
@@ -167,6 +172,14 @@ static void draw_solarmap(struct solarmap *sm)
 		gr_set_curfont(MEDIUM1_FONT);
 		gr_string(0x8000, (4 + 2) * scale + FNTScaleY * grd_curcanv->cv_font->ft_h,
 			lvlinfo[idx].name);
+		calculateRank(lvlinfo[idx].level, 0);
+		if (Ranking.rank) {
+			sprintf(buffer, "High score: %.0f", Ranking.calculatedScore);
+			drawSolarmapRankImage(Ranking.rank);
+		}
+		else
+			sprintf(buffer, "High score: N/A");
+		gr_string(0x8000, 20 * scale + FNTScaleY * grd_curcanv->cv_font->ft_h, buffer);
 	} else {
 		gr_set_curfont(MEDIUM1_FONT);
 		gr_string(0x8000, 4 * scale, "Progressing to");

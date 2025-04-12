@@ -27,6 +27,7 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "weapon.h"
 #include "wall.h"
 #include "mission.h"
+#include "switch.h"
 
 #define MAX_PLAYERS 8
 #define OBSERVER_PLAYER_ID 7
@@ -152,10 +153,10 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     lastSelectedItem;           // So the best ranks listbox doesn't keep putting you back at level 1 when you're retrying stuff.
 	int     missionRanks[MAX_MISSIONS]; // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
 	int     warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
-	int     isRankable;                 // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.
 	int     cheated;                    // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
 	double  freezeTimer;                // Tells normal levels' in-game timer whether it should be frozen or not.
 	int     num_thief_points;           // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
+	int     mergeLevels;                // Tells the par time algorithm whether to combine par times in main/secret levels that depend on each other so the one with the finish isn't incomplete.
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
 	
@@ -172,13 +173,11 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  secretMissedRngSpawn;
 	int     secretAlreadyBeaten;
 	int     num_secret_thief_points;
-	int     secretIsRankable;
+	int     secretMergeLevels;
 
 	// Below are the variables from the par time algorithm that are better off globally stored for the sake of convenience or ease of access by code.
 	// I hate how I had to put so many things here, but I would have to change countless function parameters if I tried to put as many things in state as possible. I've already done that enough as it is.
 	
-	int     parTimePathCompletable;
-	int     parTimeStateSegnum;
 	int     currentlyLockedWalls[MAX_WALLS];
 	int     numCurrentlyLockedWalls;
 	int     parTimeUnlockIDs[MAX_WALLS];
@@ -186,6 +185,11 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     parTimeNumWeapons;
 	int     parTimeHeldWeapons[9];
 	int     parTimeHasQuads;
+	int		inaccessibleObjectiveTypes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	int     inaccessibleObjectiveIDs[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	int     numInaccessibleObjectives;
+	int     parTimeRuns;
+	int     parTimeSideSizes[MAX_SEGMENTS][6]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.

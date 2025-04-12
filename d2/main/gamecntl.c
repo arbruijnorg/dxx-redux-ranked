@@ -776,7 +776,8 @@ int HandleSystemKey(int key)
 			{
 				int choice;
 				int allow_loadsave = !(Game_mode & GM_MULTI) || (Game_mode & GM_MULTI_COOP);
-				if (Ranking.quickload || Current_level_num < 0) { // If the level was reached via quickload, don't show the restart level button, as that's supposed to be part of the ranking mod, which is disabled in this case. Also can't restart on secret levels so don't give the option there.
+				// If the level was reached via quickload, don't show the restart level button, as that's supposed to be part of the ranking mod, which is disabled in this case. Also can't restart on secret levels so don't give the option there.
+				if (Ranking.quickload || Current_level_num < 0) {
 					choice = allow_loadsave ?
 						nm_messagebox(NULL, 4, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Game menu") :
 						nm_messagebox(NULL, 2, "Abort Game", TXT_OPTIONS_, "Game menu");

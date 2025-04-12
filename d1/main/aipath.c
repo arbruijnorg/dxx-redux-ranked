@@ -183,7 +183,7 @@ int create_path_points(object *objp, int start_seg, int end_seg, point_seg *pseg
 			if (random_flag)
 				snum = random_xlate[sidenum];
 
-			if ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID))) {
+			if ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, cur_seg))) {
 				int	this_seg = segp->children[snum];
 
 				if (!visited[this_seg]) {

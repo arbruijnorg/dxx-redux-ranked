@@ -1412,32 +1412,28 @@ void move_towards_segment_center(object *objp)
 #endif
 }
 
-int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
-{
-	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++) { // Scan the locked walls list.
-		if (Ranking.currentlyLockedWalls[i] == wall_num) { // This wall hasn't been unlocked yet, don't let Algo through.
-			// Furthermore, if the wall Algo is trying to get through isn't unlocked by anything, or it's unlocked by the thing Algo is trying to reach, consider this objective inaccessible so Algo is granted it later.
-			//if (!Ranking.parTimeUnlockTypes[i] || (Ranking.parTimeUnlockTypes[i] == currentObjectiveType && Ranking.parTimeUnlockIDs[i] == currentObjectiveID)) {
-				//Ranking.inaccessibleObjectiveTypes[Ranking.numInaccessibleObjectives] = currentObjectiveType;
-				//Ranking.inaccessibleObjectiveIDs[Ranking.numInaccessibleObjectives] = currentObjectiveID;
-				//Ranking.numInaccessibleObjectives++;
-			//}
-			return 0;
-		}
-	}
-	return 1;
-}
-
 //	-----------------------------------------------------------------------------------------------------------
 //	Return true if door can be flown through by a suitable type robot.
 //	Only brains and avoid robots can open doors.
-int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObjectiveType, int currentObjectiveID)
+int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObjectiveType, int currentObjectiveID, int segnum)
 {
 	int	wall_num;
 
 	//	The mighty console object can open all doors (for purposes of determining paths).
 	if (objp == ConsoleObject) {
 		int	wall_num = segp->sides[sidenum].wall_num;
+
+		// First off, if this is an inaccessible objective we're pathing to on the second run, always allow Algo straight to it.
+		if (Ranking.parTimeRuns && currentObjectiveType > -1) {
+			for (int i = 0; i < Ranking.numInaccessibleObjectives; i++)
+				if (Ranking.inaccessibleObjectiveTypes[i] == currentObjectiveType && Ranking.inaccessibleObjectiveIDs[i] == currentObjectiveID)
+					return 1;
+		}
+
+		if (Ranking.parTimeSideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
+			printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
+			return 0;
+		}
 
 		if (thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID))
 			return 1;

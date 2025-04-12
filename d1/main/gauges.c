@@ -776,12 +776,7 @@ void hud_show_speedometer()
 		Color_0_31_0 = BM_XRGB(0, 31, 0);
 	gr_set_fontcolor(Color_0_31_0, -1);
 
-	if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 17.75), "%d", speed);
-	if (PlayerCfg.CurrentCockpitMode == CM_STATUS_BAR)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 12.75), "%d", speed);
-	if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 10.75), "%d", speed);
+	gr_printf(grd_curcanv->cv_bitmap.bm_w - grd_curcanv->cv_bitmap.bm_w / 2, grd_curcanv->cv_bitmap.bm_h - grd_curcanv->cv_bitmap.bm_h / 2 + (LINE_SPACING * 2.5), "%d", speed);
 }
 
 void hud_show_pointsleftinlevel()

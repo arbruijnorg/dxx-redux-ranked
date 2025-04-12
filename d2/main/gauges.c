@@ -714,8 +714,11 @@ void hud_show_score()
 			sprintf(score_str, "%s: %5d", TXT_SCORE, Players[Player_num].score);
 		}
 		else {
-			if (Current_level_num > 0)
+			if (Current_level_num > 0) {
+				//calculateProjectedRank();
+				//sprintf(score_str, "%s: %5.0f", TXT_SCORE, Ranking.calculatedScore);
 				sprintf(score_str, "%s: %5.0f", TXT_SCORE, Ranking.rankScore);
+			}
 			else
 				sprintf(score_str, "%s: %5.0f", TXT_SCORE, Ranking.secretRankScore);
 		}
@@ -757,12 +760,7 @@ void hud_show_speedometer()
 		Color_0_31_0 = BM_XRGB(0, 31, 0);
 	gr_set_fontcolor(Color_0_31_0, -1);
 
-	if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 17.75), "%d", speed);
-	if (PlayerCfg.CurrentCockpitMode == CM_STATUS_BAR)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 12.75), "%d", speed);
-	if (PlayerCfg.CurrentCockpitMode == CM_FULL_COCKPIT)
-		gr_printf(SWIDTH - FSPACX(215), GHEIGHT - (LINE_SPACING * 10.75), "%d", speed);
+	gr_printf(grd_curcanv->cv_bitmap.bm_w - grd_curcanv->cv_bitmap.bm_w / 2, grd_curcanv->cv_bitmap.bm_h - grd_curcanv->cv_bitmap.bm_h / 2 + (LINE_SPACING * 2.5), "%d", speed);
 }
 
 void hud_show_pointsleftinlevel()
@@ -1629,11 +1627,11 @@ void show_time()
 	else
 		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
 	if ((Current_level_num > 0 && Ranking.alreadyBeaten) || (Current_level_num < 0 && Ranking.secretAlreadyBeaten)) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
-		if (Current_level_num > 0 || !Ranking.secretIsRankable) {
+		if (Current_level_num > 0) {
 			mins = Ranking.parTime / 60;
 			secs = Ranking.parTime - mins * 60;
 		}
-		if (Current_level_num < 0 || !Ranking.isRankable) {
+		if (Current_level_num < 0) {
 			mins = Ranking.secretParTime / 60;
 			secs = Ranking.secretParTime - mins * 60;
 		}

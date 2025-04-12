@@ -38,6 +38,7 @@ extern char *menu_difficulty_text[];
 
 extern void get_color_name(char* color_name, int color_name_length, int color_value, int use_alternate_colors);
 
+extern void drawSolarmapRankImage(int rank);
 extern int drawSmallRankImages(int* rankList, listbox* lb);
 
 extern void do_best_ranks_menu();
