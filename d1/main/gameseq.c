@@ -1845,6 +1845,8 @@ void bash_to_shield (int i,char *s)
 	Objects[i].size = Powerup_info[POW_SHIELD_BOOST].size;
 }
 
+// - - - - - - - - - - START OF PAR TIME ALGORITHM STUFF - - - - - - - - - - \\
+
 // Since f1_0 being an int causes rounding errors.
 #define f1_0_double 65536.0f
 // Account for custom ship properties.
@@ -1866,8 +1868,6 @@ int find_connecting_side(int from, int to) // Sirius' function, but I made it ta
 	Int3();
 	return -1;
 }
-
-// - - - - - - - - - - START OF PAR TIME ALGORITHM STUFF - - - - - - - - - - \\
 
 typedef struct
 {
@@ -1915,7 +1915,6 @@ typedef struct
 	double ammo_usage; // For when using vulcan.
 	int heldWeapons[5]; // Which weapons algo has.
 	int num_weapons; // The number of weapons algo has.
-	int loops;
 	double pathObstructionTime; // Amount of time spent dealing with walls or matcens on the way to an objective (basically an Abyss 1.0 hotfix for the 32k HP wall let's be real lol).
 	double shortestPathObstructionTime;
 	int hasQuads;
@@ -2133,7 +2132,7 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
-	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation.
+	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation, and that the player is shooting at the middle of the target from directly ahead.
 	// The amount of distance required to move is based off of hard coded gunpoints on the ship, as well as the radius of the player projectile, so we'll have to set values per weapon ID.
 	// For spreading weapons, the offset technically depends on which projectile we're talking about, but we'll set it to that of the middle one's starting point for now, then account for decreasing accuracy over distance later.
 	double projectile_offsets[21] = { 2.2, 2.2, 2.2, 2.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.2, 2.2, 0, 0, 0, 0, 0, 0};
@@ -2391,7 +2390,7 @@ int getObjectiveSegnum(partime_objective objective)
 		return objective.ID;
 	if (objective.type == OBJECTIVE_TYPE_WALL)
 		return Walls[objective.ID].segnum;
-
+	printf("Warning: Par time is going to an undefined segment!\n");
 	return -1;
 }
 
@@ -2521,6 +2520,23 @@ void addObjectiveToList(partime_objective* list, int* listSize, partime_objectiv
 	}
 }
 
+int find_connecting_wall(int wall_num)
+{
+	int adjacent_wall_num = -1;
+	int adjacent_wall_segnum;
+	int connecting_side;
+	for (int c = 0; c < 6; c++) { // Find that neighboring wall.
+		adjacent_wall_segnum = Segments[Walls[wall_num].segnum].children[c];
+		connecting_side = find_connecting_side(Walls[wall_num].segnum, adjacent_wall_segnum);
+		if (wall_num == Segments[Walls[wall_num].segnum].sides[connecting_side].wall_num) {
+			connecting_side = find_connecting_side(adjacent_wall_segnum, Walls[wall_num].segnum); // We have to reverse the arguments to get the opposite wall.
+			adjacent_wall_num = Segments[adjacent_wall_segnum].sides[connecting_side].wall_num;
+		}
+		if (adjacent_wall_num > -1)
+			return adjacent_wall_num;
+	}
+}
+
 void initLockedWalls(partime_calc_state* state)
 {
 	int i;
@@ -2555,6 +2571,10 @@ void initLockedWalls(partime_calc_state* state)
 						state->numLockedWalls--; // Nevermind about adding it here.
 						state->numReactorWalls++; // We're adding it here instead.
 						reactorInfo->wallID = i;
+						reactorInfo->unlockedBy.type = 1;
+						for (int o = 0; o <= Highest_object_index; o++)
+							if (Objects[o].type == OBJ_CNTRLCEN)
+								reactorInfo->unlockedBy.ID = o;
 						break;
 					}
 				}
@@ -2568,7 +2588,7 @@ void initLockedWalls(partime_calc_state* state)
 		Ranking.parTimeUnlockTypes[i] = state->lockedWalls[i].unlockedBy.type;
 		// Don't add an unlock objective if it's a robot holding a key. Robots are already added anyway. (Shoutout to The Pit from LOTW for having a boss hold a key or I would never have noticed this happening.)
 		// Also don't add anything with an invalid objective type. That just makes things more confusing to debug.
-		if (!(state->lockedWalls[i].unlockedBy.type == 1 && Objects[state->lockedWalls[i].unlockedBy.ID].type == OBJ_ROBOT)) // Don't add an unlock objective if it's a robot holding a key. Robots are already added anyway. (Shoutout to The Pit from LOTW for having a boss hold a key or I would never have noticed this happening.)
+		if (state->lockedWalls[i].unlockedBy.type && !(state->lockedWalls[i].unlockedBy.type == 1 && Objects[state->lockedWalls[i].unlockedBy.ID].type == OBJ_ROBOT)) // Don't add an unlock objective if it's a robot holding a key. Robots are already added anyway. (Shoutout to The Pit from LOTW for having a boss hold a key or I would never have noticed this happening.)
 			addObjectiveToList(state->toDoList, &state->toDoListSize, state->lockedWalls[i].unlockedBy, 0); // Add every key and unlock trigger to the to-do list, ignoring duplicates.
 	}
 	// Now we have to iterate again because the unlocked side of one-sided locked walls need to be tested for an unlock ID, and that can only be done AFTER the rest of the unlocks have been added.
@@ -2581,19 +2601,7 @@ void initLockedWalls(partime_calc_state* state)
 				for (int w = 0; w < state->numLockedWalls; w++) {
 					if (state->lockedWalls[w].wallID == i && state->lockedWalls[w].unlockedBy.type) // If an unlock type never got assigned for this locked door, its neighboring wall could be what unlocks it (D1 S2).
 						continue; // If one was though, that's not the case.
-					int adjacent_wall_num = -1;
-					int adjacent_wall_segnum;
-					int connecting_side;
-					for (int c = 0; c < 6; c++) { // Find that neighboring wall.
-						adjacent_wall_segnum = Segments[Walls[i].segnum].children[c];
-						connecting_side = find_connecting_side(Walls[i].segnum, adjacent_wall_segnum);
-						if (i == Segments[Walls[i].segnum].sides[connecting_side].wall_num) {
-							connecting_side = find_connecting_side(adjacent_wall_segnum, Walls[i].segnum); // We have to reverse the arguments to get the opposite wall.
-							adjacent_wall_num = Segments[adjacent_wall_segnum].sides[connecting_side].wall_num;
-						}
-						if (adjacent_wall_num > -1)
-							continue; // We found the child segment with the matching wall, don't bother iterating anymore.
-					}
+					int adjacent_wall_num = find_connecting_wall(i);
 					if (Walls[adjacent_wall_num].type == WALL_DOOR) { // Make sure it's a door.
 						for (int w2 = 0; w2 < state->numLockedWalls; w2++) {
 							if (state->lockedWalls[w2].wallID == adjacent_wall_num && state->lockedWalls[w2].unlockedBy.type) { // Make sure it can be unlocked. If neither side can be unlocked then there's no point going through with this step.
@@ -2617,10 +2625,19 @@ void initLockedWalls(partime_calc_state* state)
 	}
 	// Now let's reiterate one last time through the locked walls list if we're on the first run. We've gotta move all the stuff with unlock IDs to done list so Algo ignores locked doors.
 	// We have to do this iteration separately, because if we don't, the part of marking things as done that removes locked walls from Ranked.currentlyLockedWalls will be removing them from a list that's still populating.
-	if (!Ranking.parTimeRuns) // Dev note: This section works correctly!
-		for (i = 0; i < state->numLockedWalls; i++)
-			if (!(Objects[state->lockedWalls[i].unlockedBy.ID].type == OBJ_ROBOT && state->lockedWalls[i].unlockedBy.type == 1) && state->lockedWalls[i].unlockedBy.type) // Only move something if it has a type, so we don't ignore grates as well.
+	if (!Ranking.parTimeRuns) {
+		for (i = 0; i < state->numLockedWalls; i++) // Only move something if it has a type, so we don't ignore grates as well.
+			if (state->lockedWalls[i].unlockedBy.type)
 				addObjectiveToList(state->doneList, &state->doneListSize, state->lockedWalls[i].unlockedBy, 1);
+		if (state->numReactorWalls) // If needed, also add the reactor to done list so Algo can access reactor closets on its first run.
+			addObjectiveToList(state->doneList, &state->doneListSize, state->reactorWalls[0].unlockedBy, 1);
+		for (i = 0; i < state->numReactorWalls; i++) { // Remove any locked walls from the list that are the other side of a reactor wall. Algo went inside the D1 S1 reactor closet and couldn't get back out.
+			int adjacent_wall_num = find_connecting_wall(state->reactorWalls[i].wallID);
+			for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++)
+				if (Ranking.currentlyLockedWalls[w] == adjacent_wall_num)
+					removeLockedWallFromList(w);
+		}
+	}
 }
 
 void removeObjectiveFromList(partime_objective* list, int* listSize, partime_objective objective)
@@ -2651,7 +2668,7 @@ int create_path_partime(int start_seg, int target_seg, point_seg** path_start, i
 	*path_start = Point_segs_free_ptr;
 	*path_count = player_path_length;
 
-	if (Point_segs[player_path_length - 1].segnum != target_seg) { // Don't consider this objective in the contest for shortest path if it isn't accessible. We handle those later.
+	if (Point_segs[player_path_length - 1].segnum != target_seg) {	// Don't consider this objective in the contest for shortest path if it isn't accessible. We handle those later.
 		if (objective.type && !Ranking.parTimeRuns) {
 			Ranking.inaccessibleObjectiveTypes[Ranking.numInaccessibleObjectives] = objective.type;
 			Ranking.inaccessibleObjectiveIDs[Ranking.numInaccessibleObjectives] = objective.ID;
@@ -2723,6 +2740,9 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
 		if (Ranking.currentlyLockedWalls[i] == wall_num)
 			return 0;
+	for (int link_num = 0; link_num < ControlCenterTriggers.num_links; link_num++) // Don't wanna move state to ai.c just to access reactor walls.
+		if (ControlCenterTriggers.seg[link_num] == Walls[wall_num].segnum && ControlCenterTriggers.side[link_num] == Walls[wall_num].sidenum && Ranking.parTimeLoops < 2)
+			return 0;
 	return 1;
 }
 
@@ -2757,16 +2777,13 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 	if (shortestPathLength >= 0) {
 		// Regenerate the path since we may have checked something else in the meantime.
 		create_path_partime(start_seg, getObjectiveSegnum(nearestObjective), path_start, path_count, state, objective);
-		if (Ranking.parTimeRuns) { // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
+		*path_length = shortestPathLength;
+		if (Ranking.parTimeRuns) // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
 			for (i = 0; i < Ranking.numInaccessibleObjectives; i++)
-				if (Ranking.inaccessibleObjectiveTypes[i] == nearestObjective.type && Ranking.inaccessibleObjectiveIDs[i] == nearestObjective.ID) {
-					*path_length = shortestPathLength;
+				if (Ranking.inaccessibleObjectiveTypes[i] == nearestObjective.type && Ranking.inaccessibleObjectiveIDs[i] == nearestObjective.ID)
 					return nearestObjective;
-				}
-		}
 		state->segnum = getObjectiveSegnum(nearestObjective);
 		state->lastPosition = getObjectivePosition(nearestObjective);
-		*path_length = shortestPathLength;
 		return nearestObjective;
 	}
 	else {
@@ -3157,7 +3174,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		int lastSegnum = initialSegnum; // So the printf showing paths to and from segments works.
 		int i;
 		int j;
-		state.loops = 0; // How many times the pathmaking process has repeated. This determines what toDoList is populated with, to make sure things are gone to in the right order.
+		Ranking.parTimeLoops = 0; // How many times the pathmaking process has repeated. This determines what toDoList is populated with, to make sure things are gone to in the right order.
 		double pathLength; // Store create_path_partime's result in pathLength to compare to current shortest.
 		double matcenTime = 0; // Debug variable to see how much time matcens are adding to the par time.
 		point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
@@ -3205,9 +3222,9 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				state.numEnergyCenters++;
 			}
 
-		while (state.loops < 4) {
+		while (Ranking.parTimeLoops < 4) {
 			// Collect our objectives at this stage...
-			if (state.loops == 0) {
+			if (Ranking.parTimeLoops == 0) {
 				for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all robots, hostages, weapons, and laser powerups. Ignore robots not worth over zero, as the player isn't gonna go for those. This should never happen, but it's just a failsafe.
 					if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON))) {
 						partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
@@ -3216,7 +3233,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				}
 				for (i = 0; i < state.toDoListSize;) { // Now we go through and blacklist anything behind a reactor wall.
 					partime_objective objective = { state.toDoList[i].type , state.toDoList[i].ID }; // Save a snapshot of what this index currently is, so the list shifting doesn't cause the wrong thing to be added.
-					create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(state.toDoList[i]), &path_start, &path_count, &state, objective);
+					create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(objective), &path_start, &path_count, &state, objective);
 					int lockedWallID = find_reactor_wall_partime(&state, path_start, path_count);
 					if (lockedWallID > -1) {
 						removeObjectiveFromList(state.toDoList, &state.toDoListSize, objective);
@@ -3226,12 +3243,12 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 						i++;
 				}
 			}
-			if (state.loops == 1) {
+			if (Ranking.parTimeLoops == 1) {
 				int levelHasReactor = 0;
 				for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all reactors and bosses.
 					if (Objects[i].type == OBJ_CNTRLCEN) {
 						partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
-						create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(state.toDoList[i]), &path_start, &path_count, &state, objective); // Pathfind to potentially update inaccessibleObjectives array, in case reactor is grated off.
+						create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(objective), &path_start, &path_count, &state, objective); // Pathfind to potentially update inaccessibleObjectives array, in case reactor is grated off.
 						addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 						levelHasReactor = 1;
 					}
@@ -3257,7 +3274,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 					}
 				}
 			}
-			if (state.loops == 2) {
+			if (Ranking.parTimeLoops == 2) {
 				int blackListSize = state.blackListSize; // We need a version that stays at the initial value, since state.blackListSize is actively decreased by the code below.
 				for (i = 0; i < blackListSize; i++) { // Put the stuff we blacklisted earlier back on the list now that the reactor/boss is dead.
 					partime_objective objective = { state.blackList[0].type, state.blackList[0].ID };
@@ -3265,7 +3282,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 				}
 			}
-			if (state.loops == 3) { // Put the exit on the list.
+			if (Ranking.parTimeLoops == 3) { // Put the exit on the list.
 				for (i = 0; i <= Num_triggers; i++) {
 					if (Triggers[i].flags == TRIGGER_EXIT || Triggers[i].flags == TRIGGER_SECRET_EXIT) {
 						for (j = 0; j <= Num_walls; j++) {
@@ -3293,13 +3310,21 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				// Mark this objective as done.
 				removeObjectiveFromList(state.toDoList, &state.toDoListSize, nearestObjective);
 				addObjectiveToList(state.doneList, &state.doneListSize, nearestObjective, 1);
+				if (Ranking.parTimeLoops == 1) { // If we just added the reactor to the done list, remove any locked walls neighboring a reactor wall. They should be open too.
+					for (i = 0; i < state.numReactorWalls; i++) {
+						int adjacent_wall_num = find_connecting_wall(state.reactorWalls[i].wallID);
+						for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++)
+							if (Ranking.currentlyLockedWalls[w] == adjacent_wall_num)
+								removeLockedWallFromList(w);
+					}
+				}
 
 				// Track resource consumption and robot HP destroyed.
 				// If there's no path and we're doing straight line distance, we have no idea what we'd
 				// be crossing through, so tracking resources for the path would be meaningless.
 				// We can still check the objective itself, though.
 				int hasThisWeapon = 0; // If the next object is a weapon/laser level/quads, and algo already has it/is maxed out, skip it. We don't wanna waste time getting redundant powerups.
-				if (Objects[nearestObjective.ID].type == OBJ_POWERUP) { // I'm splitting up the if conditions this time.
+				if (nearestObjective.type == OBJECTIVE_TYPE_OBJECT && Objects[nearestObjective.ID].type == OBJ_POWERUP) { // I'm splitting up the if conditions this time.
 					for (int n = 1; n < 5; n++) {
 						int weaponIDs[5] = { 0, VULCAN_ID, SPREADFIRE_ID, PLASMA_ID, FUSION_ID };
 						if (Objects[nearestObjective.ID].id == n + 12 && do_we_have_this_weapon(&state, weaponIDs[n]))
@@ -3334,7 +3359,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 					state.objectives++;
 				}
 			}
-			state.loops++;
+			Ranking.parTimeLoops++;
 		}
 		ConsoleObject->segnum = initialSegnum;
 

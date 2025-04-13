@@ -1435,10 +1435,7 @@ int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObj
 			return 0;
 		}
 
-		if (thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID))
-			return 1;
-		else
-			return 0;
+		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
 	}
 
 	if ((objp->id == ROBOT_BRAIN) || (objp->ctype.ai_info.behavior == AIB_RUN_FROM)) {
