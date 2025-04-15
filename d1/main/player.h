@@ -151,6 +151,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int        parTimeUnlockTypes[MAX_WALLS];
 	int		   inaccessibleObjectiveTypes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	int        inaccessibleObjectiveIDs[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
+	int        inaccessibleObjectiveLastSegnums[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	int        numInaccessibleObjectives;
 	int        parTimeRuns;
 	int        parTimeLoops;

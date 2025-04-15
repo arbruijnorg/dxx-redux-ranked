@@ -2168,15 +2168,15 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	if ((enemy_runs && enemy_max_speed) || (!enemy_runs && enemy_evade_speed)) {
 		if (optimal_distance > 80) { // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
 			if (enemy_runs)
-				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed)) * accuracy_multiplier;
+				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
 			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed)) * accuracy_multiplier;
+				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed));
 		}
 		else {
 			if (enemy_runs)
-				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed)) * accuracy_multiplier;
+				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
 			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed)) * accuracy_multiplier;
+				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed));
 		}
 	}
 	else
@@ -2184,9 +2184,9 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	if (accuracy > 1) // Accuracy can't be greater than 100%.
 		return 1;
 	else if (enemy_runs)
-		return accuracy;
+		return accuracy * accuracy_multiplier;
 	else
-		return 0.5 + accuracy / 2;
+		return (0.5 + accuracy / 2) * accuracy_multiplier;
 	// Enemies evade less and less linearly as their health goes down (Source: ai.c line 997), so return an average of 100% and the starting acc, except for fleeing enemies, who we want to return very low values.
 }
 
@@ -2592,31 +2592,23 @@ void initLockedWalls(partime_calc_state* state)
 			addObjectiveToList(state->toDoList, &state->toDoListSize, state->lockedWalls[i].unlockedBy, 0); // Add every key and unlock trigger to the to-do list, ignoring duplicates.
 	}
 	// Now we have to iterate again because the unlocked side of one-sided locked walls need to be tested for an unlock ID, and that can only be done AFTER the rest of the unlocks have been added.
-	for (i = 0; i < 0; i++) {
-		if ((Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) || Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED) {;
+	for (i = 0; i < Num_walls; i++) {
+		if (Walls[i].type == WALL_DOOR && ((Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED) || Walls[i].flags & WALL_DOOR_LOCKED)) {
 			partime_locked_wall_info* wallInfo = &state->lockedWalls[state->numLockedWalls];
 			partime_locked_wall_info* reactorInfo = &state->reactorWalls[state->numReactorWalls];
 			wallInfo->wallID = i;
-			if (Walls[i].type == WALL_DOOR) {
-				for (int w = 0; w < state->numLockedWalls; w++) {
-					if (state->lockedWalls[w].wallID == i && state->lockedWalls[w].unlockedBy.type) // If an unlock type never got assigned for this locked door, its neighboring wall could be what unlocks it (D1 S2).
+			for (int w = 0; w < state->numLockedWalls; w++) {
+				if (state->lockedWalls[w].wallID == i) {
+					if (state->lockedWalls[w].unlockedBy.type) // If an unlock type never got assigned for this locked door, its neighboring wall could be what unlocks it (D1 S2).
 						continue; // If one was though, that's not the case.
 					int adjacent_wall_num = find_connecting_wall(i);
-					if (Walls[adjacent_wall_num].type == WALL_DOOR) { // Make sure it's a door.
-						for (int w2 = 0; w2 < state->numLockedWalls; w2++) {
-							if (state->lockedWalls[w2].wallID == adjacent_wall_num && state->lockedWalls[w2].unlockedBy.type) { // Make sure it can be unlocked. If neither side can be unlocked then there's no point going through with this step.
-								// Now make it the unlock ID for the locked side. Note: Due to the level design, these will probably be inaccessible objectives.
-								// Wall type objectives function identically to trigger types, except Algo must have the required key before being able to mark them as done (like in Beeblebrox Mine).
-								wallInfo->unlockedBy.type = OBJECTIVE_TYPE_WALL;
-								wallInfo->unlockedBy.ID = adjacent_wall_num; // Wall type objectives are also identified by their wall number rather than their segment number, so we can read the keys associated with the wall.
-								Ranking.currentlyLockedWalls[Ranking.numCurrentlyLockedWalls] = wallInfo->wallID;
-								Ranking.parTimeUnlockIDs[Ranking.numCurrentlyLockedWalls] = wallInfo->unlockedBy.ID;
-								Ranking.parTimeUnlockTypes[Ranking.numCurrentlyLockedWalls] = wallInfo->unlockedBy.type;
-								Ranking.numCurrentlyLockedWalls++;
-								addObjectiveToList(state->toDoList, &state->toDoListSize, wallInfo->unlockedBy, 0); // Add every key and unlock trigger to the to-do list, ignoring duplicates.
-								continue;
-							}
-						}
+					if (!(Walls[adjacent_wall_num].flags & WALL_DOOR_LOCKED)) { // Make sure it can be unlocked. If neither side can be unlocked then there's no point going through with this step.
+						// Now make it the unlock ID for the locked side. Note: Due to the level design, these will probably be inaccessible objectives.
+						// Wall type objectives function identically to trigger types, except Algo must have the required key before being able to mark them as done (like in Beeblebrox Mine).
+						wallInfo->unlockedBy.type = OBJECTIVE_TYPE_WALL;
+						wallInfo->unlockedBy.ID = adjacent_wall_num; // Wall type objectives are also identified by their wall number rather than their segment number, so we can read the keys associated with the wall.
+						addObjectiveToList(state->toDoList, &state->toDoListSize, wallInfo->unlockedBy, 0);
+						continue;
 					}
 				}
 			}
@@ -2668,13 +2660,38 @@ int create_path_partime(int start_seg, int target_seg, point_seg** path_start, i
 	*path_start = Point_segs_free_ptr;
 	*path_count = player_path_length;
 
-	if (Point_segs[player_path_length - 1].segnum != target_seg) {	// Don't consider this objective in the contest for shortest path if it isn't accessible. We handle those later.
-		if (objective.type && !Ranking.parTimeRuns) {
-			Ranking.inaccessibleObjectiveTypes[Ranking.numInaccessibleObjectives] = objective.type;
-			Ranking.inaccessibleObjectiveIDs[Ranking.numInaccessibleObjectives] = objective.ID;
-			Ranking.numInaccessibleObjectives++;
+	if (!Ranking.parTimeRuns) {
+		if (Point_segs[player_path_length - 1].segnum != target_seg) { // Don't consider this objective in the contest for shortest path if it isn't accessible. We handle those later.
+			for (int i = 0; i < Ranking.numInaccessibleObjectives; i++)
+				if (Ranking.inaccessibleObjectiveTypes[i] == objective.type && Ranking.inaccessibleObjectiveIDs[i] == objective.ID)
+					return 0; // We already added this objective to the inaccessible list, no need to add it again. Before I added this check, level's took ages to load due to hundreds of inaccessibles.
+			if (objective.type) {
+				// If we're pathing to an inaccessible objective, set Algo's position to the closest accessible point. At the objective will softlock it.
+				// Due to how taxing create_path_partime is (and because I'm lazy lmao), we'll use vm_vec_dist to determine this instead of actually measuring the path correctly.
+				// This will return the incorrect segnum when it comes to looping pathways, but this is better than the other alternatives.
+				// Those were not updating its position at all (caused really long retread paths), and not counting movement time for inaccessible objectives at all (caused potentially impossible par times).
+				// The good part about this compromise is that when it's incorrect, it's in the upper direction, so par times will be easy at worst instead of impossible.
+				int nearestSegnum;
+				int shortestDistance = -1;
+				int distance = -1;
+				vms_vector start;
+				vms_vector finish;
+				compute_segment_center(&finish, &Segments[getObjectiveSegnum(objective)]);
+				for (int p = 0; p < player_path_length; p++) {
+					compute_segment_center(&start, &Segments[Point_segs[p].segnum]);
+					distance = vm_vec_dist(&start, &finish);
+					if (distance < shortestDistance || shortestDistance == -1) {
+						shortestDistance = distance;
+						nearestSegnum = Point_segs[p].segnum;
+					}
+				}
+				Ranking.inaccessibleObjectiveLastSegnums[Ranking.numInaccessibleObjectives] = nearestSegnum;
+				Ranking.inaccessibleObjectiveTypes[Ranking.numInaccessibleObjectives] = objective.type;
+				Ranking.inaccessibleObjectiveIDs[Ranking.numInaccessibleObjectives] = objective.ID;
+				Ranking.numInaccessibleObjectives++;
+			}
+			return 0;
 		}
-		return 0;
 	}
 
 	return 1;
@@ -2780,8 +2797,13 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		*path_length = shortestPathLength;
 		if (Ranking.parTimeRuns) // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
 			for (i = 0; i < Ranking.numInaccessibleObjectives; i++)
-				if (Ranking.inaccessibleObjectiveTypes[i] == nearestObjective.type && Ranking.inaccessibleObjectiveIDs[i] == nearestObjective.ID)
+				if (Ranking.inaccessibleObjectiveTypes[i] == nearestObjective.type && Ranking.inaccessibleObjectiveIDs[i] == nearestObjective.ID) {
+					state->segnum = Ranking.inaccessibleObjectiveLastSegnums[i];
+					vms_vector segmentCenter;
+					compute_segment_center(&segmentCenter, &Segments[state->segnum]);
+					state->lastPosition = segmentCenter;
 					return nearestObjective;
+				}
 		state->segnum = getObjectiveSegnum(nearestObjective);
 		state->lastPosition = getObjectivePosition(nearestObjective);
 		return nearestObjective;
@@ -2810,7 +2832,7 @@ int getMatcenSegnum(int matcen_num)
 }
 
 void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* path, int path_count)
-{   // First, let's check if the ship can actually fit through this path. Thanks to Proxy for help with this part.
+{ 
 	int wall_num;
 	int side_num;
 	int adjacent_wall_num;
@@ -3144,6 +3166,7 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 { // January 2024 me would crap himself if he saw this actually working lol.
 	partime_calc_state state = { 0 }; // Initialize the algorithm's state. We'll call it Algo for short.
 	Ranking.parTimeRuns = 0;
+	Ranking.numInaccessibleObjectives = 0;
 	for (int i = 0; i <= Highest_segment_index; i++) { // Iterate through every side of every segment, measuring their sizes.
 		for (int s = 0; s < 6; s++) {
 			if (Segments[i].children[s] > -1) { // Don't measure closed sides. We can't go through them anyway.
@@ -3180,7 +3203,6 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
 		int path_count; // The number of segments in the path we're looking at.
 		state.doneWallsSize = 0;
-		Ranking.numInaccessibleObjectives = 0;
 		state.num_weapons = 1;
 		state.heldWeapons[0] = 0;
 		state.hasQuads = 0;
