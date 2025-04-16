@@ -116,7 +116,7 @@ extern int truncateRanks(int rank);
 extern void getLevelNameFromRankFile(int level_num, char* buffer);
 
 // Check if a wall is unlocked/accessible in par time.
-extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID);
+extern int thisWallUnlocked(int wall_num);
  
 // stuff for multiplayer
 extern int NumNetPlayerPositions;

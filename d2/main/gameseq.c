@@ -1795,6 +1795,7 @@ typedef struct
 	double objectiveEnergies[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
 	double energyTime;
 	ubyte thiefKeys; // Keeps track of which keys have been held by a thief.
+	int isSegmentAccessible[MAX_SEGMENTS];
 } partime_calc_state;
 
 double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int pathFinal) // Tell algo to use the weapon that's fastest for the destructible wall in the way.
@@ -1842,7 +1843,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 				energy_usage *= 0.75;
 		}
 		// Assume accuracy is always 100% for walls. They're big and don't move lol.
-		int shots = wall_health / damage + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+		int shots = ceil(wall_health / damage); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 			thisWeaponCombatTime = shots / fire_rate;
 		else
@@ -2188,7 +2189,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		}
 		// I'm not going any deeper than this (two layers), because you can have theoretically infinite. I've only seen three layers once (D1 level 13), and never beyond that, which would be asking for trouble on multiple fronts.
 		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
-		int shots = (adjustedRobotHealthNoAccuracy / damage + 1) / accuracy + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+		int shots = ceil((adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 			thisWeaponCombatTime = shots / fire_rate;
 		else
@@ -2298,7 +2299,7 @@ double calculate_combat_time_matcen(partime_calc_state* state, robot_info* robIn
 			adjustedRobotHealth += offspringHealth;
 		}
 		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
-		int shots = (adjustedRobotHealthNoAccuracy / damage + 1) / accuracy + 1; // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+		int shots = ceil((adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0 * (Difficulty_level + 3)) // Make sure we have enough ammo for the average of this matcen's robots, times the number of waves on this difficulty, before using it.
 			thisWeaponMatcenTime = shots / fire_rate;
 		else
@@ -2479,7 +2480,7 @@ int find_connecting_wall(int wall_num)
 	}
 }
 
-void initLockedWalls(partime_calc_state* state)
+void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 {
 	int i;
 	partime_locked_wall_info* wallInfo = &state->lockedWalls[state->numLockedWalls];
@@ -2569,9 +2570,9 @@ void initLockedWalls(partime_calc_state* state)
 		}
 		// Note: As a side effect of this, the back sides of spawn doors and exits (if they're unlocked) will be added as inaccessible objectives, but this will almost always add negligible time to par.
 	}
-	// Now let's reiterate one last time through the locked walls list if we're on the first run. We've gotta move all the stuff with unlock IDs to done list so Algo ignores locked doors.
+	// For the segment accessibility pass, we're gonna remove the unlockable walls so it can get through stuff like key doors.
 	// We have to do this iteration separately, because if we don't, the part of marking things as done that removes locked walls from Ranked.currentlyLockedWalls will be removing them from a list that's still populating.
-	if (!Ranking.parTimeRuns) {
+	if (removeUnlockableWalls) {
 		for (i = 0; i < state->numLockedWalls; i++) // Only move something if it has a type, so we don't ignore grates as well.
 			if (state->lockedWalls[i].unlockedBy.type)
 				addObjectiveToList(state->doneList, &state->doneListSize, state->lockedWalls[i].unlockedBy, 1);
@@ -2619,7 +2620,7 @@ void removeObjectiveFromList(partime_objective* list, int* listSize, partime_obj
 
 // Find a path from a start segment to an objective.
 // A lot of this is copied from the mark_player_path_to_segment function in game.c.
-int create_path_partime(int start_seg, int target_seg, point_seg** path_start, int* path_count, partime_calc_state* state, partime_objective objective)
+void create_path_partime(int start_seg, int target_seg, point_seg** path_start, int* path_count, partime_calc_state* state, partime_objective objective)
 {
 	object* objp = ConsoleObject;
 	short player_path_length = 0;
@@ -2627,51 +2628,20 @@ int create_path_partime(int start_seg, int target_seg, point_seg** path_start, i
 
 	// With the previous system of determining whether a path was completable, if a grated off area connected one sectors of a level with an otherwise locked off one, it could be used to bypass a locked door, which could make par times impossible.
 	// I thought this was rather rare, then Algo did it on D2 level 10 with wall 12/13 lol. Now it should actually be rare, and less likely to cause impossibility if it occurs.
-	create_path_points(objp, objp->segnum, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, objective.ID);
+	if (state->isSegmentAccessible[target_seg])
+		create_path_points(objp, objp->segnum, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 0);
+	else
+		create_path_points(objp, objp->segnum, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 1);
 
 	*path_start = Point_segs_free_ptr;
 	*path_count = player_path_length;
 
-	if (!Ranking.parTimeRuns) {
-		if (Point_segs[player_path_length - 1].segnum != target_seg) { // Don't consider this objective in the contest for shortest path if it isn't accessible. We handle those later.
-			for (int i = 0; i < Ranking.numInaccessibleObjectives; i++)
-				if (Ranking.inaccessibleObjectiveTypes[i] == objective.type && Ranking.inaccessibleObjectiveIDs[i] == objective.ID)
-					return 0; // We already added this objective to the inaccessible list, no need to add it again. Before I added this check, level's took ages to load due to hundreds of inaccessibles.
-			if (objective.type) {
-				// If we're pathing to an inaccessible objective, set Algo's position to the closest accessible point. At the objective will softlock it.
-				// Due to how taxing create_path_partime is (and because I'm lazy lmao), we'll use vm_vec_dist to determine this instead of actually measuring the path correctly.
-				// This will return the incorrect segnum when it comes to looping pathways, but this is better than the other alternatives.
-				// Those were not updating its position at all (caused really long retread paths), and not counting movement time for inaccessible objectives at all (caused potentially impossible par times).
-				// The good part about this compromise is that when it's incorrect, it's in the upper direction, so par times will be easy at worst instead of impossible.
-				int nearestSegnum;
-				int shortestDistance = -1;
-				int distance = -1;
-				vms_vector start;
-				vms_vector finish;
-				compute_segment_center(&finish, &Segments[getObjectiveSegnum(objective)]);
-				for (int p = 0; p < player_path_length; p++) {
-					compute_segment_center(&start, &Segments[Point_segs[p].segnum]);
-					distance = vm_vec_dist(&start, &finish);
-					if (distance < shortestDistance || shortestDistance == -1) {
-						shortestDistance = distance;
-						nearestSegnum = Point_segs[p].segnum;
-					}
-				}
-				Ranking.inaccessibleObjectiveLastSegnums[Ranking.numInaccessibleObjectives] = nearestSegnum;
-				Ranking.inaccessibleObjectiveTypes[Ranking.numInaccessibleObjectives] = objective.type;
-				Ranking.inaccessibleObjectiveIDs[Ranking.numInaccessibleObjectives] = objective.ID;
-				Ranking.numInaccessibleObjectives++;
-			}
-			return 0;
-		}
-	}
-
-	return 1;
+	return;
 }
 
 int find_reactor_wall_partime(partime_calc_state* state, point_seg* path, int path_count)
 {
-	for (int i = 0; i < path_count - 1; i++) {
+	for (int i = 0; i < path_count - 1; i++) {  
 		int sideNum = find_connecting_side(path[i].segnum, path[i + 1].segnum);
 		side* side = &Segments[path[i].segnum].sides[sideNum];
 		if (side->wall_num < 0)
@@ -2724,7 +2694,7 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared. Also fuelcen trip logic. You'll understand why if you look there.
 }
 
-int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
+int thisWallUnlocked(int wall_num)
 {
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
 		if (Ranking.currentlyLockedWalls[i] == wall_num)
@@ -2743,17 +2713,21 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 	partime_objective nearestObjective;
 	partime_objective objective;
 	int i;
+	int nearestSegnum;
+	int shortestDistance;
+	int distance;
+	int objectiveSegnum;
 
 	vms_vector start;
 	compute_segment_center(&start, &Segments[start_seg]);
 
 	for (i = 0; i < objectiveListSize; i++) {
 		objective = objectiveList[i];
+		objectiveSegnum = getObjectiveSegnum(objective);
 		// Draw a path as far as we can to the objective, avoiding currently locked doors. If we don't make it all the way, ignore any closed walls. Primarily for shooting through grates, but prevents a softlock on actual uncompletable levels.
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, -1, -1)) // If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID)) // If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
 			continue;
-		if (!create_path_partime(start_seg, getObjectiveSegnum(objective), path_start, path_count, state, objective))
-			continue; // We can't reach this objective right now; find the next one.
+		create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		pathLength = calculate_path_length_partime(state, *path_start, *path_count, objective);
 		if (pathLength < shortestPathLength || shortestPathLength < 0) {
 			shortestPathLength = pathLength;
@@ -2764,19 +2738,31 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 
 	// Did we find a legal objective? Return that.
 	if (shortestPathLength >= 0) {
+		objectiveSegnum = getObjectiveSegnum(nearestObjective);
 		// Regenerate the path since we may have checked something else in the meantime.
-		create_path_partime(start_seg, getObjectiveSegnum(nearestObjective), path_start, path_count, state, objective);
+		create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		*path_length = shortestPathLength;
-		if (Ranking.parTimeRuns) // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
-			for (i = 0; i < Ranking.numInaccessibleObjectives; i++)
-				if (Ranking.inaccessibleObjectiveTypes[i] == nearestObjective.type && Ranking.inaccessibleObjectiveIDs[i] == nearestObjective.ID) {
-					state->segnum = Ranking.inaccessibleObjectiveLastSegnums[i];
-					vms_vector segmentCenter;
-					compute_segment_center(&segmentCenter, &Segments[state->segnum]);
-					state->lastPosition = segmentCenter;
-					return nearestObjective;
+		if (!state->isSegmentAccessible[objectiveSegnum]) { // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
+			shortestDistance = -1;
+			vms_vector start;
+			vms_vector finish;
+			compute_segment_center(&finish, &Segments[objectiveSegnum]);
+			for (i = 0; i <= Highest_segment_index; i++) { // Put Algo at the closest accessible segment to the source segment.
+				if (i != objectiveSegnum && state->isSegmentAccessible[i]) { // Also exclude the source segment, since its distance from itself is zero.
+					compute_segment_center(&start, &Segments[i]);
+					distance = vm_vec_dist(&start, &finish);
+					if (distance < shortestDistance || shortestDistance == -1) {
+						shortestDistance = distance;
+						nearestSegnum = i;
+					}
 				}
-		state->segnum = getObjectiveSegnum(nearestObjective);
+			}
+			vms_vector segmentCenter;
+			compute_segment_center(&segmentCenter, &Segments[state->segnum]);
+			state->lastPosition = segmentCenter;
+			return nearestObjective;
+		}
+		state->segnum = objectiveSegnum;
 		state->lastPosition = getObjectivePosition(nearestObjective);
 		return nearestObjective;
 	}
@@ -2889,8 +2875,7 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 						// There's a minimum time for all matcen robots spawned on this path to be killed.
 						if (matcenTime > 0 && matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime) {
 							matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
-							if (Ranking.parTimeRuns)
-								printf("Total fight time: %.3fs\n", matcenTime);
+							printf("Total fight time: %.3fs\n", matcenTime);
 							state->combatTime += matcenTime;
 							state->matcenTime += matcenTime;
 						}
@@ -3190,11 +3175,19 @@ double findEnergyTime(partime_calc_state* state, partime_objective* objectiveLis
 	return minTime;
 }
 
+int determineSegmentAccessibility(partime_calc_state* state, int segnum)
+{
+	object* objp = ConsoleObject;
+	short player_path_length = 0;
+	create_path_points(objp, objp->segnum, segnum, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, -1, 0);
+	if (Point_segs[player_path_length - 1].segnum != segnum) // The segment is inaccessible if Algo doesn't end up at it when given the rules established by initLockedWalls.
+		return 0;
+	return 1;
+}
+
 double calculateParTime() // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
 { // January 2024 me would crap himself if he saw this actually working lol.
 	partime_calc_state state = { 0 }; // Initialize the algorithm's state. We'll call it Algo for short.
-	Ranking.parTimeRuns = 0;
-	Ranking.numInaccessibleObjectives = 0;
 	for (int i = 0; i <= Highest_segment_index; i++) { // Iterate through every side of every segment, measuring their sizes.
 		for (int s = 0; s < 6; s++) {
 			if (Segments[i].children[s] > -1) { // Don't measure closed sides. We can't go through them anyway.
@@ -3212,7 +3205,6 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		}
 	}
 	fix64 start_timer_value, end_timer_value; // For tracking how long this algorithm takes to run.
-	while (Ranking.parTimeRuns < 2) {
 		state.movementTime = 0; // Variable to track how much distance it's travelled.
 		state.combatTime = 0; // Variable to track how much fighting it's done.
 		// Now clear its checklists.
@@ -3268,7 +3260,12 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 		start_timer_value = timer_query();
 
 		// Populate the locked walls list.
-		initLockedWalls(&state);
+		initLockedWalls(&state, 1);
+
+		for (i = 0; i <= Highest_segment_index; i++) // Lay out the map for where the "inaccessible" territory is so we can mark objectives within it as such.
+			state.isSegmentAccessible[i] = determineSegmentAccessibility(&state, i);
+
+		initLockedWalls(&state, 0);
 
 		// Initialize all matcens to 3 lives and guarantee them to be triggerable, unless it's Insane difficulty, then give them basically unlimited.
 		for (i = 0; i < Num_robot_centers; i++) {
@@ -3448,13 +3445,11 @@ double calculateParTime() // Here is where we have an algorithm run a simulated 
 				}
 			}
 			Ranking.parTimeLoops++;
-		}
 		ConsoleObject->segnum = initialSegnum;
 
 		// Calculate end time.
 		timer_update();
 		end_timer_value = timer_query();
-		Ranking.parTimeRuns++;
 	}
 	state.energyTime = findEnergyTime(&state, &state.toDoList, 0); // Time to calculate the minimum time spent going to fuelcens for the level.
 	if (state.energyTime > state.combatTime)

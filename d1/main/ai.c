@@ -1415,27 +1415,25 @@ void move_towards_segment_center(object *objp)
 //	-----------------------------------------------------------------------------------------------------------
 //	Return true if door can be flown through by a suitable type robot.
 //	Only brains and avoid robots can open doors.
-int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObjectiveType, int currentObjectiveID, int segnum)
+int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObjectiveType, int objectiveInaccessible, int segnum)
 {
 	int	wall_num;
 
 	//	The mighty console object can open all doors (for purposes of determining paths).
 	if (objp == ConsoleObject) {
+
 		int	wall_num = segp->sides[sidenum].wall_num;
 
 		// First off, if this is an inaccessible objective we're pathing to on the second run, always allow Algo straight to it.
-		if (Ranking.parTimeRuns && currentObjectiveType > -1) {
-			for (int i = 0; i < Ranking.numInaccessibleObjectives; i++)
-				if (Ranking.inaccessibleObjectiveTypes[i] == currentObjectiveType && Ranking.inaccessibleObjectiveIDs[i] == currentObjectiveID)
-					return 1;
-		}
+		if (objectiveInaccessible && currentObjectiveType > -1)
+			return 1;
 
 		if (Ranking.parTimeSideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
 			printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
 			return 0;
 		}
 
-		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
+		return thisWallUnlocked(wall_num);
 	}
 
 	if ((objp->id == ROBOT_BRAIN) || (objp->ctype.ai_info.behavior == AIB_RUN_FROM)) {

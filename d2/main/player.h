@@ -185,11 +185,6 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     parTimeNumWeapons;
 	int     parTimeHeldWeapons[9];
 	int     parTimeHasQuads;
-	int		inaccessibleObjectiveTypes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
-	int     inaccessibleObjectiveIDs[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
-	int     inaccessibleObjectiveLastSegnums[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
-	int     numInaccessibleObjectives;
-	int     parTimeRuns;
 	int     parTimeLoops;
 	int     parTimeSideSizes[MAX_SEGMENTS][6]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
 } __pack__ ranking;
