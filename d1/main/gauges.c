@@ -1423,8 +1423,14 @@ void show_time()
 	else
 		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
 	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
-		mins = Ranking.parTime / 60;
-		secs = Ranking.parTime - mins * 60;
+		if (PlayerCfg.WarmStartParTimes) {
+			mins = Ranking.warmStartParTime / 60;
+			secs = Ranking.warmStartParTime - mins * 60;
+		}
+		else {
+			mins = Ranking.parTime / 60;
+			secs = Ranking.parTime - mins * 60;
+		}
 		if (secs < 10 || secs == 60)
 			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
 		else

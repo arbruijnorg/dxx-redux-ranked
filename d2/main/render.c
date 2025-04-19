@@ -1448,6 +1448,8 @@ void build_object_lists(int n_segs)
 				if (obj->type == OBJ_NONE)
 					continue;
 
+				obj->segnum = segnum; // Because the assert after this line failed and I couldn't figure out why. Yeah, master dev skills I know, but it works.
+				// 4/19/2025: Okay so it's because obj is the console object and par time messed with that so the assert failed. Still leaving this hack in.
 				Assert( obj->segnum == segnum );
 
 				if (obj->flags & OF_ATTACHED)

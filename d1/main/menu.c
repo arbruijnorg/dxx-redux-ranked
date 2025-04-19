@@ -2229,7 +2229,7 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[39];
+	newmenu_item m[40];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
@@ -2237,6 +2237,7 @@ void do_misc_menu()
 		ADD_CHECK(36, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
 		ADD_CHECK(37, "Show Speedometer", PlayerCfg.Speedometer);
 		ADD_CHECK(38, "Use PSX world map", PlayerCfg.UsePsxSolarmap);
+		ADD_CHECK(39, "Factor warm start in par time", PlayerCfg.WarmStartParTimes);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Persistent Debris", PlayerCfg.PersistentDebris);
 		ADD_CHECK(2, "Screenshots w/o HUD", PlayerCfg.PRShot);
@@ -2378,6 +2379,7 @@ void do_misc_menu()
 		PlayerCfg.RankShowPlusMinus = m[36].value;
 		PlayerCfg.Speedometer = m[37].value;
 		PlayerCfg.UsePsxSolarmap = m[38].value;
+		PlayerCfg.WarmStartParTimes = m[39].value;
 
 	} while (i > -1);
 
