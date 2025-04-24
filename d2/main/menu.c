@@ -1041,6 +1041,7 @@ void change_res();
 void graphics_config();
 void do_misc_menu();
 void do_obs_menu();
+void do_rso_menu();
 
 int options_menuset(newmenu *menu, d_event *event, void *userdata)
 {
@@ -1060,6 +1061,7 @@ int options_menuset(newmenu *menu, d_event *event, void *userdata)
 				case  8: ReorderSecondary();		break;
 				case  9: do_misc_menu();		break;
 				case 10: do_obs_menu();         break;
+				case 11: do_rso_menu();			break;
 			}
 			return 1;	// stay in menu until escape
 			break;
@@ -2396,6 +2398,32 @@ void do_misc_menu()
 	}
 }
 
+void do_rso_menu()
+{
+	newmenu_item m[3];
+	int i = 0;
+	struct misc_menu_data misc_menu_data;
+
+	ADD_CHECK(0, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
+	ADD_CHECK(1, "Show speedometer", PlayerCfg.Speedometer);
+	ADD_CHECK(2, "Factor warm start in par time", PlayerCfg.WarmStartParTimes);
+
+	m[0].type = NM_TYPE_CHECK;
+	m[0].text = "Show +/- on rank letters";
+
+	m[1].type = NM_TYPE_CHECK;
+	m[1].text = "Show speedometer";
+
+	m[2].type = NM_TYPE_CHECK;
+	m[2].text = "Factor warm start in par time";
+
+	i = newmenu_do1(NULL, "Ranking system mod Options", SDL_arraysize(m), m, NULL, &misc_menu_data, i);
+
+	PlayerCfg.RankShowPlusMinus = m[0].value;
+	PlayerCfg.Speedometer = m[1].value;
+	PlayerCfg.WarmStartParTimes = m[2].value;
+}
+
 int menu_misc_options_handler(newmenu* menu, d_event* event, void* userdata)
 {
 	newmenu_item *menus = newmenu_get_items(menu);
@@ -2712,7 +2740,7 @@ void do_options_menu()
 {
 	newmenu_item *m;
 
-	MALLOC(m, newmenu_item, 11);
+	MALLOC(m, newmenu_item, 12);
 	if (!m)
 		return;
 
@@ -2727,10 +2755,11 @@ void do_options_menu()
 	m[ 8].type = NM_TYPE_MENU;   m[ 8].text="Secondary autoselect ordering...";
 	m[ 9].type = NM_TYPE_MENU;   m[ 9].text="Misc Options...";
 	m[10].type = NM_TYPE_MENU;   m[10].text="Observer Options...";
+	m[11].type = NM_TYPE_MENU;   m[11].text="Ranking system mod Options...";
 
 	// Fall back to main event loop
 	// Allows clean closing and re-opening when resolution changes
-	newmenu_do3( NULL, TXT_OPTIONS, 11, m, options_menuset, NULL, 0, NULL );
+	newmenu_do3( NULL, TXT_OPTIONS, 12, m, options_menuset, NULL, 0, NULL );
 }
 
 #ifndef RELEASE

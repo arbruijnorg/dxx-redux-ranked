@@ -91,7 +91,7 @@ void piggy_load_level_data();
 //moved to sounds.h - extern digi_sound GameSounds[MAX_SOUND_FILES];
 
 extern grs_bitmap GameBitmaps[MAX_BITMAP_FILES];
-extern grs_bitmap* RankBitmaps[14];
+extern grs_bitmap* RankBitmaps[15];
 extern void piggy_bitmap_page_in( bitmap_index bmp );
 extern void piggy_bitmap_page_out_all();
 

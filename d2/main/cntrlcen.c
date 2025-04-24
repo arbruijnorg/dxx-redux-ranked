@@ -230,8 +230,11 @@ void do_countdown_frame()
 			//gauge_message( "Control Center Reset" );
 			if (!Player_is_dead) {
 				Ranking.deathCount++;
-				if (Current_level_num < 0)
+				Ranking.noDamage = 0;
+				if (Current_level_num < 0) {
 					Ranking.secretDeathCount++;
+					Ranking.secretNoDamage = 0;
+				}
 			}
 			Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
 			DoPlayerDead();		//kill_player();

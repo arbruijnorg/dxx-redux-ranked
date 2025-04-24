@@ -371,6 +371,7 @@ void scrape_player_on_wall(object *obj, short hitseg, short hitside, vms_vector 
 			}
 			#endif
 			  	
+			Ranking.noDamage = 0;
 			apply_damage_to_player( obj, obj, damage, 0 );
 		}
 
@@ -1547,6 +1548,8 @@ void collide_player_and_weapon( object * player, object * weapon, vms_vector *co
 				#endif
 			}
 
+			if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE))
+				Ranking.noDamage = 0;
 			apply_damage_to_player( player, killer, damage, 1);
 
 		}
@@ -1581,6 +1584,8 @@ void collide_player_and_nasty_robot( object * player, object * robot, vms_vector
 			multi_send_damage(damage, Players[Player_num].shields, OBJ_ROBOT, 0, DAMAGE_COLLISION, NULL);
 		}
 	#endif
+	if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE))
+		Ranking.noDamage = 0;
 	apply_damage_to_player( player, robot, damage, 0);
 
 	return;
@@ -1619,6 +1624,8 @@ void collide_player_and_materialization_center(object *objp)
 
 	bump_one_object(objp, &exit_dir, 64*F1_0);
 
+	if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE))
+		Ranking.noDamage = 0;
 	apply_damage_to_player( objp, NULL, 4*F1_0, 0);
 
 	return;

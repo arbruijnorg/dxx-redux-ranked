@@ -466,6 +466,12 @@ int check_volatile_wall(object *obj,int segnum,int sidenum,vms_vector *hitpt)
 					}
 					#endif
 					  	
+					if (Walls[Segments[segnum].sides[sidenum].wall_num].type != WALL_ILLUSION) { // Allow players to keep no damage status if they fly through a lavafall, as that's often unavoidable to progress.
+						if (Current_level_num > 0)
+							Ranking.noDamage = 0;
+						else
+							Ranking.secretNoDamage = 0;
+					}
 					apply_damage_to_player( obj, obj, damage, 0 );
 				}
 
@@ -2494,6 +2500,12 @@ void collide_player_and_weapon( object * playerobj, object * weapon, vms_vector 
 				#endif
 			}
 
+			if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE)) {
+				if (Current_level_num > 0)
+					Ranking.noDamage = 0;
+				else
+					Ranking.secretNoDamage = 0;
+			}
 			apply_damage_to_player( playerobj, killer, damage, 1);
 
 		}
@@ -2530,7 +2542,13 @@ void collide_player_and_nasty_robot( object * playerobj, object * robot, vms_vec
 			multi_send_damage(damage, Players[Player_num].shields, OBJ_ROBOT, 0, DAMAGE_COLLISION, NULL);
 		}
 	#endif
-	apply_damage_to_player( playerobj, robot, damage, 0);
+		if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE)) {
+			if (Current_level_num > 0)
+				Ranking.noDamage = 0;
+			else
+				Ranking.secretNoDamage = 0;
+		}
+		apply_damage_to_player( playerobj, robot, damage, 0);
 
 	return;
 }
@@ -2568,6 +2586,12 @@ void collide_player_and_materialization_center(object *objp)
 
 	bump_one_object(objp, &exit_dir, 64*F1_0);
 
+	if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE)) {
+		if (Current_level_num > 0)
+			Ranking.noDamage = 0;
+		else
+			Ranking.secretNoDamage = 0;
+	}
 	apply_damage_to_player( objp, objp, 4*F1_0, 0);	//	Changed, MK, 2/19/96, make killer the player, so if you die in matcen, will say you killed yourself
 
 	return;

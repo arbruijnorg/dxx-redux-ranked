@@ -782,7 +782,7 @@ void hud_show_pointsleftinlevel()
 			if (Ranking.missedRngSpawn < 0)
 				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
 			else
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%i", Ranking.noDamage);
 		}
 		else
 			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");

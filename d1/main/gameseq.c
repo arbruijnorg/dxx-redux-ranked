@@ -796,14 +796,18 @@ int calculateRank(int level_num, int update_warm_start_status)
 	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
 	double score = playerPoints + skillPoints + timePoints + missedRngSpawn + hostagePoints;
 	maxScore += levelHostages * 7500;
-	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount));
+	double deathPoints;
+	if (deathCount == -1)
+		deathPoints = ceil(maxScore / 12);
+	else
+		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
 	deathPoints = (int)deathPoints;
-	score -= deathPoints;
+	score += deathPoints;
 	if (rankPoints2 > -5) {
 		rankPoints2 = (score / maxScore) * 12;
 	}
 	if (rankPoints2 > -5 && maxScore == 0)
-		rankPoints2 = 12;
+		rankPoints2 = 13;
 	Ranking.calculatedScore = score;
 	if (rankPoints2 < -5)
 		Ranking.rank = 0;
@@ -903,7 +907,7 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 			if (!endlevel_current_rank)
 				h *= 1.0806; // Make E-rank bigger to compensate for the tilt.
 			int w = 3 * h;
-			if (!endlevel_current_rank || endlevel_current_rank == 2 || endlevel_current_rank == 5 || endlevel_current_rank == 8 || endlevel_current_rank == 11 || endlevel_current_rank == 13)
+			if (!endlevel_current_rank || endlevel_current_rank == 2 || endlevel_current_rank == 5 || endlevel_current_rank == 8 || endlevel_current_rank == 11 || endlevel_current_rank == 13 || endlevel_current_rank == 14)
 				x += w * 0.138888889; // Push the image right if it doesn't have a plus or minus, otherwise it won't be centered.
 			ogl_ubitmapm_cs(x, y, w, h, bm, -1, F1_0);
 			grs_bitmap oldbackground = nm_background1;
@@ -1002,7 +1006,9 @@ void DoEndLevelScoreGlitz(int network)
 		endgame_points = is_last_level = 0;
 	if (!cheats.enabled)
 		add_bonus_points_to_score(shield_points + energy_points + skill_points + hostage_points + all_hostage_points + endgame_points);
-	death_points = (Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount))) * -1;
+	death_points = -(Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount)));
+	if (Ranking.noDamage)
+		death_points = ceil(Ranking.maxScore / 12);
 	Ranking.missedRngSpawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
 	missed_rng_drops = Ranking.missedRngSpawn;
 	Ranking.rankScore += skill_points2 + time_points + hostage_points2 + death_points + missed_rng_drops;
@@ -1046,7 +1052,10 @@ void DoEndLevelScoreGlitz(int network)
 		sprintf(m_str[c++], "Time: %s/%s\t%i", timeText, parTimeString, time_points);
 		sprintf(m_str[c++], "Hostages: %i/%i\t%.0f", Players[Player_num].hostages_on_board, Players[Player_num].hostages_level, hostage_points2);
 		sprintf(m_str[c++], "Skill: %s\t%.0f", diffname, skill_points2);
-		sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.deathCount, death_points);
+		if (Ranking.noDamage)
+			sprintf(m_str[c++], "No damage\t%i", death_points);
+		else
+			sprintf(m_str[c++], "Deaths: %.0f\t%i", Ranking.deathCount, death_points);
 		if (Ranking.missedRngSpawn < 0)
 			sprintf(m_str[c++], "Missed RNG spawn: \t%.0f\n", Ranking.missedRngSpawn);
 		else
@@ -1058,7 +1067,7 @@ void DoEndLevelScoreGlitz(int network)
 
 		double rankPoints = (Ranking.rankScore / Ranking.maxScore) * 12;
 		if (Ranking.maxScore == 0)
-			rankPoints = 12;
+			rankPoints = 13;
 		int rank = 0;
 		if (rankPoints >= 0)
 			rank = (int)rankPoints + 1;
@@ -1097,7 +1106,10 @@ void DoEndLevelScoreGlitz(int network)
 					PHYSFSX_printf(temp, "%.3f\n", Ranking.level_time);
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_on_board);
 					PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.deathCount);
+					if (Ranking.noDamage)
+						PHYSFSX_printf(temp, "%i\n", -1);
+					else
+						PHYSFSX_printf(temp, "%.0f\n", Ranking.deathCount);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.missedRngSpawn);
 					PHYSFSX_printf(temp, "%s\n", Current_level_name);
 					PHYSFSX_printf(temp, "%s", ctime(&timeOfScore));
@@ -1271,9 +1283,13 @@ void DoBestRanksScoreGlitz(int level_num)
 	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
 	double score = playerPoints + skillPoints + timePoints + missedRngSpawn + hostagePoints;
 	maxScore += levelHostages * 7500;
-	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount));
+	double deathPoints;
+	if (deathCount == -1)
+		deathPoints = ceil(maxScore / 12);
+	else
+		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
 	deathPoints = (int)deathPoints;
-	score -= deathPoints;
+	score += deathPoints;
 
 	int minutes = secondsTaken / 60;
 	double seconds = secondsTaken - minutes * 60;
@@ -1306,10 +1322,10 @@ void DoBestRanksScoreGlitz(int level_num)
 	sprintf(m_str[c++], "Time: %s/%s\t%.0f", timeText, parTimeText, timePoints);
 	sprintf(m_str[c++], "Hostages: %i/%i\t%0.f", playerHostages, levelHostages, hostagePoints);
 	sprintf(m_str[c++], "Skill: %s\t%.0f", diffname, skillPoints);
-	if (deathPoints)
-		sprintf(m_str[c++], "Deaths: %i\t%0.f", deathCount, -deathPoints);
+	if (deathPoints <= 0)
+		sprintf(m_str[c++], "Deaths: %i\t%0.f", deathCount, deathPoints);
 	else
-		sprintf(m_str[c++], "Deaths: %i\t%i", deathCount, 0);
+		sprintf(m_str[c++], "No damage\t%.0f", deathPoints);
 	if (missedRngSpawn < 0)
 		sprintf(m_str[c++], "Missed RNG spawn: \t%.0f\n", missedRngSpawn);
 	else
@@ -1320,7 +1336,7 @@ void DoBestRanksScoreGlitz(int level_num)
 		sprintf(m_str[c++], "Total score\t%0.0f", score);
 		double rankPoints = (score / maxScore) * 12;
 	if (maxScore == 0)
-		rankPoints = 12;
+		rankPoints = 13;
 	int rank = 0;
 	if (rankPoints >= 0)
 		rank = (int)rankPoints + 1;
@@ -2683,14 +2699,13 @@ int create_path_partime(int start_seg, int target_seg, point_seg** path_start, i
 {
 	object* objp = ConsoleObject;
 	short player_path_length = 0;
-	ConsoleObject->segnum = start_seg; // We're gonna teleport the player to every one of the starting segments, then put him back at spawn in time for the level to start.
 
 	// With the previous system of determining whether a path was completable, if a grated off area connected one sectors of a level with an otherwise locked off one, it could be used to bypass a locked door, which could make par times impossible.
 	// I thought this was rather rare, then Algo did it on D2 level 10 with wall 12/13 lol. Now it should actually be rare, and less likely to cause impossibility if it occurs.
 	if (state->isSegmentAccessible[target_seg])
-		create_path_points(objp, objp->segnum, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 0);
+		create_path_points(objp, start_seg, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 0);
 	else
-		create_path_points(objp, objp->segnum, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 1);
+		create_path_points(objp, start_seg, target_seg, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, objective.type, 1);
 
 	*path_start = Point_segs_free_ptr;
 	*path_count = player_path_length;
@@ -3136,7 +3151,7 @@ int getParTimeWeaponID(int index)
 double findEnergyTime(partime_calc_state* state, partime_objective* objectiveList)
 {
 	// This function is in charge of determining the mimimum time a player needs to refill their energy in a given level, then adding that to its par time.
-	// Keep in mind this function isn't perfect lol. It assumes all fuelcens are accessible and unguarded at any time, and that the player follows Algo's exact actions, only refueling from and back to objective nodes.
+	// Keep in mind this function isn't perfect lol. It assumes all fuelcens are unguarded at any time, and that the player follows Algo's exact actions, only refueling from and back to objective nodes.
 	if (!state->numEnergyCenters)
 		return 0; // This level has no fuelcens. Can't spend any time travelling to or refilling in one.
 	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X.
@@ -3207,9 +3222,18 @@ int determineSegmentAccessibility(partime_calc_state* state, int segnum)
 	return 1;
 }
 
-int fuelcenAccessible()
+int fuelcenAccessible(partime_calc_state* state)
 {
-	return 1;
+	return 1; // Will remove when this function is ready.
+	partime_objective objective;
+	point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
+	int path_count; // The number of segments in the path we're looking at.
+	for (int i = 0; i < state->numEnergyCenters; i++) {
+		objective = state->energyCenters[i];
+		if (create_path_partime(state->segnum, getObjectiveSegnum(objective), &path_start, &path_count, &state, objective))
+			return 1;
+	}
+	return 0;
 }
 
 double calculateParTime(int factorWarmStarts) // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
@@ -3239,10 +3263,6 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	state.doneListSize = 0;
 	state.blackListSize = 0;
 	int initialSegnum = ConsoleObject->segnum; // Version of segnum that stays at its initial value, to ensure the player is put in the right spot.
-	if (!factorWarmStarts)
-		Ranking.parTimeInitialSegnum = initialSegnum;
-	else
-		initialSegnum = Ranking.parTimeInitialSegnum;
 	state.segnum = initialSegnum; // Start Algo off where the player spawns.
 	ConsoleObject->segnum = initialSegnum;
 	state.lastPosition = ConsoleObject->pos; // Both in segnum and in coordinates. (Shoutout to Maximum level 17's quads being at spawn for letting me catch this.)
@@ -3435,7 +3455,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				// Now move ourselves to the objective for the next pathfinding iteration, unless the objective wasn't reachable with just flight, in which case move ourselves as far as we COULD fly.
 				state.movementTime += (pathLength - state.shortestPathObstructionTime) / SHIP_MOVE_SPEED;
 				lastSegnum = state.segnum;
-				if (fuelcenAccessible()) {
+				if (fuelcenAccessible(&state)) { // If we can't get to any fuelcens right now, we can't travel to one, so ignore our energy unless we can.
 					state.objectiveSegments[state.objectives] = state.segnum;
 					state.objectiveEnergies[state.objectives] = f2fl(state.simulatedEnergy);
 					state.objectives++;
@@ -3444,7 +3464,6 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		}
 		Ranking.parTimeLoops++;
 	}
-	ConsoleObject->segnum = initialSegnum;
 		
 	// Calculate end time.
 	timer_update();
@@ -3484,6 +3503,7 @@ void StartNewLevel(int level_num)
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
 	Ranking.fromBestRanksButton = 0; // So the result screen knows it's not just viewing record details.
+	Ranking.noDamage = 1;
 	if (RestartLevel.updateRestartStuff) {
 		RestartLevel.primary_weapon = Players[Player_num].primary_weapon;
 		RestartLevel.secondary_weapon = Players[Player_num].secondary_weapon;
@@ -3541,7 +3561,7 @@ void StartNewLevel(int level_num)
 		Ranking.parTime = calculateParTime(0);
 		Ranking.warmStartParTime = calculateParTime(1);
 	}
-	if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an S-rank, so the mission can have an aggregate rank.
+	if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
 		PHYSFS_File* temp;
 		char filename[256];
 		char temp_filename[256];
@@ -3560,7 +3580,7 @@ void StartNewLevel(int level_num)
 		PHYSFSX_printf(temp, "0");
 		PHYSFSX_printf(temp, "0");
 		PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-		PHYSFSX_printf(temp, "0");
+		PHYSFSX_printf(temp, "-1");
 		PHYSFSX_printf(temp, "0");
 		PHYSFSX_printf(temp, "%s\n", Current_level_name);
 		PHYSFSX_printf(temp, "%s", ctime(&timeOfScore));

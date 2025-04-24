@@ -1843,7 +1843,7 @@ void ogl_loadbmtexture_f(grs_bitmap *bm, int texfilt)
 void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int filter_blueship_wing, int rank) // An alternate version of ogl_loadbmtexture_f that loads a rank image instead of a bitmap from the pig.
 {
 	unsigned char* buf;
-	char* rankFilenames[14] = {
+	char* rankFilenames[15] = {
 			"E",
 			"D-",
 			"D",
@@ -1857,7 +1857,8 @@ void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int filter_blueship_wing, 
 			"A-",
 			"A",
 			"A+",
-			"S"
+			"S",
+			"X"
 	};
 	const char* bitmapname = rankFilenames[rank];
 
@@ -2190,7 +2191,7 @@ void ogl_update_window_clip()
 
 void loadRankImages()
 {
-	for (int i = 0; i < 14; i++) {
+	for (int i = 0; i < 15; i++) {
 		RankBitmaps[i] = gr_create_bitmap(144, 48);
 		ogl_loadranktexture(RankBitmaps[i], GameCfg.TexFilt, 0, i);
 	}

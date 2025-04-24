@@ -1753,6 +1753,12 @@ void FireLaser()
 					}
 					#endif
 					
+					if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE)) {
+						if (Current_level_num > 0)
+							Ranking.noDamage = 0;
+						else
+							Ranking.secretNoDamage = 0;
+					}
 					apply_damage_to_player(ConsoleObject, ConsoleObject, damage, 0);
 				} else {
 					create_awareness_event(ConsoleObject, PA_WEAPON_ROBOT_COLLISION);

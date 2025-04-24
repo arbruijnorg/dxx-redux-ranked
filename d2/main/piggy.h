@@ -76,7 +76,7 @@ char* piggy_game_bitmap_name(grs_bitmap *bmp);
 
 extern digi_sound GameSounds[MAX_SOUND_FILES];
 extern grs_bitmap GameBitmaps[MAX_BITMAP_FILES];
-extern grs_bitmap* RankBitmaps[14];
+extern grs_bitmap* RankBitmaps[15];
 
 
 extern void piggy_bitmap_page_in( bitmap_index bmp );

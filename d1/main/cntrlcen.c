@@ -197,8 +197,10 @@ void do_countdown_frame()
 			reset_palette_add();							//restore palette for death message
 			//controlcen->MaxCapacity = Fuelcen_max_amount;
 			//gauge_message( "Control Center Reset" );
-			if (!Player_is_dead)
+			if (!Player_is_dead) {
+				Ranking.noDamage = 0;
 				Ranking.deathCount++;
+			}
 			Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536);
 			DoPlayerDead();		//kill_player();
 		}																				

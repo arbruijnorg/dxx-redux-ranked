@@ -218,6 +218,8 @@ object *object_create_explosion_sub(object *objp, short segnum, vms_vector * pos
 									}
 
 									// Explosions CAN be friendly fire.
+									if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE))
+										Ranking.noDamage = 0;
 									apply_damage_to_player(obj0p, killer, damage, 1);
 								}
 							}

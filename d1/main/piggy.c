@@ -69,7 +69,7 @@ int Num_sound_files = 0;
 digi_sound GameSounds[MAX_SOUND_FILES];
 int SoundOffset[MAX_SOUND_FILES];
 grs_bitmap GameBitmaps[MAX_BITMAP_FILES];
-grs_bitmap* RankBitmaps[14]; // Where the mod's rank image data is stored.
+grs_bitmap* RankBitmaps[15]; // Where the mod's rank image data is stored.
 
 int Num_bitmap_files_new = 0;
 int Num_sound_files_new = 0;
