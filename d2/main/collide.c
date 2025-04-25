@@ -2500,14 +2500,14 @@ void collide_player_and_weapon( object * playerobj, object * weapon, vms_vector 
 				#endif
 			}
 
-			if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE)) {
+			if (!(Players[Player_num].flags & PLAYER_FLAGS_INVULNERABLE || weapon->ctype.laser_info.parent_num == Buddy_objnum)) { // Getting hit by the guidebot's flares won't take away your no damage bonus.
 				if (Current_level_num > 0)
 					Ranking.noDamage = 0;
 				else
 					Ranking.secretNoDamage = 0;
 			}
 			apply_damage_to_player( playerobj, killer, damage, 1);
-
+			
 		}
 
 	}

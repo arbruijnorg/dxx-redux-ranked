@@ -954,7 +954,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 	maxScore += levelHostages * 7500;
 	double deathPoints;
 	if (deathCount == -1)
-		deathPoints = ceil(maxScore / 12);
+		deathPoints = ceil(maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	else
 		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
 	score += deathPoints;
@@ -1176,7 +1176,7 @@ void DoEndLevelScoreGlitz(int network)
 	hostage_points2 = round(hostage_points2); // Round this because I got 24999 hostage bonus once.
 	death_points = -(Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount)));
 	if (Ranking.noDamage)
-		death_points = ceil(Ranking.maxScore / 12);
+		death_points = ceil(Ranking.maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	Ranking.missedRngSpawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
 	missed_rng_drops = Ranking.missedRngSpawn;
 	Ranking.rankScore += skill_points2 + time_points + hostage_points2 + death_points + missed_rng_drops;
@@ -1383,7 +1383,7 @@ void DoEndSecretLevelScoreGlitz()
 	hostage_points = round(hostage_points); // Round this because I got 24999 hostage bonus once.
 	death_points = -(Ranking.secretMaxScore * 0.4 - Ranking.secretMaxScore * (0.4 / pow(2, Ranking.secretDeathCount)));
 	if (Ranking.secretNoDamage)
-		death_points = ceil(Ranking.secretMaxScore / 12);
+		death_points = ceil(Ranking.secretMaxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	Ranking.secretMissedRngSpawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
 	missed_rng_drops = Ranking.secretMissedRngSpawn;
 	Ranking.secretRankScore += skill_points + time_points + hostage_points + death_points + missed_rng_drops;
@@ -1607,7 +1607,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	maxScore += levelHostages * 7500;
 	double deathPoints;
 	if (deathCount == -1)
-		deathPoints = ceil(maxScore / 12);
+		deathPoints = ceil(maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	else
 		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
 	deathPoints = (int)deathPoints;
@@ -2930,7 +2930,7 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 									state->matcenLives[segp->matcen_num]--;
 									state->matcenTriggers[Walls[wall_num].trigger]++; // Increment the number of times this specific trigger was hit, so one time triggers won't work after this, even if its matcen has lives left.
 									state->simulatedEnergy -= (totalEnergyUsage / num_types) * (f1_0 * (Difficulty_level + 3)); // Do the same for energy
-									state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))) * f1_0; // and ammo, as those also change per matcen.
+									state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
 									if (matcenTime > 0)
 										printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), state->matcenLives[segp->matcen_num]);
 									totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
@@ -3068,7 +3068,7 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 				state->combatTime += 6; // The player must wait out potentially all of a six-second death roll. This could be merged into the movement time following the boss' death, but it's not that important.
 				if (Boss_teleports[robInfo->boss_flag]) {
 					int num_teleports = combatTime / 2; // Bosses teleport two seconds after you start damaging them, meaning you can only get two seconds of damage in at a time before they move away.
-					for (int i = 0; i < Num_boss_teleport_segs; i++) { // Now we measure the distance between every possible pair of points the boss can teleport between, then add the furthest one for each teleport.
+					for (int i = 0; i < Num_boss_teleport_segs; i++) { // Now we measure the distance between every possible pair of points the boss can teleport between.
 						for (int n = 0; n < Num_boss_teleport_segs; n++) {
 							create_path_points(obj, Boss_teleport_segs[i], Boss_teleport_segs[n], Point_segs_free_ptr, &Boss_path_length, 100, 0, 0, -1, 0, obj->id);
 							for (int c = 0; c < Boss_path_length - 1; c++)
@@ -3199,7 +3199,7 @@ double findEnergyTime(partime_calc_state* state, partime_objective* objectiveLis
 {
 	// This function is in charge of determining the mimimum time a player needs to refill their energy in a given level, then adding that to its par time.
 	// Keep in mind this function isn't perfect lol. It assumes all fuelcens are unguarded at any time, and that the player follows Algo's exact actions, only refueling from and back to objective nodes.
-	if (!state->numEnergyCenters)
+	//if (!state->numEnergyCenters)
 		return 0; // This level has no fuelcens. Can't spend any time travelling to or refilling in one.
 	double objectiveFuelcenTripTimes[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS]; // This array is in charge of tracking the travel time to and from the nearest fuelcen, starting at the segment of objective X.
 	// With that, we don't have to do thousands of expensive pathfinding operations.
@@ -3309,10 +3309,9 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	state.toDoListSize = 0;
 	state.doneListSize = 0;
 	state.blackListSize = 0;
-	int initialSegnum = ConsoleObject->segnum; // Version of segnum that stays at its initial value, to ensure the player is put in the right spot.
-	state.segnum = initialSegnum; // Start Algo off where the player spawns.
+	state.segnum = ConsoleObject->segnum; // Start Algo off where the player spawns.
 	state.lastPosition = ConsoleObject->pos; // Both in segnum and in coordinates. (Shoutout to Maximum level 17's quads being at spawn for letting me catch this.)
-	int lastSegnum = initialSegnum; // So the printf showing paths to and from segments works.
+	int lastSegnum = ConsoleObject->segnum; // So the printf showing paths to and from segments works.
 	int i;
 	int j;
 	Ranking.parTimeLoops = 0; // How many times the pathmaking process has repeated. This determines what toDoList is populated with, to make sure things are gone to in the right order.
@@ -3538,8 +3537,8 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				// Cap algo's energy and ammo like the player's.
 				if (state.simulatedEnergy > MAX_ENERGY)
 					state.simulatedEnergy = MAX_ENERGY;
-				if (state.vulcanAmmo > STARTING_VULCAN_AMMO * 8)
-					state.vulcanAmmo = STARTING_VULCAN_AMMO * 8;
+				if (state.vulcanAmmo > VULCAN_AMMO_MAX)
+					state.vulcanAmmo = VULCAN_AMMO_MAX;
 				printf("Now at %.3f energy, %.0f vulcan ammo\n", f2fl(state.simulatedEnergy), f2fl(state.vulcanAmmo));
 			
 				int nearestObjectiveSegnum = getObjectiveSegnum(nearestObjective);
@@ -3697,7 +3696,7 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		Ranking.fromBestRanksButton = 0; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
 		Ranking.num_secret_thief_points = 0;
 		Ranking.secretMergeLevels = 0;
-		Ranking.secretNoDamage = 0;
+		Ranking.secretNoDamage = 1;
 
 		int i;
 		int isRankable = 0; // If the level doesn't have a reactor, boss or normal type exit, it can't be beaten and must be given special treatment.

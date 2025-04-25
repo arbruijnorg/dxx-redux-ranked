@@ -782,7 +782,7 @@ void hud_show_pointsleftinlevel()
 			if (Ranking.missedRngSpawn < 0)
 				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
 			else
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%i", Ranking.noDamage);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
 		}
 		else
 			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
@@ -1503,7 +1503,11 @@ void hud_show_shield(void)
 
 	if (PlayerCfg.HudMode<2) {
 		gr_set_curfont( GAME_FONT );
-		gr_set_fontcolor(BM_XRGB(0,31,0),-1 );
+		// The following commented code is for turning the shield text gold when the no damage bonus is active on a previously cleared level. Still waiting on opinions for that.
+		//if ((Ranking.alreadyBeaten && Ranking.noDamage && Current_level_num > 0) || (Ranking.secretAlreadyBeaten && Ranking.secretNoDamage && Current_level_num < 0))
+			//gr_set_fontcolor(BM_XRGB(255,215,0),-1 );
+		//else
+			gr_set_fontcolor(BM_XRGB(0,31,0),-1 );
 
 		if ( Players[pnum].shields >= 0 )	{
 			if (Game_mode & GM_MULTI)
