@@ -1569,7 +1569,7 @@ extern	int	Buddy_objnum;
 //	Return true if door can be flown through by a suitable type robot.
 //	Brains, avoid robots, companions can open doors.
 //	objp == NULL means treat as buddy.
-int ai_door_is_openable(object *objp, segment *segp, int sidenum, int currentObjectiveType, int objectiveInaccessible, int segnum)
+int ai_door_is_openable(object *objp, segment *segp, int sidenum, int currentObjectiveType, int currentObjectiveID, int objectiveInaccessible, int segnum)
 {
 	int	wall_num;
 	wall	*wallp;
@@ -1596,7 +1596,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int currentObj
 			return 0;
 		}
 
-		return thisWallUnlocked(wall_num);
+		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
 	}
 
 	wallp = &Walls[wall_num];

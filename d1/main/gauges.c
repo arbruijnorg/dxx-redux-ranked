@@ -794,12 +794,12 @@ void hud_show_pointsleftinlevel()
 
 	if (pointsleftinlevel - Ranking.missedRngSpawn) {
 		if (Ranking.missedRngSpawn < 0)
-			gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
+			gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
 		else
-			gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+			gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 	}
 	else
-		gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
+		gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
 }
 
 void hud_show_timer_count()
@@ -1304,7 +1304,11 @@ void hud_show_shield(void)
 
 	if (PlayerCfg.HudMode<2) {
 		gr_set_curfont( GAME_FONT );
-		gr_set_fontcolor(BM_XRGB(0,31,0),-1 );
+		// Turn the shield text gold when the no damage bonus is active, as sometimes damage can be <1 unit of shield.
+		if (Ranking.noDamage)
+			gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
+		else
+			gr_set_fontcolor(BM_XRGB(0, 31, 0), -1);
 		if ( Players[pnum].shields >= 0 )	{
 			if (Game_mode & GM_MULTI)
 				gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*6)),"%s: %i", TXT_SHIELD, f2ir(Players[pnum].shields));
@@ -1419,22 +1423,26 @@ void show_time()
 	gr_set_fontcolor(Color_0_31_0, -1 );
 
 	if (secs < 10 || secs == 60)
-		gr_printf(SWIDTH-FSPACX(40),GHEIGHT-(LINE_SPACING*11),"%d:0%.03f", mins, secs);
+		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:0%.03f", mins, secs);
 	else
-		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
+		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:%.03f", mins, secs);
 	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
 		if (PlayerCfg.WarmStartParTimes) {
 			mins = Ranking.warmStartParTime / 60;
 			secs = Ranking.warmStartParTime - mins * 60;
+			if (f2fl(Players[Player_num].time_level) > Ranking.warmStartParTime)
+				gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		}
 		else {
 			mins = Ranking.parTime / 60;
 			secs = Ranking.parTime - mins * 60;
+			if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
+				gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		}
 		if (secs < 10 || secs == 60)
-			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
+			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
 		else
-			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:%.0f", mins, secs);
+			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:%.0f", mins, secs);
 	}
 }
 

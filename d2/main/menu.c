@@ -2230,14 +2230,11 @@ struct misc_menu_data {
 
 void do_misc_menu()
 {
-	newmenu_item m[43];
+	newmenu_item m[40];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	do {
-		ADD_CHECK(40, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
-		ADD_CHECK(41, "Show speedometer", PlayerCfg.Speedometer);
-		ADD_CHECK(42, "Factor warm start in par time", PlayerCfg.WarmStartParTimes);
 		ADD_CHECK(0, "Ship auto-leveling", PlayerCfg.AutoLeveling);
 		ADD_CHECK(1, "Missile view", PlayerCfg.MissileViewEnabled);
 		ADD_CHECK(2, "Headlight on when picked up", PlayerCfg.HeadlightActiveDefault );
@@ -2384,9 +2381,6 @@ void do_misc_menu()
 		PlayerCfg.NoChatSound = m[29].value;
 		PlayerCfg.ShowCustomColors = m[34].value;
 		PlayerCfg.PreferMyTeamColors = (PlayerCfg.MyTeamColor == 8 && PlayerCfg.OtherTeamColor == 8) ? 0 : m[39].value;
-		PlayerCfg.RankShowPlusMinus = m[40].value;
-		PlayerCfg.Speedometer = m[41].value;
-		PlayerCfg.WarmStartParTimes = m[42].value;
 
 	} while( i>-1 );
 

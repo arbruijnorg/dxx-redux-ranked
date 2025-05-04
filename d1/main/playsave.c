@@ -937,7 +937,7 @@ int write_player_d1x(char *filename)
 		PHYSFSX_printf(fout, "rankshowplusminus=%i\n", PlayerCfg.RankShowPlusMinus);
 		PHYSFSX_printf(fout, "speedometer=%i\n", PlayerCfg.Speedometer);
 		PHYSFSX_printf(fout, "usepsxsolarmap=%i\n", PlayerCfg.UsePsxSolarmap);
-		PHYSFSX_printf(fout, "warmstartpartimes%i\n", PlayerCfg.WarmStartParTimes);
+		PHYSFSX_printf(fout, "warmstartpartimes=%i\n", PlayerCfg.WarmStartParTimes);
 		//PHYSFSX_printf(fout,"quietplasma=%i\n",PlayerCfg.QuietPlasma);	
 		PHYSFSX_printf(fout,"maxfps=%i\n",PlayerCfg.maxFps);	
 		PHYSFSX_printf(fout,"nochatsound=%i\n",PlayerCfg.NoChatSound);

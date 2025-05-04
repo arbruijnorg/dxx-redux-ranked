@@ -780,9 +780,9 @@ void hud_show_pointsleftinlevel()
 	if (Current_level_num > 0) {
 		if (pointsleftinlevel - Ranking.missedRngSpawn) {
 			if (Ranking.missedRngSpawn < 0)
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
 			else
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 		}
 		else
 			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
@@ -790,12 +790,12 @@ void hud_show_pointsleftinlevel()
 	else {
 		if ((pointsleftinlevel - Ranking.secretMissedRngSpawn && Ranking.secretMissedRngSpawn <= 0) || (pointsleftinlevel && (Ranking.secretMissedRngSpawn > 0))) { // Gotta do a gross if jungle here because of the secretMissedRngSpawn bug caused by thieves.
 			if (Ranking.secretMissedRngSpawn < 0)
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel - Ranking.secretMissedRngSpawn);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel - Ranking.secretMissedRngSpawn);
 			else
-				gr_printf(SWIDTH - FSPACX(65), FSPACY(20), "%.0f remains", pointsleftinlevel);
+				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 		}
 		else
-			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
+			gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
 	}
 }
 
@@ -1503,10 +1503,10 @@ void hud_show_shield(void)
 
 	if (PlayerCfg.HudMode<2) {
 		gr_set_curfont( GAME_FONT );
-		// The following commented code is for turning the shield text gold when the no damage bonus is active on a previously cleared level. Still waiting on opinions for that.
-		//if ((Ranking.alreadyBeaten && Ranking.noDamage && Current_level_num > 0) || (Ranking.secretAlreadyBeaten && Ranking.secretNoDamage && Current_level_num < 0))
-			//gr_set_fontcolor(BM_XRGB(255,215,0),-1 );
-		//else
+		// Turn the shield text gold when the no damage bonus is active, as sometimes damage can be <1 unit of shield.
+		if ((Ranking.noDamage && Current_level_num > 0) || (Ranking.secretNoDamage && Current_level_num < 0))
+			gr_set_fontcolor(BM_XRGB(255,215,0),-1 );
+		else
 			gr_set_fontcolor(BM_XRGB(0,31,0),-1 );
 
 		if ( Players[pnum].shields >= 0 )	{
@@ -1627,34 +1627,42 @@ void show_time()
 	gr_set_fontcolor(Color_0_31_0, -1);
 
 	if (secs < 10 || secs == 60)
-		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:0%.03f", mins, secs);
+		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:0%.03f", mins, secs);
 	else
-		gr_printf(SWIDTH - FSPACX(40), GHEIGHT - (LINE_SPACING * 11), "%d:%.03f", mins, secs);
+		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:%.03f", mins, secs);
 	if ((Current_level_num > 0 && Ranking.alreadyBeaten) || (Current_level_num < 0 && Ranking.secretAlreadyBeaten)) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
 		if (Current_level_num > 0) {
 			if (PlayerCfg.WarmStartParTimes) {
 				mins = Ranking.warmStartParTime / 60;
 				secs = Ranking.warmStartParTime - mins * 60;
+				if (f2fl(Players[Player_num].time_level) > Ranking.warmStartParTime)
+					gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 			}
 			else {
 				mins = Ranking.parTime / 60;
 				secs = Ranking.parTime - mins * 60;
+				if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
+					gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 			}
 		}
 		if (Current_level_num < 0) {
 			if (PlayerCfg.WarmStartParTimes) {
 				mins = Ranking.secretWarmStartParTime / 60;
 				secs = Ranking.secretWarmStartParTime - mins * 60;
+				if (f2fl(Ranking.secretlevel_time) > Ranking.secretWarmStartParTime)
+					gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 			}
 			else {
 				mins = Ranking.secretParTime / 60;
 				secs = Ranking.secretParTime - mins * 60;
+				if (f2fl(Ranking.secretlevel_time) > Ranking.secretParTime)
+					gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 			}
 		}
 		if (secs < 10 || secs == 60)
-			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
+			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
 		else
-			gr_printf(SWIDTH - FSPACX(45), GHEIGHT - (LINE_SPACING * 10), "Par: %d:%.0f", mins, secs);
+			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:%.0f", mins, secs);
 	}
 }
 
