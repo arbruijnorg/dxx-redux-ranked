@@ -153,6 +153,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int        parTimeUnlockTypes[MAX_WALLS];
 	int        parTimeLoops;
 	int   	   parTimeSideSizes[MAX_SEGMENTS][6]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
+	int        parTimeStateSegnum;
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.

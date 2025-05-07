@@ -157,7 +157,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     cheated;                    // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
 	double  freezeTimer;                // Tells normal levels' in-game timer whether it should be frozen or not.
 	int     num_thief_points;           // How many thieves are in the level so we can subtract them from maxScore specifically when the level ends, that way "remains" counter won't break.
-	int     mergeLevels;                // Tells the par time algorithm whether to combine par times in main/secret levels that depend on each other so the one with the finish isn't incomplete.
+	ubyte   mergeLevels;                // Tells the par time algorithm whether to combine par times in main/secret levels that depend on each other so the one with the finish isn't incomplete.
 	int     noDamage;                   // A new bonus I had to add. Thanks Marvin... 4/22/2025
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
@@ -176,7 +176,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  secretMissedRngSpawn;
 	int     secretAlreadyBeaten;
 	int     num_secret_thief_points;
-	int     secretMergeLevels;
+	ubyte   secretMergeLevels;
 	int     secretNoDamage;
 
 	// Below are the variables from the par time algorithm that are better off globally stored for the sake of convenience or ease of access by code.
@@ -191,6 +191,7 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     parTimeHasQuads;
 	int     parTimeLoops;
 	int     parTimeSideSizes[MAX_SEGMENTS][6]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
+	int     parTimeStateSegnum;
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.

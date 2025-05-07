@@ -4358,8 +4358,6 @@ void draw_hud()
 			hud_show_pointsleftinlevel();
 		show_time();
 	}
-	if (PlayerCfg.Speedometer)
-		hud_show_speedometer();
 
 	if ( !Rear_view && PlayerCfg.CurrentCockpitMode!=CM_REAR_VIEW)
 		hud_show_timer_count();
@@ -4376,6 +4374,8 @@ void draw_hud()
 			hud_show_energy();
 			hud_show_shield();
 			hud_show_weapons();
+			if (PlayerCfg.Speedometer) // Okay so maybe the mod isn't COMPLETELY disabled during demos...
+				hud_show_speedometer();
 			if (!PCSharePig)
 				hud_show_keys();
 			hud_show_cloak_invuln();

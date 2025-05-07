@@ -2431,9 +2431,9 @@ int getObjectiveSegnum(partime_objective objective)
 {
 	if (objective.type == OBJECTIVE_TYPE_OBJECT)
 		return Objects[objective.ID].segnum;
-	if (objective.type == OBJECTIVE_TYPE_TRIGGER || objective.type == OBJECTIVE_TYPE_ENERGY)
-		return objective.ID;
-	if (objective.type == OBJECTIVE_TYPE_WALL)
+	if (objective.type == OBJECTIVE_TYPE_ENERGY)
+		return Triggers[objective.ID].seg;
+	if (objective.type == OBJECTIVE_TYPE_TRIGGER || objective.type == OBJECTIVE_TYPE_WALL)
 		return Walls[objective.ID].segnum;
 	//printf("Warning: Par time is going to an undefined segment!\n");
 	return -1;
@@ -2448,7 +2448,7 @@ vms_vector getObjectivePosition(partime_objective objective)
 	return segmentCenter;
 }
 
-int findKeyObjectID(int keyType)
+int findKeyObjectID(partime_calc_state* state, int keyType, int dontCheckAccessibility)
 {
 	int powerupID;
 	switch (keyType)
@@ -2471,7 +2471,8 @@ int findKeyObjectID(int keyType)
 	for (int i = 0; i <= Highest_object_index; i++) {
 		if ((Objects[i].type == OBJ_POWERUP && Objects[i].id == powerupID) ||
 			(Objects[i].type == OBJ_ROBOT && Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == powerupID) || (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].contains_type == OBJ_POWERUP && Robot_info[Objects[i].id].contains_id == powerupID))
-			return i;
+			//if (dontCheckAccessibility || state->isSegmentAccessible[Objects[i].segnum]) // Make sure the key or the robot that contains it can be physically flown to by the player.
+				return i;
 	}
 
 	return -1; // Not found
@@ -2582,7 +2583,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 			// Is it opened by a key?
 			if (Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) {
 				wallInfo->unlockedBy.type = OBJECTIVE_TYPE_OBJECT;
-				wallInfo->unlockedBy.ID = findKeyObjectID(Walls[i].keys);
+				wallInfo->unlockedBy.ID = findKeyObjectID(&state, Walls[i].keys, removeUnlockableWalls);
 				continue;
 			}
 
@@ -2591,7 +2592,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 				int unlockWall = findTriggerWallForWall(i);
 				if (unlockWall != -1) {
 					wallInfo->unlockedBy.type = OBJECTIVE_TYPE_TRIGGER;
-					wallInfo->unlockedBy.ID = Walls[unlockWall].segnum;
+					wallInfo->unlockedBy.ID = unlockWall;
 					continue;
 				}
 
@@ -2765,8 +2766,8 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
 {
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
-		if (Ranking.currentlyLockedWalls[i] == wall_num) // Let Algo through anyway if the wall is unlocked by the current objective. This is to prevent softlocks.
-			return (Ranking.parTimeUnlockTypes[i] == currentObjectiveType && Ranking.parTimeUnlockIDs[i] == currentObjectiveID);
+		if (Ranking.currentlyLockedWalls[i] == wall_num) // Let Algo through anyway if the wall is transparent and we're headed toward an unlock we don't have to go directly to (EG shooting through grate at unlocked side of door like S2).
+			return (currentObjectiveType > 1 && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	return 1;
 }
 
@@ -2806,9 +2807,10 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 
 	// Did we find a legal objective? Return that.
 	if (shortestPathLength >= 0) {
+		Ranking.parTimeStateSegnum = -1;
 		objectiveSegnum = getObjectiveSegnum(nearestObjective);
 		// Regenerate the path since we may have checked something else in the meantime.
-		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
+		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, nearestObjective);
 		*path_length = shortestPathLength;
 		if (!state->isSegmentAccessible[objectiveSegnum]) { // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
 			shortestDistance = -1;
@@ -2816,7 +2818,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			vms_vector finish;
 			compute_segment_center(&finish, &Segments[objectiveSegnum]);
 			for (i = 0; i < player_path_length; i++) { // Put Algo at the closest accessible segment to the source segment.
-				if (Point_segs[i].segnum != objectiveSegnum && state->isSegmentAccessible[Point_segs[i].segnum]) { // Also exclude the source segment, since its distance from itself is zero.
+				if (state->isSegmentAccessible[Point_segs[i].segnum]) {
 					compute_segment_center(&start, &Segments[Point_segs[i].segnum]);
 					distance = vm_vec_dist(&start, &finish);
 					if (distance < shortestDistance || shortestDistance == -1) {
@@ -2831,9 +2833,31 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			state->lastPosition = segmentCenter;
 			return nearestObjective;
 		}
-		state->segnum = objectiveSegnum;
-		state->lastPosition = getObjectivePosition(nearestObjective);
-		return nearestObjective;
+		// Now we need to find out where to place Algo for accessible objectives. In the case of phasing through locked walls to get certain objectives, set it before the first transparent one.
+		int wall_num;
+		for (i = 0; i < player_path_length - 1; i++) {
+			wall_num = Segments[Point_segs[i].segnum].sides[find_connecting_side(Point_segs[i].segnum, Point_segs[i + 1].segnum)].wall_num;
+			for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++) {
+				if (Ranking.currentlyLockedWalls[w] == wall_num)
+					if (nearestObjective.type > 1 && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
+						if (Ranking.parTimeStateSegnum == -1)
+							Ranking.parTimeStateSegnum = Walls[wall_num].segnum;
+			}
+			if (Ranking.parTimeStateSegnum > -1)
+				break; // We found where to put Algo. No need to go further.
+		}
+		if (Ranking.parTimeStateSegnum == -1) {
+			state->segnum = objectiveSegnum;
+			state->lastPosition = getObjectivePosition(nearestObjective);
+			return nearestObjective;
+		}
+		else {
+			state->segnum = Ranking.parTimeStateSegnum;
+			vms_vector segmentCenter;
+			compute_segment_center(&segmentCenter, &Segments[state->segnum]);
+			state->lastPosition = segmentCenter;
+			return nearestObjective;
+		}
 	}
 	else {
 		// No reachable objectives in list.
@@ -3376,19 +3400,15 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 			}
 		}
-		if (Ranking.parTimeLoops == 3) { // Put the exit on the list.
-			for (i = 0; i <= Num_triggers; i++) {
-				if (Triggers[i].flags == TRIGGER_EXIT || Triggers[i].flags == TRIGGER_SECRET_EXIT) {
-					for (j = 0; j <= Num_walls; j++) {
+		if (Ranking.parTimeLoops == 3) // Put the exit on the list.
+			for (i = 0; i <= Num_triggers; i++)
+				if (Triggers[i].type == TRIGGER_EXIT || Triggers[i].type == TRIGGER_SECRET_EXIT)
+					for (j = 0; j <= Num_walls; j++)
 						if (Walls[j].trigger == i) {
-							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, Walls[j].segnum };
+							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
 							addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 							i = Num_triggers + 1; // Only add one exit.
 						}
-					}
-				}
-			}
-		}
 			
 		while (state.toDoListSize > 0) {
 			// Find which object on the to-do list is the closest, ignoring the reactor/boss if it's not the only thing left.
@@ -3417,19 +3437,21 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 			// If there's no path and we're doing straight line distance, we have no idea what we'd
 			// be crossing through, so tracking resources for the path would be meaningless.
 			// We can still check the objective itself, though.
-			int hasThisWeapon = 0; // If the next object is a weapon/laser level/quads, and algo already has it/is maxed out, skip it. We don't wanna waste time getting redundant powerups.
+			int hasThisObjective = 0; // If the next object is a weapon/laser level/quads, and algo already has it/is maxed out, skip it. We don't wanna waste time getting redundant powerups.
 			if (nearestObjective.type == OBJECTIVE_TYPE_OBJECT && Objects[nearestObjective.ID].type == OBJ_POWERUP) { // I'm splitting up the if conditions this time.
+				if (!state.isSegmentAccessible[Objects[nearestObjective.ID].segnum]) // Don't go to a powerup that's inaccessible. We have to touch powerups directly to collect them.
+					hasThisObjective = 1;
 				for (int n = 1; n < 5; n++) {
 					int weaponIDs[5] = { 0, VULCAN_ID, SPREADFIRE_ID, PLASMA_ID, FUSION_ID };
 					if (Objects[nearestObjective.ID].id == n + 12 && do_we_have_this_weapon(&state, weaponIDs[n]))
-						hasThisWeapon = 1;
+						hasThisObjective = 1;
 				}
 				if (Objects[nearestObjective.ID].id == POW_LASER && state.heldWeapons[0] > LASER_ID_L3)
-					hasThisWeapon = 1;
+					hasThisObjective = 1;
 				if (Objects[nearestObjective.ID].id == POW_QUAD_FIRE && state.hasQuads)
-					hasThisWeapon = 1;
+					hasThisObjective = 1;
 			}
-			if (!hasThisWeapon) {
+			if (!hasThisObjective) {
 				update_energy_for_objective_partime(&state, nearestObjective);
 				if (path_start != NULL) {
 					check_for_walls_and_matcens_partime(&state, path_start, path_count);

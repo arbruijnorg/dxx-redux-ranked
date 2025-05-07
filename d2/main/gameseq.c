@@ -1834,7 +1834,6 @@ typedef struct
 	int numReactorWalls;
 	vms_vector lastPosition; // Tracks the last place algo went to within the same segment.
 	int matcenLives[MAX_ROBOT_CENTERS]; // We need to track how many times we trip matcens, since each one can only be tripped three times.
-	int matcenTriggers[MAX_TRIGGERS]; // We need to track how many times we trip triggers, since they can be set to only trip once.
 	// Time spent clearing matcens.
 	double matcenTime;
 	// Track the locations of energy centers for when we need to make a pit stop...
@@ -2395,9 +2394,9 @@ int getObjectiveSegnum(partime_objective objective)
 {
 	if (objective.type == OBJECTIVE_TYPE_OBJECT)
 		return Objects[objective.ID].segnum;
-	if (objective.type == OBJECTIVE_TYPE_TRIGGER || objective.type == OBJECTIVE_TYPE_ENERGY)
+	if (objective.type == OBJECTIVE_TYPE_ENERGY)
 		return objective.ID;
-	if (objective.type == OBJECTIVE_TYPE_WALL)
+	if (objective.type == OBJECTIVE_TYPE_TRIGGER || objective.type == OBJECTIVE_TYPE_WALL)
 		return Walls[objective.ID].segnum;
 
 	return -1;
@@ -2412,7 +2411,7 @@ vms_vector getObjectivePosition(partime_objective objective)
 	return segmentCenter;
 }
 
-int findKeyObjectID(int keyType)
+int findKeyObjectID(partime_calc_state* state, int keyType, int dontCheckAccessibility)
 {
 	int powerupID;
 	switch (keyType)
@@ -2435,7 +2434,8 @@ int findKeyObjectID(int keyType)
 	for (int i = 0; i <= Highest_object_index; i++) {
 		if ((Objects[i].type == OBJ_POWERUP && Objects[i].id == powerupID) ||
 			(Objects[i].type == OBJ_ROBOT && Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == powerupID) || (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].contains_type == OBJ_POWERUP && Robot_info[Objects[i].id].contains_id == powerupID))
-			return i;
+			//if (dontCheckAccessibility || state->isSegmentAccessible[Objects[i].segnum]) // Make sure the key or the robot that contains it can be physically flown to by the player.
+				return i;
 	}
 
 	return -1; // Not found
@@ -2468,7 +2468,7 @@ int findTriggerWallForWall(int wallID)
 		if (otherWallID == wallID || Walls[otherWallID].trigger == -1)
 			continue;
 		// Since these are *unlock* IDs, we only search for triggers that actually open or unlock something. Having Algo get something that does the opposite makes no sense.
-		if (Triggers[Walls[otherWallID].trigger].type == TT_OPEN_DOOR || Triggers[Walls[otherWallID].trigger].type == TT_OPEN_WALL || Triggers[Walls[otherWallID].trigger].type == TT_UNLOCK_DOOR) {
+		if (Triggers[Walls[otherWallID].trigger].type == TT_OPEN_DOOR || Triggers[Walls[otherWallID].trigger].type == TT_OPEN_WALL || Triggers[Walls[otherWallID].trigger].type == TT_UNLOCK_DOOR || Triggers[Walls[otherWallID].trigger].type == TT_ILLUSORY_WALL) {
 			trigger* t = &Triggers[Walls[otherWallID].trigger];
 			for (short link_num = 0; link_num < t->num_links; link_num++) {
 				// Does the trigger target point at this wall's segment/side?
@@ -2544,7 +2544,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 	state->numLockedWalls = 0;
 	for (i = 0; i < Num_walls; i++) {
 		// In D2, closed walls can't be "locked" as in being unlockable, but we still need to consider them locked so the other stuff we copied from D2 works. That being said, you won't see closed walls be considered on line 2283 like they are in D2.
-		if ((Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) || Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED) {
+		if ((Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) || Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED || Walls[i].type == WALL_CLOAKED) {
 			partime_locked_wall_info* wallInfo = &state->lockedWalls[state->numLockedWalls];
 			partime_locked_wall_info* reactorInfo = &state->reactorWalls[state->numReactorWalls];
 			state->numLockedWalls++;
@@ -2553,7 +2553,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 			// Is it opened by a key?
 			if (Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) {
 				wallInfo->unlockedBy.type = OBJECTIVE_TYPE_OBJECT;
-				wallInfo->unlockedBy.ID = findKeyObjectID(Walls[i].keys);
+				wallInfo->unlockedBy.ID = findKeyObjectID(&state, Walls[i].keys, removeUnlockableWalls);
 				if (Walls[i].keys == KEY_BLUE)
 					blueDoorPending = 1;
 				if (Walls[i].keys == KEY_GOLD)
@@ -2563,12 +2563,12 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 				continue;
 			}
 
-			if (Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED) {
+			if (Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED || Walls[i].type == WALL_CLOAKED) {
 				// ...or is it opened by a trigger?
 				int unlockWall = findTriggerWallForWall(i);
 				if (unlockWall != -1) {
 					wallInfo->unlockedBy.type = OBJECTIVE_TYPE_TRIGGER;
-					wallInfo->unlockedBy.ID = Walls[unlockWall].segnum;
+					wallInfo->unlockedBy.ID = unlockWall;
 					continue;
 				}
 
@@ -2658,12 +2658,22 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 			if ((Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_KEY_RED) || (Objects[i].type == OBJ_ROBOT && (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_KEY_RED)))
 				redDoorPending = 0;
 	}
-	if (blueDoorPending || yellowDoorPending || redDoorPending) {
+	// If we still haven't found every colored door's key, mark the colors we haven't so Algo knows it's allowed to ignore them as part of the merged level process.
+	if (blueDoorPending)
 		if (Current_level_num > 0)
-			Ranking.mergeLevels = 1;
+			Ranking.mergeLevels |= KEY_BLUE;
 		else
-			Ranking.secretMergeLevels = 1;
-	}
+			Ranking.secretMergeLevels |= KEY_BLUE;
+	if (yellowDoorPending)
+		if (Current_level_num > 0)
+			Ranking.mergeLevels |= KEY_GOLD;
+		else
+			Ranking.secretMergeLevels |= KEY_GOLD;
+	if (redDoorPending)
+		if (Current_level_num > 0)
+			Ranking.mergeLevels |= KEY_RED;
+		else
+			Ranking.secretMergeLevels |= KEY_RED;
 }
 
 void removeObjectiveFromList(partime_objective* list, int* listSize, partime_objective objective)
@@ -2759,8 +2769,13 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
 {
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
-		if (Ranking.currentlyLockedWalls[i] == wall_num) // Let Algo through anyway if the wall is unlocked by the current objective. This is to prevent softlocks.
-			return (Ranking.parTimeUnlockTypes[i] == currentObjectiveType && Ranking.parTimeUnlockIDs[i] == currentObjectiveID);
+		// Let Algo through anyway if the wall is transparent and we're headed toward an unlock we don't have to go directly to (EG shooting through grate at switch).
+		// Also let Algo through anyway if it's a colored door whose key wasn't found in the level.
+		if (Ranking.currentlyLockedWalls[i] == wall_num)
+			if ((Current_level_num > 0 && Ranking.mergeLevels & Walls[wall_num].keys) || (Current_level_num < 0 && Ranking.secretMergeLevels & Walls[wall_num].keys))
+				return 1;
+			else // Big return coming up. Basically it's checking if we're either going to a trigger that isn't flythrough, or the unlocked side of a door.
+				return (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type != WALL_OPEN) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	return 1;
 }
 
@@ -2800,9 +2815,10 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 
 	// Did we find a legal objective? Return that.
 	if (shortestPathLength >= 0) {
+		Ranking.parTimeStateSegnum = -1;
 		objectiveSegnum = getObjectiveSegnum(nearestObjective);
 		// Regenerate the path since we may have checked something else in the meantime.
-		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
+		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, nearestObjective);
 		*path_length = shortestPathLength;
 		if (!state->isSegmentAccessible[objectiveSegnum]) { // DON'T update segnum or lastPosition if we just pathed to an inaccessible objective. That would lock Algo in a cage!
 			shortestDistance = -1;
@@ -2810,7 +2826,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			vms_vector finish;
 			compute_segment_center(&finish, &Segments[objectiveSegnum]);
 			for (i = 0; i < player_path_length; i++) { // Put Algo at the closest accessible segment to the source segment.
-				if (Point_segs[i].segnum != objectiveSegnum && state->isSegmentAccessible[Point_segs[i].segnum]) { // Also exclude the source segment, since its distance from itself is zero.
+				if (state->isSegmentAccessible[Point_segs[i].segnum]) {
 					compute_segment_center(&start, &Segments[Point_segs[i].segnum]);
 					distance = vm_vec_dist(&start, &finish);
 					if (distance < shortestDistance || shortestDistance == -1) {
@@ -2825,9 +2841,31 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			state->lastPosition = segmentCenter;
 			return nearestObjective;
 		}
-		state->segnum = objectiveSegnum;
-		state->lastPosition = getObjectivePosition(nearestObjective);
-		return nearestObjective;
+		// Now we need to find out where to place Algo for accessible objectives. In the case of phasing through locked walls to get certain objectives, set it before the first transparent one.
+		int wall_num;
+		for (i = 0; i < player_path_length - 1; i++) {
+			wall_num = Segments[Point_segs[i].segnum].sides[find_connecting_side(Point_segs[i].segnum, Point_segs[i + 1].segnum)].wall_num;
+			for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++) {
+				if (Ranking.currentlyLockedWalls[w] == wall_num)
+					if (((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type != WALL_OPEN) || nearestObjective.type == OBJECTIVE_TYPE_WALL) && Walls && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
+						if (Ranking.parTimeStateSegnum == -1)
+							Ranking.parTimeStateSegnum = Walls[wall_num].segnum;
+				}
+			if (Ranking.parTimeStateSegnum > -1)
+				break; // We found where to put Algo. No need to go further.
+		}
+		if (Ranking.parTimeStateSegnum == -1) {
+			state->segnum = objectiveSegnum;
+			state->lastPosition = getObjectivePosition(nearestObjective);
+			return nearestObjective;
+		}
+		else {
+			state->segnum = Ranking.parTimeStateSegnum;
+			vms_vector segmentCenter;
+			compute_segment_center(&segmentCenter, &Segments[state->segnum]);
+			state->lastPosition = segmentCenter;
+			return nearestObjective;
+		}
 	}
 	else {
 		// No reachable objectives in list.
@@ -2888,7 +2926,7 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 			wall_num = Segments[path[i].segnum].sides[side_num].wall_num; // Get its wall number.
 			if (wall_num > -1) { // If that wall number is valid...
 				if (Walls[wall_num].trigger > -1) { // If this wall has a trigger...
-					if (Triggers[Walls[wall_num].trigger].type & TT_MATCEN && !(state->matcenTriggers[Walls[wall_num].trigger] && Triggers[Walls[wall_num].trigger].type & TF_ONE_SHOT)) { // If this trigger is a matcen type... (and isn't a one time trigger that's been hit already)
+					if (Triggers[Walls[wall_num].trigger].type & TT_MATCEN) { // If this trigger is a matcen type...
 						double matcenTime = 0;
 						double totalMatcenTime = 0;
 						for (int c = 0; c < Triggers[Walls[wall_num].trigger].num_links; c++) { // Repeat this loop for every segment linked to this trigger.
@@ -2925,8 +2963,10 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 									}
 									averageRobotTime = totalRobotTime / num_types;
 									matcenTime += averageRobotTime * (Difficulty_level + 3);
-									state->matcenLives[segp->matcen_num]--;
-									state->matcenTriggers[Walls[wall_num].trigger]++; // Increment the number of times this specific trigger was hit, so one time triggers won't work after this, even if its matcen has lives left.
+									if (Difficulty_level < 4) // Matcens in D2 have infinite lives on Insane.
+										state->matcenLives[segp->matcen_num]--;
+									if (Triggers[Walls[wall_num].trigger].type & TF_ONE_SHOT) // So one shot triggers only work the first time.
+										state->matcenLives[segp->matcen_num] = 0;
 									state->simulatedEnergy -= (totalEnergyUsage / num_types) * (f1_0 * (Difficulty_level + 3)); // Do the same for energy
 									state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
 									if (matcenTime > 0)
@@ -3375,20 +3415,14 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	
 	// Initialize all matcens to 3 lives, unless it's Insane difficulty, then give them basically unlimited.
 	for (i = 0; i < Num_robot_centers; i++)
-		if (Difficulty_level == 4)
-			state.matcenLives[i] = 999;
-		else
-			state.matcenLives[i] = 3;
-		
-	for (i = 0; i < Num_triggers; i++)
-		state.matcenTriggers[i] = 0;
+		state.matcenLives[i] = 3;
 	
 	// And energy stuff.
 	for (i = 0; i < Highest_segment_index; i++)
 		if (Segments[i].special == SEGMENT_IS_FUELCEN) {
 			state.energyCenters[state.numEnergyCenters].type = OBJECTIVE_TYPE_ENERGY;
 			state.energyCenters[state.numEnergyCenters].ID = i;
-			state.numEnergyCenters++;
+			state.numEnergyCenters++;		
 		}
 		
 	while (Ranking.parTimeLoops < 4) {
@@ -3451,19 +3485,15 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 			}
 		}
-		if (Ranking.parTimeLoops == 3) { // Put the exit on the list.
-			for (i = 0; i <= Num_triggers; i++) {
-				if (Triggers[i].type == TT_EXIT || Triggers[i].type == TT_SECRET_EXIT) {
-					for (j = 0; j <= Num_walls; j++) {
+		if (Ranking.parTimeLoops == 3) // Put the exit on the list.
+			for (i = 0; i <= Num_triggers; i++)
+				if (Triggers[i].type == TT_EXIT || Triggers[i].type == TT_SECRET_EXIT)
+					for (j = 0; j <= Num_walls; j++)
 						if (Walls[j].trigger == i) {
-							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, Walls[j].segnum };
+							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
 							addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 							i = Num_triggers + 1; // Only add one exit.
 						}
-					}
-				}
-			}
-		}
 			
 		while (state.toDoListSize > 0) {
 			// Find which object on the to-do list is the closest, ignoring the reactor/boss if it's not the only thing left.
@@ -3494,6 +3524,8 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 			// We can still check the objective itself, though.
 			int hasThisObjective = 0; // If the next object is a weapon/laser level/quads, and algo already has it/is maxed out, skip it. We don't wanna waste time getting redundant powerups.
 			if (nearestObjective.type == OBJECTIVE_TYPE_OBJECT && Objects[nearestObjective.ID].type == OBJ_POWERUP) { // I'm splitting up the if conditions this time.
+				if (!state.isSegmentAccessible[Objects[nearestObjective.ID].segnum]) // Don't go to a powerup that's inaccessible. We have to touch powerups directly to collect them.
+					hasThisObjective = 1;
 				int weaponIDs[9] = { 0, VULCAN_ID, SPREADFIRE_ID, PLASMA_ID, FUSION_ID, GAUSS_ID, HELIX_ID, PHOENIX_ID, OMEGA_ID };
 				int objectIDs[9] = { 0, POW_VULCAN_WEAPON, POW_SPREADFIRE_WEAPON, POW_PLASMA_WEAPON, POW_FUSION_WEAPON, POW_GAUSS_WEAPON, POW_HELIX_WEAPON, POW_PHOENIX_WEAPON, POW_OMEGA_WEAPON };
 				for (int n = 1; n < 9; n++) {
@@ -3508,24 +3540,26 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 					hasThisObjective = 1;
 			}
 			if (Objects[nearestObjective.ID].type == OBJ_ROBOT) // Only allow one thief to count toward par time per contained key color. (Fixes Bahagad Outbreak level 8.)
-				if (Robot_info[Objects[nearestObjective.ID].id].thief)
-					if (Objects[nearestObjective.ID].contains_type == OBJ_POWERUP) {
-						if (Objects[nearestObjective.ID].contains_id == POW_KEY_BLUE)
-							if (state.thiefKeys & KEY_BLUE)
-								hasThisObjective = 1;
-							else
-								state.thiefKeys |= KEY_BLUE;
-						if (Objects[nearestObjective.ID].contains_id == POW_KEY_GOLD)
-							if (state.thiefKeys & KEY_GOLD)
-								hasThisObjective = 1;
-							else
-								state.thiefKeys |= KEY_GOLD;
-						if (Objects[nearestObjective.ID].contains_id == POW_KEY_RED)
-							if (state.thiefKeys & KEY_RED)
-								hasThisObjective = 1;
-							else
-								state.thiefKeys |= KEY_RED;
-					}
+				if (!state.isSegmentAccessible[Objects[nearestObjective.ID].segnum]) { // Don't count inaccessible thieves toward anything related to keys.
+					if (Robot_info[Objects[nearestObjective.ID].id].thief)
+						if (Objects[nearestObjective.ID].contains_type == OBJ_POWERUP) {
+							if (Objects[nearestObjective.ID].contains_id == POW_KEY_BLUE)
+								if (state.thiefKeys & KEY_BLUE)
+									hasThisObjective = 1;
+								else
+									state.thiefKeys |= KEY_BLUE;
+							if (Objects[nearestObjective.ID].contains_id == POW_KEY_GOLD)
+								if (state.thiefKeys & KEY_GOLD)
+									hasThisObjective = 1;
+								else
+									state.thiefKeys |= KEY_GOLD;
+							if (Objects[nearestObjective.ID].contains_id == POW_KEY_RED)
+								if (state.thiefKeys & KEY_RED)
+									hasThisObjective = 1;
+								else
+									state.thiefKeys |= KEY_RED;
+						}
+				}
 			if (!hasThisObjective) {
 				update_energy_for_objective_partime(&state, nearestObjective);
 				if (path_start != NULL) {

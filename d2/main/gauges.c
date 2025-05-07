@@ -4751,8 +4751,6 @@ void draw_hud()
 			hud_show_pointsleftinlevel();
 		show_time();
 	}
-	if (PlayerCfg.Speedometer) // Okay so maybe the mod isn't COMPLETELY disabled...
-		hud_show_speedometer();
 
 	if (!Rear_view && PlayerCfg.CurrentCockpitMode != CM_REAR_VIEW)
 		hud_show_timer_count();
@@ -4768,6 +4766,8 @@ void draw_hud()
 		if (PlayerCfg.CurrentCockpitMode == CM_FULL_SCREEN) {
 			hud_show_energy();
 			hud_show_shield();
+			if (PlayerCfg.Speedometer) // Okay so maybe the mod isn't COMPLETELY disabled during demos...
+				hud_show_speedometer();
 			hud_show_afterburner();
 			hud_show_weapons();
 			hud_show_keys();
