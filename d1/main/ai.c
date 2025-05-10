@@ -1424,13 +1424,14 @@ int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObj
 
 		int	wall_num = segp->sides[sidenum].wall_num;
 
-		// First off, if this is an inaccessible objective we're pathing to on the second run, always allow Algo straight to it.
+		// First off, if this is an inaccessible objective we're pathing to always allow Algo straight to it.
 		if (objectiveInaccessible && currentObjectiveType > -1)
 			return 1;
 
 		if (Ranking.parTimeSideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
-			printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
-			return 0;
+			//printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
+			// Algo will softlock if it has to go through a too small gap which leads to a different accessible area to hit a trigger or wall objective. This is nigh impossible to account for, but also rare, so.
+			return (currentObjectiveType == 4);
 		}
 
 		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);

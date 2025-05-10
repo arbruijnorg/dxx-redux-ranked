@@ -2178,9 +2178,12 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 	double accuracy; // Players are NOT perfect, and it's usually not their fault. We need to account for this if we want all par times to be reachable.
 	double topAccuracy; // The percentage shown on the debug console.
 	double adjustedRobotHealthNoAccuracy;
+	int failsafe = 0; // For Maximum 16 type cases where we don't actually have a vulcan or gauss cannon to kill an energy-immune boss. Since Algo can't use missiles, we'll give it vulcan for the boss only to dodge a softlock.
 	// Weapon values converted to a format human beings in 2024 can understand.
 	for (int n = 0; n < state->num_weapons; n++) {
 		weapon_id = state->heldWeapons[n];
+		if (failsafe)
+			weapon_id = VULCAN_ID;
 		weapon_info* weapon_info = &Weapon_info[weapon_id];
 		double gunpoints = 2;
 		if ((!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6) && state->hasQuads) { // Account for increased damage of quads.
@@ -2210,8 +2213,13 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			if (weapon_id == GAUSS_ID)
 				damage *= 1 - ((double)Difficulty_level * 0.1); // Damage of gauss on bosses goes down as difficulty goes up.
 			if (Boss_invulnerable_energy[robInfo->boss_flag - BOSS_D2]) {
-				if (!(weapon_id == VULCAN_ID || weapon_id == GAUSS_ID))
+				if (!(weapon_id == VULCAN_ID || weapon_id == GAUSS_ID)) {
+					if (n == state->num_weapons - 1 && topWeapon == -1) { // We just finished the last weapon and haven't gotten a time, so Also only has energy weapons against an energy-immune boss.
+						failsafe = 1;
+						n--; // Decrement so the loop works one more time.
+					}
 					continue;
+				}
 				else
 					ammo_usage = 0; // Give Algo infinite vulcan ammo so it doesn't softlock fighting a boss that's immune to energy weapons. Do remember that Algo doesn't have access to missiles!
 			}
@@ -2271,9 +2279,8 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		lowestCombatTime = 0; // Prevent a softlock if no primaries work on a given boss.
 	if (topWeapon == VULCAN_ID || topWeapon == GAUSS_ID)
 		state->vulcanAmmo -= ammoUsed * f1_0;
-	else {
+	else
 		state->simulatedEnergy -= energyUsed;
-	}
 	if (!(topWeapon > LASER_ID_L4) || topWeapon == LASER_ID_L5 || topWeapon == LASER_ID_L6) {
 		if (state->hasQuads) {
 			if (!(topWeapon > LASER_ID_L4))
@@ -2288,8 +2295,12 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 				printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon - 25, topAccuracy);
 		}
 	}
-	if (topWeapon == VULCAN_ID)
-		printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
+	if (topWeapon == VULCAN_ID) {
+		if (failsafe)
+			printf("Took %.3fs to fight robot type %i with vulcan (FAILSAFE), %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
+		else
+			printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
+	}
 	if (topWeapon == SPREADFIRE_ID)
 		printf("Took %.3fs to fight robot type %i with spreadfire, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 	if (topWeapon == PLASMA_ID)
@@ -2434,7 +2445,7 @@ int findKeyObjectID(partime_calc_state* state, int keyType, int dontCheckAccessi
 	for (int i = 0; i <= Highest_object_index; i++) {
 		if ((Objects[i].type == OBJ_POWERUP && Objects[i].id == powerupID) ||
 			(Objects[i].type == OBJ_ROBOT && Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == powerupID) || (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].contains_type == OBJ_POWERUP && Robot_info[Objects[i].id].contains_id == powerupID))
-			//if (dontCheckAccessibility || state->isSegmentAccessible[Objects[i].segnum]) // Make sure the key or the robot that contains it can be physically flown to by the player.
+			if (dontCheckAccessibility || state->isSegmentAccessible[Objects[i].segnum]) // Make sure the key or the robot that contains it can be physically flown to by the player.
 				return i;
 	}
 
@@ -2553,7 +2564,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 			// Is it opened by a key?
 			if (Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) {
 				wallInfo->unlockedBy.type = OBJECTIVE_TYPE_OBJECT;
-				wallInfo->unlockedBy.ID = findKeyObjectID(&state, Walls[i].keys, removeUnlockableWalls);
+				wallInfo->unlockedBy.ID = findKeyObjectID(state, Walls[i].keys, removeUnlockableWalls);
 				if (Walls[i].keys == KEY_BLUE)
 					blueDoorPending = 1;
 				if (Walls[i].keys == KEY_GOLD)
@@ -2775,7 +2786,7 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 			if ((Current_level_num > 0 && Ranking.mergeLevels & Walls[wall_num].keys) || (Current_level_num < 0 && Ranking.secretMergeLevels & Walls[wall_num].keys))
 				return 1;
 			else // Big return coming up. Basically it's checking if we're either going to a trigger that isn't flythrough, or the unlocked side of a door.
-				return (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type != WALL_OPEN) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+				return (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	return 1;
 }
 
@@ -2800,9 +2811,9 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		objective = objectiveList[i];
 		objectiveSegnum = getObjectiveSegnum(objective);
 		// Draw a path as far as we can to the objective, avoiding currently locked doors. If we don't make it all the way, ignore any closed walls. Primarily for shooting through grates, but prevents a softlock on actual uncompletable levels.
+		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, objective.type, objective.ID)) // If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
 			continue;
-		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		if (!player_path_length)
 			continue;
 		pathLength = calculate_path_length_partime(state, *path_start, *path_count, objective);
@@ -2841,16 +2852,22 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			state->lastPosition = segmentCenter;
 			return nearestObjective;
 		}
-		// Now we need to find out where to place Algo for accessible objectives. In the case of phasing through locked walls to get certain objectives, set it before the first transparent one.
+		// Now we need to find out where to place Algo for accessible objectives.
+		// In the case of phasing through locked walls to get certain objectives, set it before the first transparent one. In the case of going into places that are too small, set it before that.
 		int wall_num;
+		int side_num;
 		for (i = 0; i < player_path_length - 1; i++) {
-			wall_num = Segments[Point_segs[i].segnum].sides[find_connecting_side(Point_segs[i].segnum, Point_segs[i + 1].segnum)].wall_num;
+			side_num = find_connecting_side(Point_segs[i].segnum, Point_segs[i + 1].segnum);
+			wall_num = Segments[Point_segs[i].segnum].sides[side_num].wall_num;
 			for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++) {
 				if (Ranking.currentlyLockedWalls[w] == wall_num)
-					if (((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type != WALL_OPEN) || nearestObjective.type == OBJECTIVE_TYPE_WALL) && Walls && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
+					if (((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type == WALL_OVERLAY) || nearestObjective.type == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
 						if (Ranking.parTimeStateSegnum == -1)
 							Ranking.parTimeStateSegnum = Walls[wall_num].segnum;
-				}
+			}
+			if (Ranking.parTimeSideSizes[Point_segs[i].segnum][side_num] < ConsoleObject->size * 2 && ((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type == WALL_OVERLAY) || nearestObjective.type == OBJECTIVE_TYPE_WALL))
+				if (Ranking.parTimeStateSegnum == -1)
+					Ranking.parTimeStateSegnum = Point_segs[i].segnum;
 			if (Ranking.parTimeStateSegnum > -1)
 				break; // We found where to put Algo. No need to go further.
 		}
@@ -3572,18 +3589,20 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				if (state.vulcanAmmo > VULCAN_AMMO_MAX)
 					state.vulcanAmmo = VULCAN_AMMO_MAX;
 				printf("Now at %.3f energy, %.0f vulcan ammo\n", f2fl(state.simulatedEnergy), f2fl(state.vulcanAmmo));
-			
+
 				int nearestObjectiveSegnum = getObjectiveSegnum(nearestObjective);
 				printf("Path from segment %i to %i: %.3fs\n", lastSegnum, nearestObjectiveSegnum, pathLength / SHIP_MOVE_SPEED);
 				// Now move ourselves to the objective for the next pathfinding iteration, unless the objective wasn't reachable with just flight, in which case move ourselves as far as we COULD fly.
 				state.movementTime += (pathLength - state.shortestPathObstructionTime) / SHIP_MOVE_SPEED;
 				lastSegnum = state.segnum;
-				if (fuelcenAccessible(&state)) { // If we can't get to any fuelcens right now, we can't travel to one, so ignore our energy unless we can.
+				//if (fuelcenAccessible(&state)) { // If we can't get to any fuelcens right now, we can't travel to one, so ignore our energy unless we can.
 					state.objectiveSegments[state.objectives] = state.segnum;
 					state.objectiveEnergies[state.objectives] = f2fl(state.simulatedEnergy);
 					state.objectives++;
-				}
+				//}
 			}
+			else
+				state.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
 		}
 		Ranking.parTimeLoops++;
 	}
@@ -3591,7 +3610,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	// Calculate end time.
 	timer_update();
 	end_timer_value = timer_query();
-	state.energyTime = findEnergyTime(&state, &state.toDoList); // Time to calculate the minimum time spent going to fuelcens for the level.
+	//state.energyTime = findEnergyTime(&state, &state.toDoList); // Time to calculate the minimum time spent going to fuelcens for the level.
 	if (state.energyTime > state.combatTime)
 		state.energyTime = state.combatTime; // Missions can abuse energy time by making the most powerful weapon's energy use absurdly high, so cap it.
 	state.movementTime += state.energyTime; // Ultimately energy time is a subsect of movement time because we're, well, moving to and from the energy centers.
