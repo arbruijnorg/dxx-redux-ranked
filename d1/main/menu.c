@@ -2387,36 +2387,28 @@ void do_misc_menu()
 
 void do_rso_menu()
 {
-	newmenu_item m[5];
+	newmenu_item m[3];
 	int i = 0;
 	struct misc_menu_data misc_menu_data;
 
 	ADD_CHECK(0, "Show +/- on rank letters", PlayerCfg.RankShowPlusMinus);
 	ADD_CHECK(1, "Show speedometer", PlayerCfg.Speedometer);
-	ADD_CHECK(3, "Factor warm start in par time", PlayerCfg.WarmStartParTimes);
-	ADD_CHECK(4, "Use PSX world map", PlayerCfg.UsePsxSolarmap);
+	ADD_CHECK(2, "Use PSX world map", PlayerCfg.UsePsxSolarmap);
 
 	m[0].type = NM_TYPE_CHECK;
 	m[0].text = "Show +/- on rank letters";
 
 	m[1].type = NM_TYPE_CHECK;
-	m[1].text = "Show speedometer below crosshair\n";
+	m[1].text = "Show speedometer below crosshair";
 
-	m[2].type = NM_TYPE_TEXT;
-	m[2].text = "If you want a greater challenge";
-	
-	m[3].type = NM_TYPE_CHECK;
-	m[3].text = "Factor warm start in par time\n";
-
-	m[4].type = NM_TYPE_CHECK;
-	m[4].text = "Use PSX world map";
+	m[2].type = NM_TYPE_CHECK;
+	m[2].text = "Use PSX world map";
 
 	i = newmenu_do1(NULL, "Ranking system mod Options", SDL_arraysize(m), m, NULL, &misc_menu_data, i);
 
 	PlayerCfg.RankShowPlusMinus = m[0].value;
 	PlayerCfg.Speedometer = m[1].value;
-	PlayerCfg.WarmStartParTimes = m[3].value;
-	PlayerCfg.UsePsxSolarmap = m[4].value;
+	PlayerCfg.UsePsxSolarmap = m[2].value;
 }
 
 int menu_misc_options_handler(newmenu* menu, d_event* event, void* userdata)

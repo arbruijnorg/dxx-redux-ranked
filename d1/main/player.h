@@ -133,7 +133,6 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double     level_time;                 // Time variable used in rank calculation. Updates to match Players[Player_num].time_level at specific points to protect players from being penalized for not skipping things.
 	int        quickload;                  // Whether the player has quickloaded into the current level.
 	double     parTime;                    // The algorithmically-generated required time for the current level.
-	double     warmStartParTime;           // The version of par time that accounts for extra starting weapons.
 	double     calculatedScore;            // Stores the score determined in calculateRank.
 	int        rank;                       // Stores the rank determined in calculateRank.
 	double     missedRngSpawn;             // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.

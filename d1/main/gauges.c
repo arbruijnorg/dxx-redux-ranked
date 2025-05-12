@@ -1427,18 +1427,10 @@ void show_time()
 	else
 		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:%.03f", mins, secs);
 	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
-		if (PlayerCfg.WarmStartParTimes) {
-			mins = Ranking.warmStartParTime / 60;
-			secs = Ranking.warmStartParTime - mins * 60;
-			if (f2fl(Players[Player_num].time_level) > Ranking.warmStartParTime)
-				gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
-		}
-		else {
-			mins = Ranking.parTime / 60;
-			secs = Ranking.parTime - mins * 60;
-			if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
-				gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
-		}
+		mins = Ranking.parTime / 60;
+		secs = Ranking.parTime - mins * 60;
+		if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
+			gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		if (secs < 10 || secs == 60)
 			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
 		else

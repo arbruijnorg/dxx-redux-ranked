@@ -911,14 +911,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 			PHYSFSX_getsTerminated(fp, buffer);
 			levelPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			if (PlayerCfg.WarmStartParTimes) {
-				PHYSFSX_getsTerminated(fp, buffer);
-				parTime = atof(buffer);
-			}
-			else {
-				parTime = atof(buffer);
-				PHYSFSX_getsTerminated(fp, buffer);
-			}
+			parTime = atof(buffer);
 			PHYSFSX_getsTerminated(fp, buffer); // Fetch player data starting here.
 			playerPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
@@ -985,7 +978,7 @@ void getLevelNameFromRankFile(int level_num, char* buffer)
 	if (fp == NULL)
 		sprintf(buffer, "???");
 	else {
-		for (int i = 0; i < 11; i++)
+		for (int i = 0; i < 10; i++)
 			PHYSFSX_getsTerminated(fp, buffer); // Get a line ten times because the tenth line has the level name.
 	}
 	PHYSFS_close(fp);
@@ -1144,14 +1137,9 @@ void DoEndLevelScoreGlitz(int network)
 	shield_points -= shield_points % 50;
 	energy_points = f2i(Players[Player_num].energy) * 2 * mine_level;
 	energy_points -= energy_points % 50;
-	double parTime;
-	if (PlayerCfg.WarmStartParTimes)
-		parTime = Ranking.warmStartParTime;
-	else
-		parTime = Ranking.parTime;
-	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / parTime);
-	if (Ranking.level_time < parTime)
-		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / parTime) * 0.2);
+	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
+	if (Ranking.level_time < Ranking.parTime)
+		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
 	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
 	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
 	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
@@ -1183,16 +1171,8 @@ void DoEndLevelScoreGlitz(int network)
 
 	int minutes = Ranking.level_time / 60;
 	double seconds = Ranking.level_time - minutes * 60;
-	int parMinutes;
-	double parSeconds;
-	if (PlayerCfg.WarmStartParTimes) {
-		parMinutes = Ranking.warmStartParTime / 60;
-		parSeconds = Ranking.warmStartParTime - parMinutes * 60;
-	}
-	else {
-		parMinutes = Ranking.parTime / 60;
-		parSeconds = Ranking.parTime - parMinutes * 60;
-	}
+	int parMinutes = Ranking.parTime / 60;
+	double parSeconds = Ranking.parTime - parMinutes * 60;
 	char* diffname = 0;
 	char timeText[256];
 	char parTimeString[256];
@@ -1264,7 +1244,6 @@ void DoEndLevelScoreGlitz(int network)
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
 					PHYSFSX_printf(temp, "%.0f\n", (Ranking.maxScore - Players[Player_num].hostages_level * 7500) / 3);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.parTime);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.warmStartParTime);
 					PHYSFSX_printf(temp, "%.0f\n", level_points - Ranking.excludePoints);
 					PHYSFSX_printf(temp, "%.3f\n", Ranking.level_time);
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_on_board);
@@ -1368,14 +1347,9 @@ void DoEndSecretLevelScoreGlitz()
 
 	skill_points = (int)(Ranking.secretRankScore * ((double)Difficulty_level / 4));
 
-	double parTime;
-	if (PlayerCfg.WarmStartParTimes)
-		parTime = Ranking.secretWarmStartParTime;
-	else
-		parTime = Ranking.secretParTime;
-	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / parTime);
-	if (Ranking.secretlevel_time < parTime)
-		time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / parTime) * 0.2);
+	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
+	if (Ranking.secretlevel_time < Ranking.secretParTime)
+		time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
 	Ranking.secretMaxScore += Ranking.hostages_secret_level * 7500;
 	hostage_points = Ranking.secret_hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
 	if (Ranking.secret_hostages_on_board == Ranking.hostages_secret_level)
@@ -1390,16 +1364,8 @@ void DoEndSecretLevelScoreGlitz()
 
 	int minutes = Ranking.secretlevel_time / 60;
 	double seconds = Ranking.secretlevel_time - minutes * 60;
-	int parMinutes;
-	double parSeconds;
-	if (PlayerCfg.WarmStartParTimes) {
-		parMinutes = Ranking.secretWarmStartParTime / 60;
-		parSeconds = Ranking.secretWarmStartParTime - parMinutes * 60;
-	}
-	else {
-		parMinutes = Ranking.secretParTime / 60;
-		parSeconds = Ranking.secretParTime - parMinutes * 60;
-	}
+	int parMinutes = Ranking.secretParTime / 60;
+	double parSeconds = Ranking.secretParTime - parMinutes * 60;
 	char* diffname = 0;
 	char timeText[256];
 	char parTimeString[256];
@@ -1468,7 +1434,6 @@ void DoEndSecretLevelScoreGlitz()
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.hostages_secret_level);
 					PHYSFSX_printf(temp, "%.0f\n", (Ranking.secretMaxScore - Ranking.hostages_secret_level * 7500) / 3);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretParTime);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.secretWarmStartParTime);
 					PHYSFSX_printf(temp, "%.0f\n", level_points - Ranking.secretExcludePoints);
 					PHYSFSX_printf(temp, "%.3f\n", Ranking.secretlevel_time);
 					PHYSFSX_printf(temp, "%i\n", Ranking.secret_hostages_on_board);
@@ -1562,14 +1527,7 @@ void DoBestRanksScoreGlitz(int level_num)
 			PHYSFSX_getsTerminated(fp, buffer);
 			levelPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			if (PlayerCfg.WarmStartParTimes) {
-				PHYSFSX_getsTerminated(fp, buffer);
-				parTime = atof(buffer);
-			}
-			else {
-				parTime = atof(buffer);
-				PHYSFSX_getsTerminated(fp, buffer);
-			}
+			parTime = atof(buffer);
 			PHYSFSX_getsTerminated(fp, buffer); // Fetch player data starting here.
 			playerPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
@@ -1844,6 +1802,7 @@ typedef struct
 	fix vulcanAmmo; // What it sounds like.
 	// How much robot HP we've had to destroy to this point.
 	double combatTime;
+	double warmStartCombatTime;
 	fix energy_gained_per_pickup;
 	// Info about the weapon algo currently has equipped.
 	double energy_usage;
@@ -1853,6 +1812,7 @@ typedef struct
 	double pathObstructionTime; // Amount of time spent dealing with walls or matcens on the way to an objective (basically an Abyss 1.0 hotfix for the 32k HP wall let's be real lol).
 	double shortestPathObstructionTime;
 	int hasQuads;
+	double hasAfterburner;
 	int segnum; // What segment Algo is in.
 	int objectives; // How many objectives Algo has dealt with so far.
 	int objectiveSegments[MAX_OBJECTS + MAX_TRIGGERS + MAX_WALLS];
@@ -2812,7 +2772,9 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		objectiveSegnum = getObjectiveSegnum(objective);
 		// Draw a path as far as we can to the objective, avoiding currently locked doors. If we don't make it all the way, ignore any closed walls. Primarily for shooting through grates, but prevents a softlock on actual uncompletable levels.
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, objective.type, objective.ID)) // If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
+		// If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
+		// Also CAN ignore this if it's a transparent door but I'm not too worried about this.
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID))
 			continue;
 		if (!player_path_length)
 			continue;
@@ -3048,7 +3010,7 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 	// How much energy does it take to complete this objective?
 	if (objective.type == OBJECTIVE_TYPE_OBJECT) { // We don't fight triggers.
 		object* obj = &Objects[objective.ID];
-		if (obj->type == OBJ_POWERUP && (obj->id == POW_LASER || obj->id == POW_QUAD_FIRE || obj->id == POW_VULCAN_WEAPON || obj->id == POW_SPREADFIRE_WEAPON || obj->id == POW_PLASMA_WEAPON || obj->id == POW_FUSION_WEAPON || obj->id == POW_SUPER_LASER || obj->id == POW_GAUSS_WEAPON || obj->id == POW_HELIX_WEAPON || obj->id == POW_PHOENIX_WEAPON || obj->id == POW_OMEGA_WEAPON)) {
+		if (obj->type == OBJ_POWERUP && (obj->id == POW_LASER || obj->id == POW_QUAD_FIRE || obj->id == POW_VULCAN_WEAPON || obj->id == POW_SPREADFIRE_WEAPON || obj->id == POW_PLASMA_WEAPON || obj->id == POW_FUSION_WEAPON || obj->id == POW_SUPER_LASER || obj->id == POW_GAUSS_WEAPON || obj->id == POW_HELIX_WEAPON || obj->id == POW_PHOENIX_WEAPON || obj->id == POW_OMEGA_WEAPON || obj->id == POW_AFTERBURNER)) {
 			int weapon_id = 0;
 			if (obj->id == POW_VULCAN_WEAPON)
 				weapon_id = VULCAN_ID;
@@ -3103,6 +3065,12 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 					else
 						state->simulatedEnergy += state->energy_gained_per_pickup;
 				}
+				if (obj->id == POW_AFTERBURNER) {
+					if (state->hasAfterburner == 1)
+						state->hasAfterburner = 1.2;
+					else
+						state->simulatedEnergy += state->energy_gained_per_pickup;
+				}
 			}
 		}
 		if (obj->type == OBJ_ROBOT || obj->type == OBJ_CNTRLCEN) { // We don't fight keys, hostages or weapons.
@@ -3131,7 +3099,7 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 						}
 					}
 					teleportTime = (teleportDistance / pow(Num_boss_teleport_segs, 2)) * num_teleports; // Account for the average teleport distance, not highest.
-					state->movementTime += teleportTime / SHIP_MOVE_SPEED;
+					state->movementTime += (teleportTime / SHIP_MOVE_SPEED) / state->hasAfterburner;
 					printf("Teleport time: %.3fs\n", teleportTime / SHIP_MOVE_SPEED);
 				}
 				// This commented code gives more time to account for bosses spawning robots, but it gave too much in general from my experience. Perhaps its inaccurate implementation was to blame, but I don't find doing it right to be worth the effort.
@@ -3179,7 +3147,7 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 				double addAmmo = (((double)robInfo->contains_count * (double)robInfo->contains_prob) / 16) * (STARTING_VULCAN_AMMO / 2); // We have to do this because data loss.
 				state->vulcanAmmo += addAmmo;
 			}
-			if (obj->contains_type == OBJ_POWERUP && (obj->contains_id == POW_LASER || obj->contains_id == POW_QUAD_FIRE || obj->contains_id == POW_VULCAN_WEAPON || obj->contains_id == POW_SPREADFIRE_WEAPON || obj->contains_id == POW_PLASMA_WEAPON || obj->contains_id == POW_FUSION_WEAPON || obj->contains_id == POW_SUPER_LASER || obj->contains_id == POW_GAUSS_WEAPON || obj->contains_id == POW_HELIX_WEAPON || obj->contains_id == POW_PHOENIX_WEAPON || obj->contains_id == POW_OMEGA_WEAPON)) {
+			if (obj->contains_type == OBJ_POWERUP && (obj->contains_id == POW_LASER || obj->contains_id == POW_QUAD_FIRE || obj->contains_id == POW_VULCAN_WEAPON || obj->contains_id == POW_SPREADFIRE_WEAPON || obj->contains_id == POW_PLASMA_WEAPON || obj->contains_id == POW_FUSION_WEAPON || obj->contains_id == POW_SUPER_LASER || obj->contains_id == POW_GAUSS_WEAPON || obj->contains_id == POW_HELIX_WEAPON || obj->contains_id == POW_PHOENIX_WEAPON || obj->contains_id == POW_OMEGA_WEAPON || obj->contains_id == POW_AFTERBURNER)) {
 				int weapon_id = 0;
 				if (obj->id == POW_VULCAN_WEAPON)
 					weapon_id = VULCAN_ID;
@@ -3231,6 +3199,12 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 					if (obj->contains_id == POW_QUAD_FIRE) {
 						if (!state->hasQuads)
 							state->hasQuads = 1;
+						else
+							state->simulatedEnergy += state->energy_gained_per_pickup * obj->contains_count;
+					}
+					if (obj->contains_id == POW_AFTERBURNER) {
+						if (state->hasAfterburner == 1)
+							state->hasAfterburner = 1.2;
 						else
 							state->simulatedEnergy += state->energy_gained_per_pickup * obj->contains_count;
 					}
@@ -3338,7 +3312,7 @@ int fuelcenAccessible(partime_calc_state* state)
 	return 0;
 }
 
-double calculateParTime(int factorWarmStarts) // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
+void calculateParTime() // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
 { // January 2024 me would crap himself if he saw this actually working lol.
 	partime_calc_state state = { 0 }; // Initialize the algorithm's state. We'll call it Algo for short.
 	fix64 start_timer_value, end_timer_value; // For tracking how long this algorithm takes to run.
@@ -3364,39 +3338,12 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	state.num_weapons = 1;
 	state.heldWeapons[0] = 0;
 	state.hasQuads = 0;
+	// Afterburner is 1 for no and 1.2 for yes, as opposed to the usual 0 for no and 1 for yes. This variable serves as a multiplier for ship move speed. 
+	// It was gotten from a test level with a 6000 unit straight line where the ship's average speed was tracked using all afterburner charge, then waiting until it fully recharged and repeating. The average was ~70.
+	state.hasAfterburner = 1;
 	state.thiefKeys = 0;
 	state.matcenTime = 0;
 	state.energyTime = 0;
-	if (factorWarmStarts) {
-		state.simulatedEnergy = Players[Player_num].energy; // Start with the player's energy, so fuelcen needs adapt to any extra energy they might have.
-		state.vulcanAmmo = Players[Player_num].primary_ammo[1] * 13 * F1_0;
-		if (state.vulcanAmmo > VULCAN_AMMO_MAX)
-			state.vulcanAmmo = VULCAN_AMMO_MAX; // Algo can't get the ammo rack, so cap its ammo at the default limit.
-		state.num_weapons = 0;
-		for (i = 0; i < 10; i++) {
-			if (Players[Player_num].primary_weapon_flags & HAS_FLAG(i)) {
-				if (!(i == 5)) { // Skip 5 since that's the super laser index, which is already being tracked in the normal laser one.
-					state.heldWeapons[state.num_weapons] = getParTimeWeaponID(i);
-					state.num_weapons++;
-				}
-			}
-		}
-		if (Players[Player_num].laser_level < 5)
-			state.heldWeapons[0] = Players[Player_num].laser_level;
-		else
-			state.heldWeapons[0] = Players[Player_num].laser_level + 26;
-		if (Players[Player_num].flags & PLAYER_FLAGS_QUAD_LASERS)
-			state.hasQuads = 1;
-		// If calculating par time for a secret level, assume Algo already has everything it could possibly get from the base level, even if the player doesn't actually have them. 
-		// This is to prevent players from setting a secret level's par time based on poor weapons, then leaving and grabbing good ones to return with an advantage.
-		// This approach isn't perfect, and the perfect approach isn't possible without loading multiple levels at once and drastically increasing load times, so it'll have to do.
-		if (Current_level_num < 0) {
-			state.num_weapons = Ranking.parTimeNumWeapons;
-			for (i = 0; i < 9; i++)
-				state.heldWeapons[i] = Ranking.parTimeHeldWeapons[i];
-			state.hasQuads = Ranking.parTimeHasQuads;
-		}
-	}
 	state.energy_gained_per_pickup = 3 * F1_0 + 3 * F1_0 * (NDL - Difficulty_level); // From pick_up_energy (powerup.c)
 	if (!Difficulty_level)
 		state.energy_gained_per_pickup = 27 * F1_0; // Trainee gives 27 energy per pickup in D2, as opposed to D1's 18.
@@ -3446,7 +3393,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		// Collect our objectives at this stage...
 		if (Ranking.parTimeLoops == 0) {
 			for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all robots, hostages, weapons, and laser powerups. Ignore robots not worth over zero, as the player isn't gonna go for those. This should never happen, but it's just a failsafe. Also ignore any thieves that aren't carrying keys.
-				if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag && !(Robot_info[Objects[i].id].thief && !(Objects[i].contains_type == OBJ_POWERUP && (Objects[i].contains_id == POW_KEY_BLUE || Objects[i].contains_id == POW_KEY_GOLD || Objects[i].contains_id == POW_KEY_RED)))) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON || Objects[i].id == POW_SUPER_LASER || Objects[i].id == POW_GAUSS_WEAPON || Objects[i].id == POW_HELIX_WEAPON || Objects[i].id == POW_PHOENIX_WEAPON || Objects[i].id == POW_OMEGA_WEAPON))) {
+				if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag && !(Robot_info[Objects[i].id].thief && !(Objects[i].contains_type == OBJ_POWERUP && (Objects[i].contains_id == POW_KEY_BLUE || Objects[i].contains_id == POW_KEY_GOLD || Objects[i].contains_id == POW_KEY_RED)))) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON || Objects[i].id == POW_SUPER_LASER || Objects[i].id == POW_GAUSS_WEAPON || Objects[i].id == POW_HELIX_WEAPON || Objects[i].id == POW_PHOENIX_WEAPON || Objects[i].id == POW_OMEGA_WEAPON || Objects[i].id == POW_AFTERBURNER))) {
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 				}
@@ -3555,6 +3502,8 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 					hasThisObjective = 1;
 				if (Objects[nearestObjective.ID].id == POW_QUAD_FIRE && state.hasQuads)
 					hasThisObjective = 1;
+				if (Objects[nearestObjective.ID].id == POW_AFTERBURNER && state.hasAfterburner > 1)
+					hasThisObjective = 1;
 			}
 			if (Objects[nearestObjective.ID].type == OBJ_ROBOT) // Only allow one thief to count toward par time per contained key color. (Fixes Bahagad Outbreak level 8.)
 				if (!state.isSegmentAccessible[Objects[nearestObjective.ID].segnum]) { // Don't count inaccessible thieves toward anything related to keys.
@@ -3579,10 +3528,10 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				}
 			if (!hasThisObjective) {
 				update_energy_for_objective_partime(&state, nearestObjective);
-				if (path_start != NULL) {
+				if (path_start != NULL)
 					check_for_walls_and_matcens_partime(&state, path_start, path_count);
-					update_energy_for_path_partime(&state, path_start, path_count);
-				}
+					//update_energy_for_path_partime(&state, path_start, path_count);
+				//}
 				// Cap algo's energy and ammo like the player's.
 				if (state.simulatedEnergy > MAX_ENERGY)
 					state.simulatedEnergy = MAX_ENERGY;
@@ -3593,7 +3542,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 				int nearestObjectiveSegnum = getObjectiveSegnum(nearestObjective);
 				printf("Path from segment %i to %i: %.3fs\n", lastSegnum, nearestObjectiveSegnum, pathLength / SHIP_MOVE_SPEED);
 				// Now move ourselves to the objective for the next pathfinding iteration, unless the objective wasn't reachable with just flight, in which case move ourselves as far as we COULD fly.
-				state.movementTime += (pathLength - state.shortestPathObstructionTime) / SHIP_MOVE_SPEED;
+				state.movementTime += ((pathLength - state.shortestPathObstructionTime) / SHIP_MOVE_SPEED) / state.hasAfterburner;
 				lastSegnum = state.segnum;
 				//if (fuelcenAccessible(&state)) { // If we can't get to any fuelcens right now, we can't travel to one, so ignore our energy unless we can.
 					state.objectiveSegments[state.objectives] = state.segnum;
@@ -3621,15 +3570,12 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		state.matcenTime,
 		state.energyTime,
 		f2fl(end_timer_value - start_timer_value));
-
-	// Store Algo's weapon info to use for secret levels predeterminately so players can't abuse their par times.
-	Ranking.parTimeNumWeapons = state.num_weapons;
-	for (i = 0; i < 10; i++)
-		Ranking.parTimeHeldWeapons[i] = state.heldWeapons[i];
-	Ranking.parTimeHasQuads = state.hasQuads;
 	
 	// Par time is rounded up to the nearest five seconds so it looks better/legible on the result screen, leaves room for the time bonus, and looks like a human set it.
-	return 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
+	if (Current_level_num > 0)
+		Ranking.parTime = 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
+	else
+		Ranking.secretParTime = 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
 	// Also because Doom did five second increments.
 	// Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
 }
@@ -3793,12 +3739,11 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 				isRankable = 1; // A level-ending exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 		}
 		Ranking.secretAlreadyBeaten = 0;
-		Ranking.secretParTime = calculateParTime(0);
-		Ranking.secretWarmStartParTime = calculateParTime(1);
-		if (Ranking.mergeLevels)
-			Ranking.parTime += Ranking.secretParTime;
-		if (Ranking.secretMergeLevels)
-			Ranking.secretParTime += Ranking.parTime;
+		calculateParTime();
+		//if (Ranking.mergeLevels)
+			//Ranking.parTime += Ranking.secretParTime;
+		//if (Ranking.secretMergeLevels)
+			//Ranking.secretParTime += Ranking.parTime;
 		if (calculateRank(Current_mission->last_level - level_num, 0) > 0)
 			Ranking.secretAlreadyBeaten = 1;
 		if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
@@ -3810,17 +3755,17 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 			time_t timeOfScore = time(NULL);
 			temp = PHYSFS_openWrite(temp_filename);
 			PHYSFSX_printf(temp, "%i\n", Ranking.hostages_secret_level);
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
 			PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-			PHYSFSX_printf(temp, "-1");
-			PHYSFSX_printf(temp, "0");
+			PHYSFSX_printf(temp, "-1\n");
+			PHYSFSX_printf(temp, "0\n");
 			PHYSFSX_printf(temp, "%s\n", Current_level_name);
-			PHYSFSX_printf(temp, "%s", ctime(&timeOfScore));
+			PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
 			PHYSFSX_printf(temp, "0");
 			PHYSFS_close(temp);
 			PHYSFS_delete(filename);
@@ -4672,28 +4617,27 @@ void StartNewLevel(int level_num)
 		powerup_basic(-10, -10, -10, 0, message);
 	}
 	else {
-		Ranking.parTime = calculateParTime(0);
-		Ranking.warmStartParTime = calculateParTime(1);
-		if (isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
+		calculateParTime();
+		if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
 			PHYSFS_File* temp;
 			char filename[256];
 			char temp_filename[256];
-			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num);
 			sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
 			time_t timeOfScore = time(NULL);
 			temp = PHYSFS_openWrite(temp_filename);
 			PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
-			PHYSFSX_printf(temp, "0");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
 			PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-			PHYSFSX_printf(temp, "-1");
-			PHYSFSX_printf(temp, "0");
+			PHYSFSX_printf(temp, "-1\n");
+			PHYSFSX_printf(temp, "0\n");
 			PHYSFSX_printf(temp, "%s\n", Current_level_name);
-			PHYSFSX_printf(temp, "%s", ctime(&timeOfScore));
+			PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
 			PHYSFSX_printf(temp, "0");
 			PHYSFS_close(temp);
 			PHYSFS_delete(filename);

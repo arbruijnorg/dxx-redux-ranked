@@ -755,14 +755,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 			PHYSFSX_getsTerminated(fp, buffer);
 			levelPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			if (PlayerCfg.WarmStartParTimes) {
-				PHYSFSX_getsTerminated(fp, buffer);
-				parTime = atof(buffer);
-			}
-			else {
-				parTime = atof(buffer);
-				PHYSFSX_getsTerminated(fp, buffer);
-			}
+			parTime = atof(buffer);
 			PHYSFSX_getsTerminated(fp, buffer); // Fetch player data starting here.
 			playerPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
@@ -830,7 +823,7 @@ void getLevelNameFromRankFile(int level_num, char* buffer)
 	if (fp == NULL)
 		sprintf(buffer, "???");
 	else {
-		for (int i = 0; i < 11; i++)
+		for (int i = 0; i < 10; i++)
 			PHYSFSX_getsTerminated(fp, buffer); // Get a line ten times because the tenth line has the level name.
 	}
 	PHYSFS_close(fp);
@@ -975,14 +968,9 @@ void DoEndLevelScoreGlitz(int network)
 
 	shield_points = f2i(Players[Player_num].shields) * 10 * (Difficulty_level + 1);
 	energy_points = f2i(Players[Player_num].energy) * 5 * (Difficulty_level + 1);
-	double parTime;
-	if (PlayerCfg.WarmStartParTimes)
-		parTime = Ranking.warmStartParTime;
-	else
-		parTime = Ranking.parTime;
-	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / parTime);
-	if (Ranking.level_time < parTime)
-		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / parTime) * 0.2);
+	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
+	if (Ranking.level_time < Ranking.parTime)
+		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
 	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
 	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
 	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
@@ -1015,16 +1003,8 @@ void DoEndLevelScoreGlitz(int network)
 
 	int minutes = Ranking.level_time / 60;
 	double seconds = Ranking.level_time - minutes * 60;
-	int parMinutes;
-	double parSeconds;
-	if (PlayerCfg.WarmStartParTimes) {
-		parMinutes = Ranking.warmStartParTime / 60;
-		parSeconds = Ranking.warmStartParTime - parMinutes * 60;
-	}
-	else {
-		parMinutes = Ranking.parTime / 60;
-		parSeconds = Ranking.parTime - parMinutes * 60;
-	}
+	int parMinutes = Ranking.parTime / 60;
+	double parSeconds = Ranking.parTime - parMinutes * 60;
 	char* diffname = 0;
 	char timeText[256];
 	char parTimeString[256];
@@ -1101,7 +1081,6 @@ void DoEndLevelScoreGlitz(int network)
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
 					PHYSFSX_printf(temp, "%.0f\n", (Ranking.maxScore - Players[Player_num].hostages_level * 7500) / 3);
 					PHYSFSX_printf(temp, "%.0f\n", Ranking.parTime);
-					PHYSFSX_printf(temp, "%.0f\n", Ranking.warmStartParTime);
 					PHYSFSX_printf(temp, "%.0f\n", level_points - Ranking.excludePoints);
 					PHYSFSX_printf(temp, "%.3f\n", Ranking.level_time);
 					PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_on_board);
@@ -1240,14 +1219,7 @@ void DoBestRanksScoreGlitz(int level_num)
 			PHYSFSX_getsTerminated(fp, buffer);
 			levelPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			if (PlayerCfg.WarmStartParTimes) {
-				PHYSFSX_getsTerminated(fp, buffer);
-				parTime = atof(buffer);
-			}
-			else {
-				parTime = atof(buffer);
-				PHYSFSX_getsTerminated(fp, buffer);
-			}
+			parTime = atof(buffer);
 			PHYSFSX_getsTerminated(fp, buffer); // Fetch player data starting here.
 			playerPoints = atoi(buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
@@ -2793,7 +2765,9 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		objectiveSegnum = getObjectiveSegnum(objective);
 		// Draw a path as far as we can to the objective, avoiding currently locked doors. If we don't make it all the way, ignore any closed walls. Primarily for shooting through grates, but prevents a softlock on actual uncompletable levels.
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, objective.type, objective.ID)) // If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
+		// If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
+		// Also CAN ignore this if it's a transparent door but I'm not too worried about this.
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID))
 			continue;
 		if (!player_path_length)
 			continue;
@@ -3196,7 +3170,7 @@ double findEnergyTime(partime_calc_state* state, partime_objective* objectiveLis
 		if (Segments[state->objectiveSegments[i]].special == SEGMENT_IS_FUELCEN) // No need to measure distance to a fuelcen if we're already at a fuelcen.
 			objectiveFuelcenTripTimes[i] = 0;
 		else {
-			find_nearest_objective_partime(&state, 0, state->objectiveSegments[i], state->energyCenters, state->numEnergyCenters, &path_start, &path_count, &pathLength, 0);
+			find_nearest_objective_partime(&state, 0, state->objectiveSegments[i], state->energyCenters, state->numEnergyCenters, &path_start, &path_count, &pathLength);
 			objectiveFuelcenTripTimes[i] = (pathLength / SHIP_MOVE_SPEED) * 2; // Doing *2 here to account for the trip back, so it doesn't have to be done even more outside of this.
 		}
 	}
@@ -3260,7 +3234,7 @@ int fuelcenAccessible(partime_calc_state* state)
 	return 0;
 }
 
-double calculateParTime(int factorWarmStarts) // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
+void calculateParTime() // Here is where we have an algorithm run a simulated path through a level to determine how long the player should take, both flying around and fighting robots.
 { // January 2024 me would crap himself if he saw this actually working lol.
 	partime_calc_state state = { 0 }; // Initialize the algorithm's state. We'll call it Algo for short.
 	fix64 start_timer_value, end_timer_value; // For tracking how long this algorithm takes to run.
@@ -3289,20 +3263,6 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 	state.objectives = 0;
 	state.matcenTime = 0;
 	state.energyTime = 0;
-	if (factorWarmStarts) {
-		state.simulatedEnergy = Players[Player_num].energy; // Start with the player's energy, so fuelcen needs adapt to any extra energy they might have.
-		state.vulcanAmmo = Players[Player_num].primary_ammo[1] * 13 * F1_0;
-		state.num_weapons = 0;
-		for (i = 0; i < 5; i++) {
-			if (Players[Player_num].primary_weapon_flags & HAS_FLAG(i)) {
-				state.heldWeapons[state.num_weapons] = getParTimeWeaponID(i);
-				state.num_weapons++;
-			}
-		}
-		state.heldWeapons[0] = Players[Player_num].laser_level;
-		if (Players[Player_num].flags & PLAYER_FLAGS_QUAD_LASERS)
-			state.hasQuads = 1;
-	}
 	state.energy_gained_per_pickup = 3 * F1_0 + 3 * F1_0 * (NDL - Difficulty_level); // From pick_up_energy (powerup.c)
 	
 	// Calculate start time.
@@ -3408,7 +3368,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		}
 		if (Ranking.parTimeLoops == 3) // Put the exit on the list.
 			for (i = 0; i <= Num_triggers; i++)
-				if (Triggers[i].type == TRIGGER_EXIT || Triggers[i].type == TRIGGER_SECRET_EXIT)
+				if (Triggers[i].flags == TRIGGER_EXIT || Triggers[i].flags == TRIGGER_SECRET_EXIT)
 					for (j = 0; j <= Num_walls; j++)
 						if (Walls[j].trigger == i) {
 							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
@@ -3419,7 +3379,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		while (state.toDoListSize > 0) {
 			// Find which object on the to-do list is the closest, ignoring the reactor/boss if it's not the only thing left.
 			partime_objective nearestObjective =
-				find_nearest_objective_partime(&state, 1, state.segnum, state.toDoList, state.toDoListSize, &path_start, &path_count, &pathLength, 0);
+				find_nearest_objective_partime(&state, 1, state.segnum, state.toDoList, state.toDoListSize, &path_start, &path_count, &pathLength);
 			
 			if (nearestObjective.type == OBJECTIVE_TYPE_INVALID) {
 				// This should only happen if there are no reachable objectives left in the list.
@@ -3459,10 +3419,10 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 			}
 			if (!hasThisObjective) {
 				update_energy_for_objective_partime(&state, nearestObjective);
-				if (path_start != NULL) {
+				if (path_start != NULL)
 					check_for_walls_and_matcens_partime(&state, path_start, path_count);
-					update_energy_for_path_partime(&state, path_start, path_count);
-				}
+					//update_energy_for_path_partime(&state, path_start, path_count);
+				//}
 				// Cap algo's energy and ammo like the player's.
 				if (state.simulatedEnergy > MAX_ENERGY)
 					state.simulatedEnergy = MAX_ENERGY;
@@ -3503,7 +3463,7 @@ double calculateParTime(int factorWarmStarts) // Here is where we have an algori
 		f2fl(end_timer_value - start_timer_value));
 	
 	// Par time is rounded up to the nearest five seconds so it looks better / legible on the result screen, leaves room for the time bonus, and looks like a human set it.
-		return 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
+		Ranking.parTime = 5 * (1 + (int)(state.movementTime + state.combatTime) / 5);
 	// Also because Doom did five second increments.
 	// Par time will vary based on difficulty, so the player will always have to go fast for a high time bonus, even on lower difficulties.
 }
@@ -3579,33 +3539,31 @@ void StartNewLevel(int level_num)
 		if (Triggers[i].flags & TRIGGER_EXIT || Triggers[i].flags & TRIGGER_SECRET_EXIT)
 			isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 	}
-	if (!RestartLevel.restarts) { // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
-		Ranking.parTime = calculateParTime(0);
-		Ranking.warmStartParTime = calculateParTime(1);
-	}
+	if (!RestartLevel.restarts) // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
+		calculateParTime();
 	if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
 		PHYSFS_File* temp;
 		char filename[256];
 		char temp_filename[256];
 		if (Current_level_num > 0)
-			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num);
 		else
 			sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
 		sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
 		time_t timeOfScore = time(NULL);
 		temp = PHYSFS_openWrite(temp_filename);
 		PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
-		PHYSFSX_printf(temp, "0");
-		PHYSFSX_printf(temp, "0");
-		PHYSFSX_printf(temp, "0");
-		PHYSFSX_printf(temp, "0");
-		PHYSFSX_printf(temp, "0");
-		PHYSFSX_printf(temp, "0");
+		PHYSFSX_printf(temp, "0\n");
+		PHYSFSX_printf(temp, "0\n");
+		PHYSFSX_printf(temp, "0\n");
+		PHYSFSX_printf(temp, "0\n");
+		PHYSFSX_printf(temp, "0\n");
+		PHYSFSX_printf(temp, "0\n");
 		PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-		PHYSFSX_printf(temp, "-1");
-		PHYSFSX_printf(temp, "0");
+		PHYSFSX_printf(temp, "-1\n");
+		PHYSFSX_printf(temp, "0\n");
 		PHYSFSX_printf(temp, "%s\n", Current_level_name);
-		PHYSFSX_printf(temp, "%s", ctime(&timeOfScore));
+		PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
 		PHYSFSX_printf(temp, "0");
 		PHYSFS_close(temp);
 		PHYSFS_delete(filename);
