@@ -785,7 +785,7 @@ void hud_show_pointsleftinlevel()
 				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 		}
 		else
-			gr_printf(SWIDTH - FSPACX(55), FSPACY(20), "FULL CLEAR!");
+			gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
 	}
 	else {
 		if ((pointsleftinlevel - Ranking.secretMissedRngSpawn && Ranking.secretMissedRngSpawn <= 0) || (pointsleftinlevel && (Ranking.secretMissedRngSpawn > 0))) { // Gotta do a gross if jungle here because of the secretMissedRngSpawn bug caused by thieves.
@@ -1504,7 +1504,7 @@ void hud_show_shield(void)
 	if (PlayerCfg.HudMode<2) {
 		gr_set_curfont( GAME_FONT );
 		// Turn the shield text gold when the no damage bonus is active, as sometimes damage can be <1 unit of shield.
-		if ((Ranking.noDamage && Current_level_num > 0) || (Ranking.secretNoDamage && Current_level_num < 0))
+		if ((Ranking.noDamage && Current_level_num > 0 && !Ranking.quickload) || (Ranking.secretNoDamage && Current_level_num < 0 && !Ranking.secretQuickload))
 			gr_set_fontcolor(BM_XRGB(255,215,0),-1 );
 		else
 			gr_set_fontcolor(BM_XRGB(0,31,0),-1 );

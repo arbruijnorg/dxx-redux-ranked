@@ -1305,7 +1305,7 @@ void hud_show_shield(void)
 	if (PlayerCfg.HudMode<2) {
 		gr_set_curfont( GAME_FONT );
 		// Turn the shield text gold when the no damage bonus is active, as sometimes damage can be <1 unit of shield.
-		if (Ranking.noDamage)
+		if (Ranking.noDamage && !Ranking.quickload)
 			gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
 		else
 			gr_set_fontcolor(BM_XRGB(0, 31, 0), -1);
