@@ -1597,7 +1597,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int currentObj
 			return ((currentObjectiveType == 2 && Walls[currentObjectiveID].type == WALL_OVERLAY) || currentObjectiveType == 4);
 		}
 
-		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
+		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID, 0);
 	}
 
 	wallp = &Walls[wall_num];

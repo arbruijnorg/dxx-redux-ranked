@@ -205,6 +205,7 @@ int endlevel_data_loaded=0;
 
 void start_endlevel_sequence()
 {
+	Ranking.freezeTimer = 1;
 #ifndef NDEBUG
 	int last_segnum;
 #endif

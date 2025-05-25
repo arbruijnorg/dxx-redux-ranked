@@ -1611,7 +1611,7 @@ void show_time()
 {
 	int mins = f2i(Players[Player_num].time_level + Players[Player_num].hours_level * 3600) / 60;
 	double secs = (double)Players[Player_num].time_level / 65536 - mins * 60;
-	if (Ranking.freezeTimer == 1) {
+	if (Ranking.freezeTimer) {
 		mins = Ranking.level_time / 60;
 		secs = Ranking.level_time - mins * 60;
 	}
@@ -1634,7 +1634,7 @@ void show_time()
 		if (Current_level_num > 0) {
 			mins = Ranking.parTime / 60;
 			secs = Ranking.parTime - mins * 60;
-			if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
+			if ((!Ranking.freezeTimer && f2fl(Players[Player_num].time_level) > Ranking.parTime) || (Ranking.freezeTimer && f2fl(Ranking.level_time) > Ranking.parTime))
 				gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		}
 		else {

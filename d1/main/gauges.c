@@ -1429,7 +1429,7 @@ void show_time()
 	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
 		mins = Ranking.parTime / 60;
 		secs = Ranking.parTime - mins * 60;
-		if (f2fl(Players[Player_num].time_level) > Ranking.parTime)
+		if ((!Ranking.freezeTimer && mins * 60 + secs > Ranking.parTime) || (Ranking.freezeTimer && f2fl(Ranking.level_time) > Ranking.parTime))
 			gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		if (secs < 10 || secs == 60)
 			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);

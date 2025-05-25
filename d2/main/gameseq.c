@@ -543,7 +543,7 @@ void DoGameOver()
 void update_player_stats()
 {
 	Players[Player_num].time_level += FrameTime;	//the never-ending march of time...
-	if (Current_level_num < 0 && Ranking.freezeTimer == 0)
+	if (Current_level_num < 0 && !Ranking.freezeTimer)
 		Ranking.secretlevel_time += FrameTime;
 	if ( Players[Player_num].time_level > i2f(3600) )	{
 		Players[Player_num].time_level -= i2f(3600);
@@ -937,10 +937,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 	skillPoints = (int)skillPoints;
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
-		if (playerPoints >= maxScore / 3)
-			timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
-		else
-			timePoints = maxScore / 3;
+		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
 	if (!parTime)
 		timePoints = 0;
 	timePoints = (int)timePoints;
@@ -1143,10 +1140,7 @@ void DoEndLevelScoreGlitz(int network)
 	energy_points -= energy_points % 50;
 	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
 	if (Ranking.level_time < Ranking.parTime)
-		if (Ranking.rankScore >= Ranking.maxScore / 3)
-			time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
-		else
-			time_points = Ranking.maxScore / 3; // Don't give any extra time bonus unless the player full cleared, this way enemies can't be skipped when doing so saves enough time.
+		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
 	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
 	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
 	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
@@ -1356,10 +1350,7 @@ void DoEndSecretLevelScoreGlitz()
 
 	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
 	if (Ranking.secretlevel_time < Ranking.secretParTime)
-		if (Ranking.secretRankScore >= Ranking.secretMaxScore / 3)
-			time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
-		else
-			time_points = Ranking.secretMaxScore / 3; // Don't give any extra time bonus unless the player full cleared, this way enemies can't be skipped when doing so saves enough time.
+		time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
 	Ranking.secretMaxScore += Ranking.hostages_secret_level * 7500;
 	hostage_points = Ranking.secret_hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
 	if (Ranking.secret_hostages_on_board == Ranking.hostages_secret_level)
@@ -1565,10 +1556,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	skillPoints = (int)skillPoints;
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
-		if (playerPoints >= maxScore / 3)
-			timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
-		else
-			timePoints = maxScore / 3;
+		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
 	if (!parTime)
 		timePoints = 0;
 	timePoints = (int)timePoints;
@@ -2147,7 +2135,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		double adjustedRobotHealth = enemy_health;
 		adjustedRobotHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1; // Divide the health value of the enemy instead of increasing damage when accounting for splash damage, since we'll potentially have multiple damage values.
 		adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
-		adjustedRobotHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, isObject);
+		adjustedRobotHealth /= calculate_weapon_accuracy(state, weapon_info, weapon_id, obj, robInfo, isObject);
 		if (robInfo->thief)
 			state->combatTime += 2.5; // To account for the death tantrum they throw when they get their comeuppance for stealing your stuff.
 		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
@@ -2577,7 +2565,7 @@ int retreadingPath(partime_calc_state* state, point_seg* path, int index)
 			if (Segments[path[index].segnum].children[c] == path[index - 1].segnum) {
 				int flag = pow(2, c);
 				if (state->segmentVisitedFrom[path[index].segnum] & flag)
-					return 1;
+					return 0; // 0 disables backtracking omission, 1 enables it.
 			}
 	return 0;
 }
@@ -2627,7 +2615,7 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared. Also fuelcen trip logic. You'll understand why if you look there.
 }
 
-int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
+int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeFourCheck)
 {
 	int unlocked = 1;
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
@@ -2638,14 +2626,16 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 				unlocked = 1;
 			else // Big return coming up. Basically it's checking if we're either going to a trigger that isn't flythrough, or the unlocked side of a door.
 				unlocked = (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
-	// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
-	wall_num = findConnectedWallNum(wall_num);
-	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
-		if (Ranking.currentlyLockedWalls[i] == wall_num)
-			if ((Current_level_num > 0 && Ranking.mergeLevels & Walls[wall_num].keys) || (Current_level_num < 0 && Ranking.secretMergeLevels & Walls[wall_num].keys))
-				unlocked = 1;
-			else
-				unlocked = (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+	if (!typeFourCheck) { // If we're deciding whether to continue in find_nearest_objective_partime, we only want the wall facing Algo to be checked so wall type objectives don't always fail.
+		// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
+		wall_num = findConnectedWallNum(wall_num);
+		for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
+			if (Ranking.currentlyLockedWalls[i] == wall_num)
+				if ((Current_level_num > 0 && Ranking.mergeLevels & Walls[wall_num].keys) || (Current_level_num < 0 && Ranking.secretMergeLevels & Walls[wall_num].keys))
+					unlocked = 1;
+				else
+					unlocked = (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) || currentObjectiveType == OBJECTIVE_TYPE_WALL) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+	}
 	return unlocked;
 }
 
@@ -2672,7 +2662,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		// If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
 		// Also CAN ignore this if it's a transparent door but I'm not too worried about this.
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID))
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID, 1))
 			continue;
 		if (!player_path_length)
 			continue;

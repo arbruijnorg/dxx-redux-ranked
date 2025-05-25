@@ -781,10 +781,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 	double skillPoints = (int)(playerPoints * (difficulty / 4));
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
-		if (playerPoints >= maxScore / 3)
-			timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
-		else
-			timePoints = maxScore / 3;
+		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
 	if (!parTime)
 		timePoints = 0;
 	timePoints = (int)timePoints;
@@ -935,7 +932,7 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 void DoEndLevelScoreGlitz(int network)
 {
 	if (Ranking.level_time == 0)
-		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
+		Ranking.level_time = Players[Player_num].hours_level * 3600 + (double)Players[Player_num].time_level / 65536; // Failsafe for if this isn't updated.
 	RestartLevel.restartsCache = RestartLevel.restarts;
 	RestartLevel.restarts = 0;
 	RestartLevel.isResults = 1;
@@ -975,10 +972,7 @@ void DoEndLevelScoreGlitz(int network)
 	energy_points = f2i(Players[Player_num].energy) * 5 * (Difficulty_level + 1);
 	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
 	if (Ranking.level_time < Ranking.parTime)
-		if (Ranking.rankScore >= Ranking.maxScore / 3)
-			time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
-		else
-			time_points = Ranking.maxScore / 3; // Don't give any extra time bonus unless the player full cleared, this way enemies can't be skipped when doing so saves enough time.
+		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
 	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
 	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
 	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
@@ -1255,10 +1249,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	skillPoints = (int)skillPoints;
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
-		if (playerPoints >= maxScore / 3)
-			timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
-		else
-			timePoints = maxScore / 3;
+		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
 	if (!parTime)
 		timePoints = 0;
 	timePoints = (int)timePoints;
@@ -1510,6 +1501,7 @@ int checkForWarmStart()
 int AdvanceLevel(int secret_flag)
 {
 	Control_center_destroyed = 0;
+	Ranking.freezeTimer = 0;
 
 	#ifdef EDITOR
 	if (Current_level_num == 0)
@@ -1807,6 +1799,7 @@ void StartNewLevelSub(int level_num, int page_in_textures, int secret_flag)
 	Game_suspended = 0;
 
 	Control_center_destroyed = 0;
+	Ranking.freezeTimer = 0;
 
 	init_cockpit();
 	init_robots_for_level();
@@ -2051,6 +2044,8 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	// First initialize weapon and enemy stuff. This is gonna be a long section.
 	// Everything will be doubles due to the variables' involvement in division equations.
 
+	if (weapon_id <= LASER_ID_L4)
+		weapon_id = 0; // In D1, all laser levels use level 1's stats... for some reason.
 	double projectile_speed = f2fl(Weapon_info[weapon_id].speed[Difficulty_level]);
 	double player_size = f2fl(ConsoleObject->size);
 	double projectile_size = 1;
@@ -2211,7 +2206,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		double adjustedRobotHealth = enemy_health;
 		adjustedRobotHealth /= (splash_radius - enemy_size) / splash_radius >= 0 ? 1 + (splash_radius - enemy_size) / splash_radius : 1; // Divide the health value of the enemy instead of increasing damage when accounting for splash damage, since we'll potentially have multiple damage values.
 		adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
-		adjustedRobotHealth /= calculate_weapon_accuracy(&state, weapon_info, weapon_id, obj, robInfo, isObject);
+		adjustedRobotHealth /= calculate_weapon_accuracy(state, weapon_info, weapon_id, obj, robInfo, isObject);
 		accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
 		int shots = ceil((adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 		if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
@@ -2249,6 +2244,8 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		}
 	}
 	else if (isObject) {
+		if (obj->ctype.ai_info.behavior == AIB_RUN_FROM)
+			printf("THIS ROBOT DROPS BOMBS! ITS ACCURACY WILL BE DIFFERENT!\n");
 		if (!(topWeapon > LASER_ID_L4)) {
 			if (state->hasQuads)
 				printf("Took %.3fs to fight robot type %i with quad laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon + 1, topAccuracy);
@@ -2579,7 +2576,7 @@ int retreadingPath(partime_calc_state* state, point_seg* path, int index)
 			if (Segments[path[index].segnum].children[c] == path[index - 1].segnum) {
 				int flag = pow(2, c);
 				if (state->segmentVisitedFrom[path[index].segnum] & flag)
-					return 1;
+					return 0; // 0 disables backtracking omission, 1 enables it.
 			}
 	return 0;
 }
@@ -2629,17 +2626,19 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared. Also fuelcen trip logic. You'll understand why if you look there.
 }
 
-int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
+int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeFourCheck)
 {
 	int unlocked = 1;
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
 		if (Ranking.currentlyLockedWalls[i] == wall_num) // Let Algo through anyway if the wall is transparent and we're headed toward an unlock we don't have to go directly to (EG shooting through grate at unlocked side of door like S2).
 			unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
-	// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
-	wall_num = findConnectedWallNum(wall_num);
-	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
-		if (Ranking.currentlyLockedWalls[i] == wall_num)
-			unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+	if (!typeFourCheck) { // If we're deciding whether to continue in find_nearest_objective_partime, we only want the wall facing Algo to be checked so wall type objectives don't always fail.
+		// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
+		wall_num = findConnectedWallNum(wall_num);
+		for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
+			if (Ranking.currentlyLockedWalls[i] == wall_num)
+				unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+	}
 	return unlocked;
 }
 
@@ -2666,7 +2665,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		// If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
 		// Also CAN ignore this if it's a transparent door but I'm not too worried about this.
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID))
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID, 1))
 			continue;
 		if (!player_path_length)
 			continue;
