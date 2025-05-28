@@ -613,8 +613,8 @@ int drawSmallRankImages(int* ranksList, listbox* lb)
 		int x = lb->box_x + lb->box_w - FSPACX(25); // align to right of listbox
 		int y = lb->box_y + (i - lb->first_item) * LINE_SPACING;
 		int h = LINE_SPACING * 0.7;
-		if (rank == 1)
-			h *= 1.0806; // Make the E-rank bigger to account for the tilt.
+		if (rank == 1 || rank == 15)
+			h *= 1.0806; // Make the E-rank bigger to account for the tilt, and X too because it's just small lol.
 		int w = h * 3;
 		ogl_ubitmapm_cs(x, y, w, h, bm, -1, F1_0);
 	}
@@ -637,7 +637,7 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 		Players[Player_num].lives = 3;
 		Difficulty_level = PlayerCfg.DefaultDifficulty;
 		if (citem < Current_mission->last_level) {
-			if (calculateRank(citem + 1, 0))
+			if (calculateRank(citem + 1, 1))
 				DoBestRanksScoreGlitz(citem + 1, calculateRank(citem + 1, 1));
 			else {
 				if (!do_difficulty_menu())
@@ -646,7 +646,7 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 			}
 		}
 		else {
-			if (calculateRank(citem + 1, 0))
+			if (calculateRank(citem + 1, 1))
 				DoBestRanksScoreGlitz(citem + 1, calculateRank(citem + 1, 1));
 			else {
 				nm_messagebox(NULL, 1, "Ok", "Can't start on secret level!\nTry saving right before teleporter.");
@@ -694,7 +694,7 @@ void do_best_ranks_menu()
 				ranks[i] = 0;
 			}
 			else {
-				calculateRank(i + 1, 0);
+				calculateRank(i + 1, 1);
 				ranks[i] = Ranking.rank;
 				char level_name[36];
 				char buffer[LEVEL_NAME_LEN];
@@ -705,7 +705,7 @@ void do_best_ranks_menu()
 						if (i < Current_mission->last_level)
 							snprintf(list[i], 64, "%i. %s\t* %.0f    ", i + 1, level_name, Ranking.calculatedScore);
 						else
-							snprintf(list[i], 64, "S%i. %s\t%.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
+							snprintf(list[i], 64, "S%i. %s\t* %.0f    ", i - Current_mission->last_level + 1, level_name, Ranking.calculatedScore);
 					}
 					else {
 						if (i < Current_mission->last_level)

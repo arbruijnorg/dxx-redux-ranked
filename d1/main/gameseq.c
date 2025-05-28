@@ -899,8 +899,8 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 			int x = grd_curscreen->sc_w * 0.4;
 			int y = grd_curscreen->sc_h * 0.725;
 			int h = grd_curscreen->sc_h * 0.1125;
-			if (!endlevel_current_rank)
-				h *= 1.0806; // Make E-rank bigger to compensate for the tilt.
+			if (!endlevel_current_rank || endlevel_current_rank == 14)
+				h *= 1.0806; // Make E-rank bigger to compensate for the tilt, and X too because it's just small lol.
 			int w = 3 * h;
 			if (!endlevel_current_rank || endlevel_current_rank == 2 || endlevel_current_rank == 5 || endlevel_current_rank == 8 || endlevel_current_rank == 11 || endlevel_current_rank == 13 || endlevel_current_rank == 14)
 				x += w * 0.138888889; // Push the image right if it doesn't have a plus or minus, otherwise it won't be centered.
@@ -2033,14 +2033,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 
 double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_info, int weapon_id, object* obj, robot_info* robInfo, int isObject)
 {
-	//return 1; // For if I ever want to disable this.
 	// Here we use various aspects of the combat situation to estimate what percentage of shots the player will hit.
-	// robot_type tells this function which data to look at to find the right enemy.
-	// 0 means a parent robot, 1 means a robot dropped from the obj data, 2 means a robot dropped from the robot data, 3 means a matcen robot.
-
-	if (weapon_info->homing_flag)
-		return 1; // Generally, robots can't dodge homing stuff that you shoot.
-
 	// First initialize weapon and enemy stuff. This is gonna be a long section.
 	// Everything will be doubles due to the variables' involvement in division equations.
 
@@ -2049,12 +2042,11 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	double projectile_speed = f2fl(Weapon_info[weapon_id].speed[Difficulty_level]);
 	double player_size = f2fl(ConsoleObject->size);
 	double projectile_size = 1;
-	if (weapon_info->render_type) {
+	if (weapon_info->render_type)
 		if (weapon_info->render_type == 2)
 			projectile_size = f2fl(Polygon_models[weapon_info->model_num].rad) / f2fl(weapon_info->po_len_to_width_ratio);
 		else
 			projectile_size = f2fl(weapon_info->blob_size);
-	}
 	double enemy_runs = 0;
 	double enemy_health = f2fl(robInfo->strength);
 	double enemy_max_speed = f2fl(robInfo->max_speed[Difficulty_level]);
@@ -2072,12 +2064,11 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 	double enemy_weapon_speed = f2fl(Weapon_info[robInfo->weapon_type].speed[Difficulty_level]);
 	double enemy_weapon_size = 1;
-	if (Weapon_info[robInfo->weapon_type].render_type) {
+	if (Weapon_info[robInfo->weapon_type].render_type)
 		if (Weapon_info[robInfo->weapon_type].render_type == 2)
 			enemy_weapon_size = f2fl(Polygon_models[Weapon_info[robInfo->weapon_type].model_num].rad) / f2fl(Weapon_info[robInfo->weapon_type].po_len_to_width_ratio);
 		else
 			enemy_weapon_size = f2fl(Weapon_info[robInfo->weapon_type].blob_size);
-	}
 	double enemy_attack_type = robInfo->attack_type;
 	double enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
 
@@ -2111,41 +2102,38 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	// At a certain distance, projectiles for Vulcan and Spreadfire will start missing from drifting so far off course.
 	// For Vulcan we scale accuracy by the probability of a shot landing at a given distance (since the spread is random), and for Spreadfire/Helix we use a binary outcome.
 	double accuracy_multiplier = 1;
-	if (weapon_id == VULCAN_ID) {
+	if (weapon_id == VULCAN_ID)
 		if (optimal_distance / 32 > enemy_size + projectile_size) // This is the distance where Vulcan's accuracy dropoff starts.
 			accuracy_multiplier *= (enemy_size + projectile_size) / (optimal_distance / 32);
-	}
-	if (weapon_id == SPREADFIRE_ID) {
+	if (weapon_id == SPREADFIRE_ID)
 		if (optimal_distance / 16 > enemy_size + projectile_size) // Divisor is gotten because Spreadfire projectiles move one unit outward for every 16 units forward.
 			accuracy_multiplier /= 3;
-	}
 	// If the enemy is small enough to fit between projectiles, only one can hit at a time, so halve accuracy.
 	// This makes Algo unlikely to use something like lasers against sidearm modula, which is good because it obeys real world expectations.
 	if (enemy_size < projectile_offsets[weapon_id] - projectile_size)
 		accuracy_multiplier *= 0.5;
 
 	double accuracy;
-	if ((enemy_runs && enemy_max_speed) || (!enemy_runs && enemy_evade_speed)) {
-		if (optimal_distance > 80) { // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
+	if ((enemy_runs && enemy_max_speed) || (!enemy_runs && enemy_evade_speed))
+		if (optimal_distance > 80) // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
 			if (enemy_runs)
 				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
 			else
 				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed));
-		}
-		else {
+		else
 			if (enemy_runs)
 				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
 			else
 				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed));
-		}
-	}
 	else
 		return accuracy_multiplier; // If the enemy doesn't move in the relevant way, guarantee all hits (assuming efficient size).
 	if (accuracy * accuracy_multiplier > 1) // Accuracy can't be greater than 100%.
 		return 1;
+	else if (weapon_info->homing_flag)
+		return (0.5 + accuracy / 2) * accuracy_multiplier; // Buff player accuracy if their weapon has homing.
 	else
-		return accuracy * accuracy_multiplier;//(0.5 + accuracy / 2) * accuracy_multiplier;
-	// Enemies evade less and less linearly as their health goes down (Source: ai.c line 997), so we SHOULD return an average of 100% and the starting acc...
+		return accuracy * accuracy_multiplier;
+	// Enemies evade less and less linearly as their health goes down (Source: ai.c line 997), so we SHOULD return an average of 100% and the starting acc always instead of just with homing...
 	// Gonna be honest though, I'm actually not sure about that HP part for D2, and high difficulty times are too harsh if we do it that way. Also the average thing is a lazy approach anyway.
 }
 
@@ -2429,8 +2417,13 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 
 			// Is it opened by a key?
 			if (Walls[i].type == WALL_DOOR && (Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED)) {
-				wallInfo->unlockedBy.type = OBJECTIVE_TYPE_OBJECT;
 				wallInfo->unlockedBy.ID = findKeyObjectID(state, Walls[i].keys, removeUnlockableWalls);
+				if (wallInfo->unlockedBy.ID == -1) { // If a colored door has no key, don't assign a type or ID to it.
+					wallInfo->unlockedBy.type = OBJECTIVE_TYPE_INVALID;
+					wallInfo->unlockedBy.ID = 0;
+				}
+				else
+					wallInfo->unlockedBy.type = OBJECTIVE_TYPE_OBJECT;
 				continue;
 			}
 
@@ -2476,13 +2469,20 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 	}
 	// Now we have to iterate again because the unlocked side of one-sided locked walls need to be tested for an unlock ID, and that can only be done AFTER the rest of the unlocks have been added.
 	for (i = 0; i < Num_walls; i++) {
-		if (Walls[i].type == WALL_DOOR && ((Walls[i].keys == KEY_BLUE || Walls[i].keys == KEY_GOLD || Walls[i].keys == KEY_RED) || Walls[i].flags & WALL_DOOR_LOCKED)) {
+		if (Walls[i].type == WALL_DOOR) { // Only doors can be shot from the inside. I wager that shooting the inside of a grate won't accomplish much.
 			for (int w = 0; w < state->numLockedWalls; w++) {
 				if (state->lockedWalls[w].wallID == i) {
 					if (state->lockedWalls[w].unlockedBy.type) // If an unlock type never got assigned for this locked door, its neighboring wall could be what unlocks it (D1 S2).
 						continue; // If one was though, that's not the case.
 					int adjacent_wall_num = findConnectedWallNum(i);
-					if (!(Walls[adjacent_wall_num].flags & WALL_DOOR_LOCKED)) { // Make sure it can be unlocked. If neither side can be unlocked then there's no point going through with this step.
+					int skip = 0;
+					for (int w2 = 0; w2 < state->numLockedWalls; w2++)
+						if (state->lockedWalls[w2].wallID == adjacent_wall_num) {
+							if (!state->lockedWalls[w2].unlockedBy.type) // Make sure it can be unlocked. If neither side can be unlocked then there's no point going through with this step.
+								skip = 1;
+							break;
+						}
+					if (!skip) {
 						// Now make it the unlock ID for the locked side. Note: Due to the level design, these will probably be inaccessible objectives.
 						// Wall type objectives function identically to trigger types, except Algo must have the required key before being able to mark them as done (like in Beeblebrox Mine).
 						state->lockedWalls[w].unlockedBy.type = OBJECTIVE_TYPE_WALL;
@@ -2491,9 +2491,8 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 							if (Ranking.currentlyLockedWalls[w] == i) {
 								Ranking.parTimeUnlockTypes[w] = OBJECTIVE_TYPE_WALL;
 								Ranking.parTimeUnlockIDs[w] = adjacent_wall_num;
+								break;
 							}
-						addObjectiveToList(state->toDoList, &state->toDoListSize, state->lockedWalls[state->numLockedWalls].unlockedBy, 0);
-						continue;
 					}
 				}
 			}
@@ -2593,12 +2592,12 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 	if (path_count > 1) {
 		for (int i = 0; i < path_count - 1; i++) {
 			segmentLength = vm_vec_dist(&path[i].point, &path[i + 1].point);
-			if (!(path_final && retreadingPath(state, path, i)))
+			//if (!(path_final && retreadingPath(state, path, i)))
 				pathLength += segmentLength;
-			else {
-				printf("Segment %i has already been visited from segment %i! Omitting %.3fs of movement time.\n", path[i].segnum, path[i - 1].segnum, segmentLength / SHIP_MOVE_SPEED);
-				state->omittedMovementTime += segmentLength / SHIP_MOVE_SPEED;
-			}
+			//else {
+				//printf("Segment %i has already been visited from segment %i! Omitting %.3fs of movement time.\n", path[i].segnum, path[i - 1].segnum, segmentLength / SHIP_MOVE_SPEED);
+				//state->omittedMovementTime += segmentLength / SHIP_MOVE_SPEED;
+			//}
 			// For objects, once we reach the target segment we move to the object to "pick it up".
 			// Note: For now, this applies to robots, too.
 			// Now, we account for the time it'd take to fight walls on the path (Abyss 1.0 par time 32k HP wall hotfix lol). Originally I accounted for matcen fight time as well, but that change did more harm than good.
@@ -2687,12 +2686,12 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		// Let's record that we travelled to this segment from this direction.
 		// Algo will only count each segment-direction combination once to avoid inflating par times when it likely does huge unoptimal backtracking, due to the nature of the "nearest neighbor" approach.
 		// Levels that loop back on themselves are susceptible to having par times that are too low, but this is rare and usually non-fatal to rank possibility.
-		for (i = 1; i < player_path_length - 1; i++)
-			for (int c = 0; c < 6; c++)
-				if (Segments[Point_segs[i].segnum].children[c] == Point_segs[i - 1].segnum) {
-					int flag = pow(2, c);
-					state->segmentVisitedFrom[Point_segs[i].segnum] |= flag; // Because |=ing pow(2, c) or MACRO(c) just... didn't work.
-				}
+		//for (i = 1; i < player_path_length - 1; i++)
+			//for (int c = 0; c < 6; c++)
+				//if (Segments[Point_segs[i].segnum].children[c] == Point_segs[i - 1].segnum) {
+					//int flag = pow(2, c);
+					//state->segmentVisitedFrom[Point_segs[i].segnum] |= flag; // Because |=ing pow(2, c) or MACRO(c) just... didn't work.
+				//}
 		// Now we need to find out where to place Algo for accessible objectives.
 		// In the case of phasing through locked walls to get certain objectives, set it before the first transparent one. In the case of going into places that are too small, set it before that.
 		int wall_num;
@@ -2949,7 +2948,6 @@ void update_energy_for_objective_partime(partime_calc_state* state, partime_obje
 			short Boss_path_length = 0;
 			state->combatTime += combatTime;
 			if (robInfo->boss_flag > 0) { // Bosses have special abilities that take additional time to counteract. Boss levels are unfair without this.
-				state->combatTime += 6; // The player must wait out potentially all of a six-second death roll. This could be merged into the movement time following the boss' death, but it's not that important.
 				int num_teleports = combatTime / 2; // Bosses teleport two seconds after you start damaging them, meaning you can only get two seconds of damage in at a time before they move away.
 				for (int i = 0; i < Num_boss_teleport_segs; i++) { // Now we measure the distance between every possible pair of points the boss can teleport between.
 					for (int n = 0; n < Num_boss_teleport_segs; n++) {
@@ -3169,7 +3167,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			else
 				Ranking.parTimeSideSizes[i][s] = ConsoleObject->size * 2; // If a side is closed, mark it down as big enough.
 		}
-		state.segmentVisitedFrom[i] = 0;
+		//state.segmentVisitedFrom[i] = 0;
 	}
 	for (i = 0; i <= Highest_segment_index; i++) // Lay out the map for where the "inaccessible" territory is so we can mark objectives within it as such.
 		state.isSegmentAccessible[i] = determineSegmentAccessibility(&state, i);
@@ -3215,22 +3213,27 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all reactors and bosses.
 				if (Objects[i].type == OBJ_CNTRLCEN) {
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
-					create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(objective), &path_start, &path_count, &state, objective); // Pathfind to potentially update inaccessibleObjectives array, in case reactor is grated off.
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 					levelHasReactor = 1;
 				}
 			}
 			if (!levelHasReactor) {
+				int bossScore;
 				int highestBossScore = 0;
 				int targetedBossID = -1;
 				for (i = 0; i <= Highest_object_index; i++) {
 					if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag) { // Look at every boss, adding only the highest point value.
 						// Killing any boss in levels with multiple kills ALL of them, only giving points for the one directly killed, so the player needs to target the highest-scoring one for the best rank. Give them the time needed for that one.
 						// This means players may have to replay levels a bunch to find which boss gives most out of custom bosses/values, but I don't thinks that's a cause for great concern.
-						if (Robot_info[Objects[i].id].score_value > highestBossScore) {
-							highestBossScore = Robot_info[Objects[i].id].score_value;
+						bossScore = Robot_info[Objects[i].id].score_value;
+						if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) // So points in infinite robot drop loops aren't counted past the parent bot.
+							bossScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+						if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
+							bossScore += Objects[i].contains_count * 10000;
+						state.combatTime += 6.2; // Each boss has its own deathroll that lasts six seconds one at a time.
+						if (bossScore > highestBossScore) {
+							highestBossScore = bossScore;
 							targetedBossID = i;
-							state.combatTime += 6; // Each boss has its own deathroll that lasts six seconds one at a time.
 						}
 					}
 				}
@@ -3392,13 +3395,21 @@ void StartNewLevel(int level_num)
 	RestartLevel.isResults = 0;
 	int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
 	int highestBossScore = 0;
+	int bossScore;
+	Ranking.maxScore = 0;
 	for (i = 0; i <= Highest_object_index; i++) {
 		if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag) { // Look at every boss, adding only the highest point value.
-			if (Robot_info[Objects[i].id].score_value > highestBossScore)
-				highestBossScore = Robot_info[Objects[i].id].score_value;
+			bossScore = Robot_info[Objects[i].id].score_value;
+			if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) // So points in infinite robot drop loops aren't counted past the parent bot.
+				bossScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
+			if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
+				bossScore += Objects[i].contains_count * 10000;
+			if (bossScore > highestBossScore) {
+				highestBossScore = bossScore;
+				Ranking.maxScore = Robot_info[Objects[i].id].score_value;
+			}
 		}
 	}
-	Ranking.maxScore = highestBossScore;
 	for (i = 0; i <= Highest_object_index; i++) {
 		if (Objects[i].type == OBJ_ROBOT) {
 			if (!Robot_info[Objects[i].id].boss_flag)
@@ -3437,7 +3448,6 @@ void StartNewLevel(int level_num)
 		sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
 		time_t timeOfScore = time(NULL);
 		temp = PHYSFS_openWrite(temp_filename);
-		PHYSFSX_printf(temp, "%i\n", Players[Player_num].hostages_level);
 		PHYSFSX_printf(temp, "0\n");
 		PHYSFSX_printf(temp, "0\n");
 		PHYSFSX_printf(temp, "0\n");

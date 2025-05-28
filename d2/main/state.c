@@ -1409,7 +1409,7 @@ int state_restore_all_sub(char* filename, int secret_restore)
 	// Restore the cheats enabled flag
 	game_disable_cheats(); // disable cheats first
 	cheats.enabled = PHYSFSX_readSXE32(fp, swap);
-
+	Ranking.cheated = cheats.enabled; // So the player's next score will count if they quickloaded into a level after cheating, or vice versa.
 	Do_appearance_effect = 0;			// Don't do this for middle o' game stuff.
 
 	//Clear out all the objects from the lvl file

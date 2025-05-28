@@ -798,8 +798,10 @@ void hud_show_pointsleftinlevel()
 		else
 			gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 	}
-	else
+	else {
+		gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
 		gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
+	}
 }
 
 void hud_show_timer_count()
@@ -1427,10 +1429,10 @@ void show_time()
 	else
 		gr_printf(SWIDTH - FSPACX(65), GHEIGHT - (LINE_SPACING * 11), "Time: %d:%.03f", mins, secs);
 	if (Ranking.alreadyBeaten) { // Only show par time if the level's been beaten before, so we don't spoil a new level's length or produce unwanted pressure.
+		if ((!Ranking.freezeTimer && mins * 60 + secs > Ranking.parTime) || (Ranking.freezeTimer && Ranking.level_time > Ranking.parTime))
+			gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		mins = Ranking.parTime / 60;
 		secs = Ranking.parTime - mins * 60;
-		if ((!Ranking.freezeTimer && mins * 60 + secs > Ranking.parTime) || (Ranking.freezeTimer && f2fl(Ranking.level_time) > Ranking.parTime))
-			gr_set_fontcolor(BM_XRGB(255, 0, 0), -1);
 		if (secs < 10 || secs == 60)
 			gr_printf(SWIDTH - FSPACX(61), GHEIGHT - (LINE_SPACING * 10), "Par: %d:0%.0f", mins, secs);
 		else

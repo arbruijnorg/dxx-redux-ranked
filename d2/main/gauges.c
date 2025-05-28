@@ -784,8 +784,10 @@ void hud_show_pointsleftinlevel()
 			else
 				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 		}
-		else
+		else {
+			gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
 			gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
+		}
 	}
 	else {
 		if ((pointsleftinlevel - Ranking.secretMissedRngSpawn && Ranking.secretMissedRngSpawn <= 0) || (pointsleftinlevel && (Ranking.secretMissedRngSpawn > 0))) { // Gotta do a gross if jungle here because of the secretMissedRngSpawn bug caused by thieves.
@@ -794,8 +796,10 @@ void hud_show_pointsleftinlevel()
 			else
 				gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 		}
-		else
+		else {
+			gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
 			gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");
+		}
 	}
 }
 
