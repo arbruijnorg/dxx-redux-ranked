@@ -1430,8 +1430,8 @@ int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObj
 			return check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum);
 
 		if (Ranking.parTimeSideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
-			//printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
-			return (currentObjectiveType == 4);
+			printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
+			return (currentObjectiveType == 3);
 		}
 
 		return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID, 0);

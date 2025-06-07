@@ -109,7 +109,7 @@ extern void DoEndSecretLevelScoreGlitz();
 extern void DoBestRanksScoreGlitz(int level_num, int warm_start);
 
 // Check if a wall is unlocked/accessible in par time.
-extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeFourCheck);
+extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeThreeCheck);
 
 // stuff for multiplayer
 extern int NumNetPlayerPositions;
