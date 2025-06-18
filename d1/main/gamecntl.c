@@ -513,7 +513,7 @@ int HandleSystemKey(int key)
 				else {
 					choice = allow_loadsave ?
 						nm_messagebox(NULL, 5, "Abort Game", TXT_OPTIONS_, "Save Game...", TXT_LOAD_GAME, "Restart level", "Game menu") :
-						nm_messagebox(NULL, 3, "Abort Game", TXT_OPTIONS_, "Restart level", "Game menu");
+						nm_messagebox(NULL, 2, "Abort Game", TXT_OPTIONS_, "Game menu");
 				}
 				switch(choice)
 				{

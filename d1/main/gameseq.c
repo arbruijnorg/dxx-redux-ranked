@@ -1877,8 +1877,7 @@ void bash_to_shield (int i,char *s)
 #define OBJECTIVE_TYPE_INVALID 0
 #define OBJECTIVE_TYPE_OBJECT 1
 #define OBJECTIVE_TYPE_TRIGGER 2
-#define OBJECTIVE_TYPE_ENERGY 3
-#define OBJECTIVE_TYPE_WALL 4
+#define OBJECTIVE_TYPE_WALL 3
 
 int find_connecting_side(int from, int to) // Sirius' function, but I made it take ints instead of point segs for easier use (also the old '94 function "find_connect_side" already did it with point segs anyway).
 {
@@ -1909,10 +1908,6 @@ typedef struct
 	int toDoListSize;
 	partime_objective doneList[MAX_OBJECTS + MAX_WALLS];
 	int doneListSize;
-	partime_objective blackList[MAX_OBJECTS + MAX_WALLS];
-	int blackListSize;
-	int doneWalls[MAX_WALLS];
-	int doneWallsSize;
 	// Remember the IDs of all walls in the level that are locked in some way, so we can see if any of our paths encounter them.
 	partime_locked_wall_info lockedWalls[MAX_WALLS];
 	partime_locked_wall_info reactorWalls[MAX_WALLS];
@@ -1934,7 +1929,6 @@ typedef struct
 	int hasQuads;
 	int segnum; // What segment Algo is in.
 	ubyte isSegmentAccessible[MAX_SEGMENTS];
-	ubyte segmentVisited[MAX_SEGMENTS];
 } partime_calc_state;
 
 double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int pathFinal) // Tell algo to use the weapon that's fastest for the destructible wall in the way.
@@ -1965,7 +1959,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
 			wall_health = f2fl(Walls[wall_num].hps + 1); // We do +1 to account for walls still being alive at exactly 0 HP.
 			// Assume accuracy is always 100% for walls. They're big and don't move lol.
-			int shots = ceil(wall_health / damage); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+			int shots = ceil(wall_health / damage); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this wall before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
@@ -2144,7 +2138,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			adjustedRobotHealthNoAccuracy = adjustedRobotHealth;
 			adjustedRobotHealth /= calculate_weapon_accuracy(state, weapon_info, n, obj, robInfo, isObject);
 			accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
-			int shots = round(ceil(adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time and energy into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
+			int shots = round(ceil(adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
@@ -2233,8 +2227,13 @@ void robotHasPowerup(partime_calc_state* state, int robotID, double weight) {
 			weapon_id = FUSION_ID;
 		if (weapon_id) {
 			state->heldWeapons[weapon_id] *= (1 - weight) + (pow(1 - ((double)robInfo->contains_prob / 16), robInfo->contains_count) * weight);
-			if (state->heldWeapons[weapon_id] <= 0.0625)
+			if (state->heldWeapons[weapon_id] <= 0.0625) {
+				if (weapon_id == VULCAN_ID && state->heldWeapons[weapon_id])
+					state->vulcanAmmo += STARTING_VULCAN_AMMO;
+				else
+					state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
 				state->heldWeapons[weapon_id] = 0;
+			}
 		}
 		else {
 			if (robInfo->contains_id == POW_LASER) {
@@ -2266,8 +2265,13 @@ void robotHasPowerup(partime_calc_state* state, int robotID, double weight) {
 			weapon_id = FUSION_ID;
 		if (weapon_id) {
 			state->heldWeapons[weapon_id] *= (1 - weight) + (pow(1 - ((double)robInfo->contains_prob / 16), robInfo->contains_count) * weight);
-			if (state->heldWeapons[weapon_id] <= 0.0625)
+			if (state->heldWeapons[weapon_id] <= 0.0625) {
+				if (weapon_id == VULCAN_ID && state->heldWeapons[weapon_id])
+					state->vulcanAmmo += STARTING_VULCAN_AMMO;
+				else
+					state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
 				state->heldWeapons[weapon_id] = 0;
+			}
 		}
 		else {
 			if (robInfo->contains_id == POW_LASER) {
@@ -2405,6 +2409,21 @@ void addObjectiveToList(partime_objective* list, int* listSize, partime_objectiv
 	}
 }
 
+void removeObjectiveFromList(partime_objective* list, int* listSize, partime_objective objective)
+{
+	if (*listSize == 0)
+		return;
+
+	int offset = 0;
+	for (offset = 0; offset < *listSize; offset++)
+		if (list[offset].type == objective.type && list[offset].ID == objective.ID)
+			break;
+	if (offset + 1 < *listSize)
+		memmove(list + offset, list + offset + 1, (*listSize - offset - 1) * sizeof(partime_objective));
+	(*listSize)--;
+}
+
+
 void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 {
 	int i;
@@ -2501,7 +2520,7 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 				}
 			}
 		}
-		// Note: As a side effect of this, the back sides of spawn doors and exits (if they're unlocked) will be added as inaccessible objectives, but this will almost always add negligible time to par.
+		// Note: As a side effect of this, the back sides of spawn doors and exits (if they're unlocked) will be added to the objective list, but this will likely affect nothing as they will usually never be gotten.
 	}
 	// For the segment accessibility pass, we're gonna remove the unlockable walls so it can get through stuff like key doors.
 	// We have to do this iteration separately, because if we don't, the part of marking things as done that removes locked walls from Ranked.currentlyLockedWalls will be removing them from a list that's still populating.
@@ -2518,20 +2537,17 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 					removeLockedWallFromList(w);
 		}
 	}
-}
-
-void removeObjectiveFromList(partime_objective* list, int* listSize, partime_objective objective)
-{
-	if (*listSize == 0)
-		return;
-
-	int offset = 0;
-	for (offset = 0; offset < *listSize; offset++)
-		if (list[offset].type == objective.type && list[offset].ID == objective.ID)
-			break;
-	if (offset + 1 < *listSize)
-		memmove(list + offset, list + offset + 1, (*listSize - offset - 1) * sizeof(partime_objective));
-	(*listSize)--;
+	for (i = 0; i < state->toDoListSize; i++) { // Remove all wall type objectives that are a reactor wall. They're redundant and distract Algo from end-of-level stuff.
+		partime_objective objective = state->toDoList[i];
+		if (objective.type == OBJECTIVE_TYPE_WALL)
+			for (int w = 0; w < state->numReactorWalls / 2; w++) // Divide by 2 because the reactor walls list populates twice and I'm too lazy to solve this inconsequential problem.
+				if (state->reactorWalls[w].wallID == objective.ID) {
+					removeObjectiveFromList(state->toDoList, &state->toDoListSize, objective);
+					addObjectiveToList(state->doneList, &state->doneListSize, objective, 1);
+					i--;
+					break; // We need to remove things one at a time, so i doesn't get decremented too much and cause negative indexes of toDoList to be read.
+				}
+	}
 }
 
 // Find a path from a start segment to an objective.
@@ -2590,8 +2606,8 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 			if (wall_num > -1) {
 				if (Walls[wall_num].type == WALL_BLASTABLE) {
 					int skip = 0; // So it skips incrementing this path's time for a wall already marked done.
-					for (int n = 0; n < state->doneWallsSize; n++)
-						if (state->doneWalls[n] == wall_num)
+					for (int n = 0; n < state->doneListSize; n++)
+						if (state->doneList[n].type == OBJECTIVE_TYPE_WALL && state->doneList[n].ID == wall_num)
 							skip = 1; // If algo's already destroyed this wall, don't account for it.
 					if (!skip)
 						state->pathObstructionTime += (calculate_combat_time_wall(state, wall_num, 0));
@@ -2607,7 +2623,7 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 		pathLength = vm_vec_dist(&state->lastPosition, &Objects[objective.ID].pos);
 	state->pathObstructionTime *= SHIP_MOVE_SPEED; // Convert time to distance before adding.
 	pathLength += state->pathObstructionTime;
-	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared. Also fuelcen trip logic. You'll understand why if you look there.
+	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared.
 }
 
 int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeThreeCheck)
@@ -2615,13 +2631,17 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 	int unlocked = 1;
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
 		if (Ranking.currentlyLockedWalls[i] == wall_num) // Let Algo through anyway if the wall is transparent and we're headed toward an unlock we don't have to go directly to (EG shooting through grate at unlocked side of door like S2).
-			unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+			unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL ||
+				(currentObjectiveType == OBJECTIVE_TYPE_OBJECT && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag))) &&
+				check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	if (!typeThreeCheck) { // If we're deciding whether to continue in find_nearest_objective_partime, we only want the wall facing Algo to be checked so wall type objectives don't always fail.
 		// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
 		wall_num = findConnectedWallNum(wall_num);
 		for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
 			if (Ranking.currentlyLockedWalls[i] == wall_num)
-				unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
+				unlocked = (currentObjectiveType == OBJECTIVE_TYPE_WALL ||
+					(currentObjectiveType == OBJECTIVE_TYPE_OBJECT && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag))) &&
+					check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	}
 	return unlocked;
 }
@@ -2668,11 +2688,6 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		// Regenerate the path since we may have checked something else in the meantime.
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, nearestObjective);
 		*path_length = calculate_path_length_partime(state, *path_start, *path_count, nearestObjective, 1);
-		// Let's record that we travelled to this segment from this direction.
-		// Algo will only count each segment-direction combination once to avoid inflating par times when it likely does huge unoptimal backtracking, due to the nature of the "nearest neighbor" approach.
-		// Levels that loop back on themselves are susceptible to having par times that are too low, but this is rare and usually non-fatal to rank possibility.
-		for (i = 1; i < player_path_length - 1; i++)
-			state->segmentVisited[Point_segs[i].segnum] = 1;
 		// Now we need to find out where to place Algo for accessible objectives.
 		// In the case of phasing through locked walls to get certain objectives, set it before the first transparent one. In the case of going into places that are too small, set it before that.
 		int wall_num;
@@ -2719,8 +2734,9 @@ int getMatcenSegnum(int matcen_num)
 			return i;
 }
 
-void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* path, int path_count)
-{ 
+void examine_path_partime(partime_calc_state* state, point_seg* path, int path_count)
+{
+	// First, let's check if the ship can actually fit through this path. Thanks to Proxy for help with this part.
 	int wall_num;
 	int side_num;
 	int adjacent_wall_num;
@@ -2731,84 +2747,101 @@ void check_for_walls_and_matcens_partime(partime_calc_state* state, point_seg* p
 		adjacent_wall_num = Segments[path[i + 1].segnum].sides[find_connecting_side(path[i + 1].segnum, path[i].segnum)].wall_num;
 		if (wall_num > -1) {
 			if (Walls[wall_num].type == WALL_BLASTABLE) {
-				for (int n = 0; n < state->doneWallsSize; n++) {
-					if (state->doneWalls[n] == wall_num) {
+				for (int n = 0; n < state->doneListSize; n++) {
+					if (state->doneList[n].type == OBJECTIVE_TYPE_WALL && state->doneList[n].ID == wall_num) {
 						thisWallDestroyed = 1;
 						break; // If algo's already destroyed this wall, don't destroy it again.
 					}
 				}
 				if (!thisWallDestroyed) {
-					// For algorithmic simplicity, wall fight time is counted toward movement time, not combat time. Sorry not sorry.
-					state->doneWalls[state->doneWallsSize] = wall_num;
-					state->doneWallsSize++;
-					state->doneWalls[state->doneWallsSize] = adjacent_wall_num; // Mark the other side of the wall as done too, before algo gets to it. Only the hps of the side we're coming from applies, and it destroys both sides.
-					state->doneWallsSize++;
+					state->combatTime += calculate_combat_time_wall(state, wall_num, 1);
+					partime_objective objective = { OBJECTIVE_TYPE_WALL, wall_num };
+					partime_objective adjacentObjective = { OBJECTIVE_TYPE_WALL, adjacent_wall_num };
+					addObjectiveToList(state->doneList, &state->doneListSize, objective, 1);
+					addObjectiveToList(state->doneList, &state->doneListSize, adjacentObjective, 1); // Mark the other side of the wall as done too, before algo gets to it. Only the hps of the side we're coming from applies, and it destroys both sides.
 				}
 			}
 		}
-	}
-	// How much time and energy does it take to handle the matcens along the way? Let's find out!
-	if (Num_robot_centers > 0) { // Don't bother constantly scanning the path for matcens on levels with no matcens.
-		for (int i = 0; i < path_count - 1; i++) { // Repeat this loop for every pair of segments on the path. I'm gonna comment every step, because either this whole process is confusing, or I'm just having a brain fog night.
-			side_num = find_connecting_side(path[i].segnum, path[i + 1].segnum); // Find the side both segments share.
-			wall_num = Segments[path[i].segnum].sides[side_num].wall_num; // Get its wall number.
-			if (wall_num > -1) { // If that wall number is valid...
-				if (Walls[wall_num].trigger > -1) { // If this wall has a trigger...
-					if (Triggers[Walls[wall_num].trigger].flags & TRIGGER_MATCEN) { // If this trigger is a matcen type...
-						double matcenTime = 0;
-						double totalMatcenTime = 0;
-						for (int c = 0; c < Triggers[Walls[wall_num].trigger].num_links; c++) { // Repeat this loop for every segment linked to this trigger.
-							if (Segments[Triggers[Walls[wall_num].trigger].seg[c]].special == SEGMENT_IS_ROBOTMAKER) { // Check them to see if they're matcens. 
-								segment* segp = &Segments[Triggers[Walls[wall_num].trigger].seg[c]]; // Whenever one is, set this variable as a shortcut so we don't have to put that long string of text every time.
-								if (RobotCenters[segp->matcen_num].robot_flags[0] != 0 && state->matcenLives[segp->matcen_num] > 0) { // If the matcen has robots in it, and isn't dead or on cooldown, consider it triggered...
-									uint	flags;
-									sbyte	legal_types[32];		//	32 bits in a word, the width of robot_flags.
-									int	num_types, robot_index;
-									robot_index = 0;
-									num_types = 0;
-									flags = RobotCenters[segp->matcen_num].robot_flags[0];
-									while (flags) {
-										if (flags & 1)
-											legal_types[num_types++] = robot_index;
-										flags >>= 1;
-										robot_index++;
-									}
-									// Find the average fight time for the robots in this matcen and multiply that by the spawn count on this difficulty.
-									int n;
-									double totalRobotTime = 0;
-									double totalAmmoUsage = 0;
-									double averageRobotTime = 0;
-									for (n = 0; n < num_types; n++) {
-										robot_info* robInfo = &Robot_info[legal_types[n]];
-										if (legal_types[n] != 10) { // Don't consider matcen gophers. They run.
-											totalRobotTime += calculate_combat_time(state, NULL, robInfo, 0, 1);
-											if (robInfo->contains_type == OBJ_ROBOT) {
-												totalRobotTime += calculate_combat_time(state, NULL, &Robot_info[robInfo->contains_id], 0, 1) * round((robInfo->contains_count * (robInfo->contains_prob / 16)));
-												robotHasPowerup(state, robInfo->contains_id, (double)(1 / num_types));
-											}
-											else
-												robotHasPowerup(state, legal_types[n], (double)(1 / num_types));
+		// How much time and ammo does it take to handle the matcens along the way? Let's find out!
+		if (Num_robot_centers > 0) { // Don't bother constantly scanning the path for matcens on levels with no matcens.
+			for (int i = 0; i < path_count - 1; i++) { // Repeat this loop for every pair of segments on the path. I'm gonna comment every step, because either this whole process is confusing, or I'm just having a brain fog night.
+				side_num = find_connecting_side(path[i].segnum, path[i + 1].segnum); // Find the side both segments share.
+				wall_num = Segments[path[i].segnum].sides[side_num].wall_num; // Get its wall number.
+				if (wall_num > -1) { // If that wall number is valid...
+					if (Walls[wall_num].trigger > -1) { // If this wall has a trigger...
+						if (Triggers[Walls[wall_num].trigger].flags & TRIGGER_MATCEN) { // If this trigger is a matcen type...
+							double matcenTime = 0;
+							double totalMatcenTime = 0;
+							for (int c = 0; c < Triggers[Walls[wall_num].trigger].num_links; c++) { // Repeat this loop for every segment linked to this trigger.
+								if (Segments[Triggers[Walls[wall_num].trigger].seg[c]].special == SEGMENT_IS_ROBOTMAKER) { // Check them to see if they're matcens. 
+									segment* segp = &Segments[Triggers[Walls[wall_num].trigger].seg[c]]; // Whenever one is, set this variable as a shortcut so we don't have to put that long string of text every time.
+									if (RobotCenters[segp->matcen_num].robot_flags[0] > 0 && state->matcenLives[segp->matcen_num] > 0) { // If the matcen has robots in it, and isn't dead, consider it triggered...
+										uint	flags;
+										sbyte	legal_types[32];		//	32 bits in a word, the width of robot_flags.
+										int	num_types, robot_index;
+										robot_index = 0;
+										num_types = 0;
+										flags = RobotCenters[segp->matcen_num].robot_flags[0];
+										while (flags) {
+											if (flags & 1)
+												legal_types[num_types++] = robot_index;
+											flags >>= 1;
+											robot_index++;
 										}
-										totalAmmoUsage += state->ammo_usage;
+										// Find the average fight time for the robots in this matcen and multiply that by the spawn count on this difficulty.
+										int n;
+										double totalRobotTime = 0;
+										double totalAmmoUsage = 0;
+										double averageRobotTime = 0;
+										for (n = 0; n < num_types; n++) {
+											robot_info* robInfo = &Robot_info[legal_types[n]];
+											if (legal_types[n] != 10) { // Don't consider matcen gophers. They run.
+												totalRobotTime += calculate_combat_time(state, NULL, robInfo, 0, 1);
+												if (robInfo->contains_type == OBJ_ROBOT) {
+													totalRobotTime += calculate_combat_time(state, NULL, &Robot_info[robInfo->contains_id], 0, 1) * round((robInfo->contains_count * (robInfo->contains_prob / 16)));
+													robotHasPowerup(state, robInfo->contains_id, (double)(1 / num_types));
+												}
+												else
+													robotHasPowerup(state, legal_types[n], (double)(1 / num_types));
+											}
+											totalAmmoUsage += state->ammo_usage;
+										}
+										averageRobotTime = totalRobotTime / num_types;
+										matcenTime += averageRobotTime * (Difficulty_level + 3);
+										state->matcenLives[segp->matcen_num]--;
+										state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
+										if (matcenTime > 0)
+											printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), state->matcenLives[segp->matcen_num]);
+										totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
 									}
-									averageRobotTime = totalRobotTime / num_types;
-									matcenTime += averageRobotTime * (Difficulty_level + 3);
-									state->matcenLives[segp->matcen_num]--;
-									state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
-									if (matcenTime > 0)
-										printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), state->matcenLives[segp->matcen_num]);
-									totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
 								}
 							}
-						}
-						// There's a minimum time for all matcen robots spawned on this path to be killed.
-						if (matcenTime > 0 && matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime) {
-							matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
-							printf("Total fight time: %.3fs\n", matcenTime);
-							state->combatTime += matcenTime;
-							state->matcenTime += matcenTime;
+							// There's a minimum time for all matcen robots spawned on this path to be killed.
+							if (matcenTime > 0 && matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime) {
+								matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
+								printf("Total fight time: %.3fs\n", matcenTime);
+								state->combatTime += matcenTime;
+								state->matcenTime += matcenTime;
+							}
 						}
 					}
+				}
+			}
+		}
+		// If there's ammo in this segment, collect it.
+		for (int objNum = 0; objNum <= Highest_object_index; objNum++) {
+			if (Objects[objNum].type == OBJ_POWERUP && (Objects[objNum].id == POW_VULCAN_AMMO || (Objects[objNum].id == POW_VULCAN_WEAPON && !state->heldWeapons[VULCAN_ID])) && Objects[objNum].segnum == path[i].segnum) {
+				// ...make sure we didn't already get this one
+				int thisSourceCollected = 0;
+				for (int j = 0; j < state->doneListSize; j++)
+					if (state->doneList[j].type == OBJECTIVE_TYPE_OBJECT && state->doneList[j].ID == objNum) {
+						thisSourceCollected = 1;
+						break;
+					}
+				if (!thisSourceCollected) {
+					state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
+					partime_objective ammoObjective = { OBJECTIVE_TYPE_OBJECT, objNum };
+					addObjectiveToList(state->doneList, &state->doneListSize, ammoObjective, 1);
 				}
 			}
 		}
@@ -2832,7 +2865,9 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 			if (obj->id == POW_FUSION_WEAPON)
 				weapon_id = FUSION_ID;
 			if (weapon_id) { // If the powerup we got is a weapon, sets Algo's chance of not having it to 0.
-				if (weapon_id == VULCAN_ID)
+				if (weapon_id == VULCAN_ID && state->heldWeapons[weapon_id])
+					state->vulcanAmmo += STARTING_VULCAN_AMMO;
+				else
 					state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
 				state->heldWeapons[weapon_id] = 0;
 			}
@@ -2894,7 +2929,9 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 				if (obj->contains_id == POW_FUSION_WEAPON)
 					weapon_id = FUSION_ID;
 				if (weapon_id) { // If the powerup we got is a weapon, sets Algo's chance of not having it to 0.
-					if (weapon_id == VULCAN_ID)
+					if (weapon_id == VULCAN_ID && state->heldWeapons[weapon_id])
+						state->vulcanAmmo += STARTING_VULCAN_AMMO;
+					else
 						state->vulcanAmmo += STARTING_VULCAN_AMMO / 2;
 					state->heldWeapons[weapon_id] = 0;
 				}
@@ -2944,7 +2981,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	// Now clear its checklists.
 	state.toDoListSize = 0;
 	state.doneListSize = 0;
-	state.blackListSize = 0;
 	state.segnum = ConsoleObject->segnum; // Start Algo off where the player spawns.
 	state.lastPosition = ConsoleObject->pos; // Both in segnum and in coordinates. (Shoutout to Maximum level 17's quads being at spawn for letting me catch this.)
 	int lastSegnum = ConsoleObject->segnum; // So the printf showing paths to and from segments works.
@@ -2955,7 +2991,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	double matcenTime = 0; // Debug variable to see how much time matcens are adding to the par time.
 	point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
 	int path_count; // The number of segments in the path we're looking at.
-	state.doneWallsSize = 0;
 	// The values for each held weapon go by weapon ID, and are set based on how likely it is Algo doesn't have the weapon. It's only allowed to use a certain ID's weapon if its index is 0.
 	// They start at 1, getting influenced by robot drop chances (automatically set to 0 if a weapon is picked up directly). Once it reaches a certain decimal value (1/16 chance), it automatically sets to 0.
 	state.heldWeapons[0] = 0;
@@ -2974,8 +3009,8 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	// Populate the locked walls list.
 	initLockedWalls(&state, 1);
 		
-	for (i = 0; i <= Highest_segment_index; i++) { // Iterate through every side of every segment, measuring their sizes.
-		for (int s = 0; s < 6; s++) {
+	for (i = 0; i <= Highest_segment_index; i++) // Iterate through every side of every segment, measuring their sizes.
+		for (int s = 0; s < 6; s++)
 			if (Segments[i].children[s] > -1) { // Don't measure closed sides. We can't go through them anyway.
 				// Measure the distance between all of that side's verts to determine whether we can fit. ai_door_is_openable will use them later to disallow passage if we can't.
 				int a = vm_vec_dist(&Vertices[Segments[i].verts[Side_to_verts[s][0]]], &Vertices[Segments[i].verts[Side_to_verts[s][1]]]);
@@ -2988,9 +3023,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			}
 			else
 				Ranking.parTimeSideSizes[i][s] = ConsoleObject->size * 2; // If a side is closed, mark it down as big enough.
-		}
-		state.segmentVisited[i] = 0;
-	}
 	for (i = 0; i <= Highest_segment_index; i++) // Lay out the map for where the "inaccessible" territory is so we can mark objectives within it as such.
 		state.isSegmentAccessible[i] = determineSegmentAccessibility(&state, i);
 		
@@ -3009,17 +3041,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 				}
-			}
-			for (i = 0; i < state.toDoListSize;) { // Now we go through and blacklist anything behind a reactor wall.
-				partime_objective objective = { state.toDoList[i].type , state.toDoList[i].ID }; // Save a snapshot of what this index currently is, so the list shifting doesn't cause the wrong thing to be added.
-				create_path_partime(ConsoleObject->segnum, getObjectiveSegnum(objective), &path_start, &path_count, &state, objective);
-				int lockedWallID = find_reactor_wall_partime(&state, path_start, path_count);
-				if (lockedWallID > -1) {
-					removeObjectiveFromList(state.toDoList, &state.toDoListSize, objective);
-					addObjectiveToList(state.blackList, &state.blackListSize, objective, 0);
-				}
-				else
-					i++;
 			}
 		}
 		if (Ranking.parTimeLoops == 1) {
@@ -3056,14 +3077,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 					// Let's hope no one makes a boss be worth negative points.
 				}
-			}
-		}
-		if (Ranking.parTimeLoops == 2) {
-			int blackListSize = state.blackListSize; // We need a version that stays at the initial value, since state.blackListSize is actively decreased by the code below.
-			for (i = 0; i < blackListSize; i++) { // Put the stuff we blacklisted earlier back on the list now that the reactor/boss is dead.
-				partime_objective objective = { state.blackList[0].type, state.blackList[0].ID };
-				removeObjectiveFromList(state.blackList, &state.blackListSize, objective);
-				addObjectiveToList(state.toDoList, &state.toDoListSize, objective, 0);
 			}
 		}
 		if (Ranking.parTimeLoops == 3) // Put the exit on the list.
@@ -3122,7 +3135,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				printf("Path from segment %i to %i: %.3fs\n", lastSegnum, nearestObjectiveSegnum, pathLength / SHIP_MOVE_SPEED);
 				respond_to_objective_partime(&state, nearestObjective);
 				if (path_start != NULL)
-					check_for_walls_and_matcens_partime(&state, path_start, path_count);
+					examine_path_partime(&state, path_start, path_count);
 				// Cap algo's energy and ammo like the player's.
 				if (state.vulcanAmmo > STARTING_VULCAN_AMMO * 4)
 					state.vulcanAmmo = STARTING_VULCAN_AMMO * 4;
