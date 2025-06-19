@@ -1997,8 +1997,6 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	// First initialize weapon and enemy stuff. This is gonna be a long section.
 	// Everything will be doubles due to the variables' involvement in division equations.
 
-	if (weapon_id <= LASER_ID_L4)
-		weapon_id = 0; // In D1, all laser levels use level 1's stats... for some reason.
 	double projectile_speed = f2fl(Weapon_info[weapon_id].speed[Difficulty_level]);
 	double player_size = f2fl(ConsoleObject->size);
 	double projectile_size = 1;
@@ -2010,16 +2008,11 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	double enemy_runs = 0;
 	double enemy_health = f2fl(robInfo->strength);
 	double enemy_max_speed = f2fl(robInfo->max_speed[Difficulty_level]);
-	double enemy_evade_speed = robInfo->evade_speed[Difficulty_level] * 32;
-	if (enemy_evade_speed > enemy_max_speed)
-		enemy_evade_speed *= 0.75;
 	if (isObject) {
 		if (obj->ctype.ai_info.behavior == AIB_RUN_FROM)
 			enemy_runs = 1;
-		if (obj->type == OBJ_CNTRLCEN) { // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
+		if (obj->type == OBJ_CNTRLCEN) // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
 			enemy_max_speed = 0;
-			enemy_evade_speed = 0;
-		}
 	}
 	double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 	double enemy_weapon_speed = f2fl(Weapon_info[robInfo->weapon_type].speed[Difficulty_level]);
@@ -2074,17 +2067,11 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		accuracy_multiplier *= 0.5;
 
 	double accuracy;
-	if ((enemy_runs && enemy_max_speed) || (!enemy_runs && enemy_evade_speed))
+	if (enemy_max_speed)
 		if (optimal_distance > 80) // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
-			if (enemy_runs)
-				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
-			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed));
+			accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
 		else
-			if (enemy_runs)
-				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
-			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed));
+			accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
 	else
 		return accuracy_multiplier; // If the enemy doesn't move in the relevant way, guarantee all hits (assuming efficient size).
 	if (accuracy * accuracy_multiplier > 1) // Accuracy can't be greater than 100%.
@@ -2764,66 +2751,65 @@ void examine_path_partime(partime_calc_state* state, point_seg* path, int path_c
 		}
 		// How much time and ammo does it take to handle the matcens along the way? Let's find out!
 		if (Num_robot_centers > 0) { // Don't bother constantly scanning the path for matcens on levels with no matcens.
-			for (int i = 0; i < path_count - 1; i++) { // Repeat this loop for every pair of segments on the path. I'm gonna comment every step, because either this whole process is confusing, or I'm just having a brain fog night.
-				side_num = find_connecting_side(path[i].segnum, path[i + 1].segnum); // Find the side both segments share.
-				wall_num = Segments[path[i].segnum].sides[side_num].wall_num; // Get its wall number.
-				if (wall_num > -1) { // If that wall number is valid...
-					if (Walls[wall_num].trigger > -1) { // If this wall has a trigger...
-						if (Triggers[Walls[wall_num].trigger].flags & TRIGGER_MATCEN) { // If this trigger is a matcen type...
-							double matcenTime = 0;
-							double totalMatcenTime = 0;
-							for (int c = 0; c < Triggers[Walls[wall_num].trigger].num_links; c++) { // Repeat this loop for every segment linked to this trigger.
-								if (Segments[Triggers[Walls[wall_num].trigger].seg[c]].special == SEGMENT_IS_ROBOTMAKER) { // Check them to see if they're matcens. 
-									segment* segp = &Segments[Triggers[Walls[wall_num].trigger].seg[c]]; // Whenever one is, set this variable as a shortcut so we don't have to put that long string of text every time.
-									if (RobotCenters[segp->matcen_num].robot_flags[0] > 0 && state->matcenLives[segp->matcen_num] > 0) { // If the matcen has robots in it, and isn't dead, consider it triggered...
-										uint	flags;
-										sbyte	legal_types[32];		//	32 bits in a word, the width of robot_flags.
-										int	num_types, robot_index;
-										robot_index = 0;
-										num_types = 0;
-										flags = RobotCenters[segp->matcen_num].robot_flags[0];
-										while (flags) {
-											if (flags & 1)
-												legal_types[num_types++] = robot_index;
-											flags >>= 1;
-											robot_index++;
-										}
-										// Find the average fight time for the robots in this matcen and multiply that by the spawn count on this difficulty.
-										int n;
-										double totalRobotTime = 0;
-										double totalAmmoUsage = 0;
-										double averageRobotTime = 0;
-										for (n = 0; n < num_types; n++) {
-											robot_info* robInfo = &Robot_info[legal_types[n]];
-											if (legal_types[n] != 10) { // Don't consider matcen gophers. They run.
-												totalRobotTime += calculate_combat_time(state, NULL, robInfo, 0, 1);
-												if (robInfo->contains_type == OBJ_ROBOT) {
-													totalRobotTime += calculate_combat_time(state, NULL, &Robot_info[robInfo->contains_id], 0, 1) * round((robInfo->contains_count * (robInfo->contains_prob / 16)));
-													robotHasPowerup(state, robInfo->contains_id, (double)(1 / num_types));
-												}
-												else
-													robotHasPowerup(state, legal_types[n], (double)(1 / num_types));
-											}
-											totalAmmoUsage += state->ammo_usage;
-										}
-										averageRobotTime = totalRobotTime / num_types;
-										matcenTime += averageRobotTime * (Difficulty_level + 3);
-										state->matcenLives[segp->matcen_num]--;
-										state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
-										if (matcenTime > 0)
-											printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), state->matcenLives[segp->matcen_num]);
-										totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
+			side_num = find_connecting_side(path[i].segnum, path[i + 1].segnum); // Find the side both segments share.
+			wall_num = Segments[path[i].segnum].sides[side_num].wall_num; // Get its wall number.
+			if (wall_num > -1) { // If that wall number is valid...
+				if (Walls[wall_num].trigger > -1) { // If this wall has a trigger...
+					if (Triggers[Walls[wall_num].trigger].flags & TRIGGER_MATCEN) { // If this trigger is a matcen type...
+						double matcenTime = 0;
+						double totalMatcenTime = 0;
+						for (int c = 0; c < Triggers[Walls[wall_num].trigger].num_links; c++) { // Repeat this loop for every segment linked to this trigger.
+							if (Segments[Triggers[Walls[wall_num].trigger].seg[c]].special == SEGMENT_IS_ROBOTMAKER) { // Check them to see if they're matcens. 
+								segment* segp = &Segments[Triggers[Walls[wall_num].trigger].seg[c]]; // Whenever one is, set this variable as a shortcut so we don't have to put that long string of text every time.
+								if (RobotCenters[segp->matcen_num].robot_flags[0] > 0 && state->matcenLives[segp->matcen_num] > 0) { // If the matcen has robots in it, and isn't dead, consider it triggered...
+									uint	flags;
+									sbyte	legal_types[32];		//	32 bits in a word, the width of robot_flags.
+									int	num_types, robot_index;
+									robot_index = 0;
+									num_types = 0;
+									flags = RobotCenters[segp->matcen_num].robot_flags[0];
+									while (flags) {
+										if (flags & 1)
+											legal_types[num_types++] = robot_index;
+										flags >>= 1;
+										robot_index++;
 									}
+									// Find the average fight time for the robots in this matcen and multiply that by the spawn count on this difficulty.
+									int n;
+									double totalRobotTime = 0;
+									double totalAmmoUsage = 0;
+									double averageRobotTime = 0;
+									for (n = 0; n < num_types; n++) {
+										robot_info* robInfo = &Robot_info[legal_types[n]];
+										if (legal_types[n] != 10) { // Don't consider matcen gophers. They run.
+											totalRobotTime += calculate_combat_time(state, NULL, robInfo, 0, 1);
+											if (robInfo->contains_type == OBJ_ROBOT) {
+												totalRobotTime += calculate_combat_time(state, NULL, &Robot_info[robInfo->contains_id], 0, 1) * round((robInfo->contains_count * (robInfo->contains_prob / 16)));
+												robotHasPowerup(state, robInfo->contains_id, (double)(1 / num_types));
+											}
+											else
+												robotHasPowerup(state, legal_types[n], (double)(1 / num_types));
+										}
+										totalAmmoUsage += state->ammo_usage;
+									}
+									averageRobotTime = totalRobotTime / num_types;
+									matcenTime += averageRobotTime * (Difficulty_level + 3);
+									state->matcenLives[segp->matcen_num]--;
+									state->vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
+									if (matcenTime > 0)
+										printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), state->matcenLives[segp->matcen_num]);
+									totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
 								}
 							}
-							// There's a minimum time for all matcen robots spawned on this path to be killed.
-							if (matcenTime > 0 && matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime) {
-								matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
-								printf("Total fight time: %.3fs\n", matcenTime);
-								state->combatTime += matcenTime;
-								state->matcenTime += matcenTime;
-							}
 						}
+						// There's a minimum time for all matcen robots spawned on this path to be killed.
+						if (matcenTime > 0) {
+							if (matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime)
+								matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
+							printf("Total fight time: %.3fs\n", matcenTime);
+						}
+						state->combatTime += matcenTime;
+						state->matcenTime += matcenTime;
 					}
 				}
 			}

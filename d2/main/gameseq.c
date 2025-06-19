@@ -1841,6 +1841,8 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
 			wall_health = f2fl(Walls[wall_num].hps) + 1; // We do +1 to account for walls still being alive at exactly 0 HP.
+			if (!(n > LASER_ID_L4) || n == LASER_ID_L5 || n == LASER_ID_L6) // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rates in theirs.
+				fire_rate = (double)f1_0 / Weapon_info[0].fire_wait;
 			// Assume accuracy is always 100% for walls. They're big and don't move lol.
 			int shots = ceil(wall_health / damage); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 			if (f2fl(state->vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
@@ -1911,15 +1913,10 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 	double enemy_behavior = robInfo->behavior;
 	double enemy_health = f2fl(robInfo->strength);
 	double enemy_max_speed = f2fl(robInfo->max_speed[Difficulty_level]);
-	double enemy_evade_speed = robInfo->evade_speed[Difficulty_level] * 32;
-	if (enemy_evade_speed > enemy_max_speed)
-		enemy_evade_speed *= 0.75;
 	if (isObject) {
 		enemy_behavior = obj->ctype.ai_info.behavior;
-		if (obj->type == OBJ_CNTRLCEN) { // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
+		if (obj->type == OBJ_CNTRLCEN) // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
 			enemy_max_speed = 0;
-			enemy_evade_speed = 0;
-		}
 	}
 	if (robInfo->thief)
 		enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
@@ -1987,17 +1984,11 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		accuracy_multiplier *= 0.5;
 
 	double accuracy;
-	if ((enemy_behavior == AIB_RUN_FROM && enemy_max_speed) || (enemy_behavior != AIB_RUN_FROM && enemy_evade_speed))
+	if (enemy_max_speed)
 		if (optimal_distance > 80) // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
-			if (enemy_behavior == AIB_RUN_FROM)
-				accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
-			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (80 / projectile_speed));
+			accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
 		else
-			if (enemy_behavior == AIB_RUN_FROM)
-				accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
-			else
-				accuracy = ((dodge_distance / enemy_evade_speed) / (optimal_distance / projectile_speed));
+			accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
 	else
 		return accuracy_multiplier; // If the enemy doesn't move in the relevant way, guarantee all hits (assuming efficient size).
 	if (accuracy * accuracy_multiplier > 1) // Accuracy can't be greater than 100%.
@@ -2048,6 +2039,8 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 			double splash_radius = f2fl(weapon_info->damage_radius);
 			double enemy_health = f2fl(robInfo->strength + 1); // We do +1 to account for robots still being alive at exactly 0 HP.
 			double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
+			if (!(weapon_id > LASER_ID_L4) || weapon_id == LASER_ID_L5 || weapon_id == LASER_ID_L6) // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rates in theirs.
+				fire_rate = (double)f1_0 / Weapon_info[0].fire_wait;
 			if (isObject) {
 				if (obj->type == OBJ_CNTRLCEN) {
 					if (weapon_id == FUSION_ID)
@@ -2856,12 +2849,13 @@ void examine_path_partime(partime_calc_state* state, point_seg* path, int path_c
 							}
 						}
 						// There's a minimum time for all matcen robots spawned on this path to be killed.
-						if (matcenTime > 0 && matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime) {
-							matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
+						if (matcenTime > 0) {
+							if (matcenTime < 3.5 * (Difficulty_level + 2) + totalMatcenTime)
+								matcenTime = 3.5 * (Difficulty_level + 2) + totalMatcenTime;
 							printf("Total fight time: %.3fs\n", matcenTime);
-							state->combatTime += matcenTime;
-							state->matcenTime += matcenTime;
 						}
+						state->combatTime += matcenTime;
+						state->matcenTime += matcenTime;
 					}
 				}
 			}
