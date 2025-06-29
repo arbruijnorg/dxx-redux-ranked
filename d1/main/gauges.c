@@ -781,10 +781,19 @@ void hud_show_speedometer()
 
 void hud_show_pointsleftinlevel()
 {
-	double pointsleftinlevel = Ranking.maxScore / 3 - Ranking.rankScore;
-
+	double pointsleftinlevel = 0;
+	for (int i = 0; i <= Highest_object_index; i++) {
+		if (Objects[i].type == OBJ_ROBOT && !Objects[i].matcen_creator && Robot_info[Objects[i].id].score_value > 0)
+			pointsleftinlevel += Robot_info[Objects[i].id].score_value;
+		if (Objects[i].type == OBJ_CNTRLCEN && !Control_center_destroyed)
+			pointsleftinlevel += CONTROL_CEN_SCORE;
+		if (Objects[i].type == OBJ_HOSTAGE)
+			pointsleftinlevel += HOSTAGE_SCORE;
+		if (Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_EXTRA_LIFE)
+			pointsleftinlevel += 10000;
+	}
 	if (HUD_toolong)
-		return;
+		return;	
 
 	gr_set_curfont(GAME_FONT);
 
@@ -792,12 +801,8 @@ void hud_show_pointsleftinlevel()
 		Color_0_31_0 = BM_XRGB(0, 31, 0);
 	gr_set_fontcolor(Color_0_31_0, -1);
 
-	if (pointsleftinlevel - Ranking.missedRngSpawn) {
-		if (Ranking.missedRngSpawn < 0)
-			gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel - Ranking.missedRngSpawn);
-		else
-			gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
-	}
+	if (pointsleftinlevel)
+		gr_printf(SWIDTH - FSPACX(65), FSPACY(15), "%.0f remains", pointsleftinlevel);
 	else {
 		gr_set_fontcolor(BM_XRGB(255, 215, 0), -1);
 		gr_printf(SWIDTH - FSPACX(55), FSPACY(15), "FULL CLEAR!");

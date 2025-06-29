@@ -1598,7 +1598,7 @@ int ai_door_is_openable(object *objp, segment *segp, int sidenum, int currentObj
 		if (objectiveInaccessible && currentObjectiveType > -1 && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
 			return 1;
 		else
-			return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID, 0);
+			return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
 	}
 
 	wallp = &Walls[wall_num];

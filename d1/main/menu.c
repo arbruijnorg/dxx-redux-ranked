@@ -502,9 +502,6 @@ void create_main_menu(newmenu_item* m, int* menu_choice, int* callers_num_option
 	ADD_ITEM(TXT_NEW_GAME, MENU_NEW_GAME, KEY_N);
 
 	ADD_ITEM(TXT_LOAD_GAME, MENU_LOAD_GAME, KEY_L);
-#if defined(USE_UDP)
-	ADD_ITEM(TXT_MULTIPLAYER_, MENU_MULTIPLAYER, -1);
-#endif
 
 	ADD_ITEM(TXT_OPTIONS_, MENU_CONFIG, -1);
 	ADD_ITEM(TXT_CHANGE_PILOTS, MENU_NEW_PLAYER, unused);

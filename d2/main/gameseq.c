@@ -842,45 +842,6 @@ int truncateRanks(int rank)
 	return newRank;
 }
 
-int calculateProjectedRank()
-{
-	// This function, largely a modified version of calculateRank, is an experimental disabled feature where your end of level score is projected live throughout the level as opposed to your rank score. It can be enabled in gauges.c under hud_show_score.
-	// It was gonna show alongside a live rank, but I decided against it for a multitude of reasons, including vague spoilers of levels' contents/requirements for new players, stress of constant point loss, and inconsistency with the remains counter.
-	int rankPoints2 = -10;
-	double maxScore = Ranking.maxScore - Ranking.num_thief_points * 3;
-	maxScore = (int)maxScore;
-	double skillPoints = Ranking.rankScore * (Difficulty_level / 4);
-	skillPoints = (int)skillPoints;
-	double timePoints = (maxScore / 1.5) / pow(2, f2fl(Players[Player_num].time_level) / Ranking.parTime);
-	if (f2fl(Players[Player_num].time_level) < Ranking.parTime)
-		timePoints = (maxScore / 2.4) * (1 - (f2fl(Players[Player_num].time_level) / Ranking.parTime) * 0.2);
-	timePoints = (int)timePoints;
-	int hostagePoints = Players[Player_num].hostages_on_board * 2500 * ((Difficulty_level + 8) / 12);
-	if (Players[Player_num].hostages_on_board == Players[Player_num].hostages_level)
-		hostagePoints *= 3;
-	hostagePoints = round(hostagePoints); // Round this because I got 24999 hostage bonus once.
-	double score = Ranking.rankScore + skillPoints + timePoints + Ranking.missedRngSpawn + hostagePoints;
-	maxScore += Players[Player_num].hostages_level * 7500;
-	double deathPoints = maxScore * 0.4 - maxScore * (0.4 / pow(2, Ranking.deathCount));
-	deathPoints = (int)deathPoints;
-	score -= deathPoints;
-	if (rankPoints2 > -5) {
-		rankPoints2 = (score / maxScore) * 12;
-	}
-	if (rankPoints2 > -5 && maxScore == 0)
-		rankPoints2 = 12;
-	Ranking.calculatedScore = score;
-	if (rankPoints2 < -5)
-		Ranking.rank = 0;
-	if (rankPoints2 > -5)
-		Ranking.rank = 1;
-	if (rankPoints2 >= 0)
-		Ranking.rank = (int)rankPoints2 + 2;
-	if (!PlayerCfg.RankShowPlusMinus)
-		Ranking.rank = truncateRanks(Ranking.rank);
-	return Ranking.rank;
-}
-
 int calculateRank(int level_num, int update_warm_start_status)
 {
 	int levelHostages = 0;
@@ -927,7 +888,8 @@ int calculateRank(int level_num, int update_warm_start_status)
 			PHYSFSX_getsTerminated(fp, buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
 			PHYSFSX_getsTerminated(fp, buffer);
-			Ranking.warmStart = atoi(buffer);
+			if (update_warm_start_status)
+				Ranking.warmStart = atoi(buffer);
 		}
 	}
 	PHYSFS_close(fp);
@@ -951,7 +913,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 	if (deathCount == -1)
 		deathPoints = ceil(maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	else
-		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
+		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount / (parTime / 360))));
 	score += deathPoints;
 	if (rankPoints2 > -5)
 		if (maxScore)
@@ -965,6 +927,8 @@ int calculateRank(int level_num, int update_warm_start_status)
 		Ranking.rank = 1;
 	if (rankPoints2 >= 0)
 		Ranking.rank = (int)rankPoints2 + 2;
+	if (Ranking.rank > 15)
+		Ranking.rank = 15;
 	if (!PlayerCfg.RankShowPlusMinus)
 		Ranking.rank = truncateRanks(Ranking.rank);
 	return Ranking.rank;
@@ -1099,7 +1063,6 @@ void DoEndLevelScoreGlitz(int network)
 {
 	if (Ranking.level_time == 0)
 		Ranking.level_time = (Players[Player_num].hours_level * 3600) + ((double)Players[Player_num].time_level / 65536); // Failsafe for if this isn't updated.
-	Ranking.maxScore -= Ranking.num_thief_points * 3; // Subtract thieves from the max score right before result screen loads so the "remains" counter is correct in the level.
 	RestartLevel.restartsCache = RestartLevel.restarts;
 	RestartLevel.restarts = 0;
 	RestartLevel.isResults = 1;
@@ -1138,10 +1101,9 @@ void DoEndLevelScoreGlitz(int network)
 	shield_points -= shield_points % 50;
 	energy_points = f2i(Players[Player_num].energy) * 2 * mine_level;
 	energy_points -= energy_points % 50;
-	time_points = (Ranking.maxScore / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
+	time_points = ((Ranking.maxScore - Players[Player_num].hostages_level * 7500) / 1.5) / pow(2, Ranking.level_time / Ranking.parTime);
 	if (Ranking.level_time < Ranking.parTime)
-		time_points = (Ranking.maxScore / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
-	Ranking.maxScore += Players[Player_num].hostages_level * 7500;
+		time_points = ((Ranking.maxScore - Players[Player_num].hostages_level * 7500) / 2.4) * (1 - (Ranking.level_time / Ranking.parTime) * 0.2);
 	hostage_points = Players[Player_num].hostages_on_board * 500 * (Difficulty_level + 1);
 	hostage_points2 = Players[Player_num].hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
 
@@ -1163,7 +1125,7 @@ void DoEndLevelScoreGlitz(int network)
 	if (Players[Player_num].hostages_on_board == Players[Player_num].hostages_level)
 		hostage_points2 *= 3;
 	hostage_points2 = round(hostage_points2); // Round this because I got 24999 hostage bonus once.
-	death_points = -(Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount)));
+	death_points = -(Ranking.maxScore * 0.4 - Ranking.maxScore * (0.4 / pow(2, Ranking.deathCount / (Ranking.parTime / 360))));
 	if (Ranking.noDamage)
 		death_points = ceil(Ranking.maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	Ranking.missedRngSpawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
@@ -1220,6 +1182,8 @@ void DoEndLevelScoreGlitz(int network)
 		int rank = 0;
 		if (rankPoints >= 0)
 			rank = (int)rankPoints + 1;
+		if (rank > 14)
+			rank = 14;
 		if (!PlayerCfg.RankShowPlusMinus)
 			rank = truncateRanks(rank + 1) - 1;
 		endlevel_current_rank = rank;
@@ -1306,7 +1270,7 @@ void DoEndLevelScoreGlitz(int network)
 		// m[c].type = NM_TYPE_MENU;	m[c++].text = "Ok";
 
 		if (!Ranking.quickload) 
-			sprintf(title, "%s %i %s\n%s %s \n Press R to restart level", TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
+			sprintf(title, "%s %i %s\n%s %s \nR restarts level", TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
 		else
 			sprintf(title, "%s %i %s\n%s %s \n", TXT_LEVEL, Current_level_num, TXT_COMPLETE, Current_level_name, TXT_DESTROYED);
 
@@ -1339,7 +1303,6 @@ void DoEndSecretLevelScoreGlitz()
 	char				title[128];
 	int				is_last_level = 0;
 	Ranking.secretlevel_time = Ranking.secretlevel_time / 65536;
-	Ranking.secretMaxScore -= Ranking.num_secret_thief_points * 3; // Subtract thieves from the max score right before result screen loads so the "remains" counter is correct in the level.
 
 	//	Compute level player is on, deal with secret levels (negative numbers)
 
@@ -1348,15 +1311,14 @@ void DoEndSecretLevelScoreGlitz()
 
 	skill_points = (int)(Ranking.secretRankScore * ((double)Difficulty_level / 4));
 
-	time_points = (Ranking.secretMaxScore / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
+	time_points = ((Ranking.secretMaxScore - Players[Player_num].hostages_level * 7500) / 1.5) / pow(2, Ranking.secretlevel_time / Ranking.secretParTime);
 	if (Ranking.secretlevel_time < Ranking.secretParTime)
-		time_points = (Ranking.secretMaxScore / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
-	Ranking.secretMaxScore += Ranking.hostages_secret_level * 7500;
+		time_points = ((Ranking.secretMaxScore - Players[Player_num].hostages_level * 7500) / 2.4) * (1 - (Ranking.secretlevel_time / Ranking.secretParTime) * 0.2);
 	hostage_points = Ranking.secret_hostages_on_board * 2500 * (((double)Difficulty_level + 8) / 12);
 	if (Ranking.secret_hostages_on_board == Ranking.hostages_secret_level)
 		hostage_points *= 3;
 	hostage_points = round(hostage_points); // Round this because I got 24999 hostage bonus once.
-	death_points = -(Ranking.secretMaxScore * 0.4 - Ranking.secretMaxScore * (0.4 / pow(2, Ranking.secretDeathCount)));
+	death_points = -(Ranking.secretMaxScore * 0.4 - Ranking.secretMaxScore * (0.4 / pow(2, Ranking.secretDeathCount / (Ranking.secretParTime / 360))));
 	if (Ranking.secretNoDamage)
 		death_points = ceil(Ranking.secretMaxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	Ranking.secretMissedRngSpawn *= ((double)Difficulty_level + 4) / 4; // Add would-be skill bonus into the penalty for ignored random offspring. This makes ignoring them on high difficulties more consistent and punishing.
@@ -1412,6 +1374,8 @@ void DoEndSecretLevelScoreGlitz()
 		int rank = 0;
 		if (rankPoints >= 0)
 			rank = (int)rankPoints + 1;
+		if (rank > 14)
+			rank = 14;
 		if (!PlayerCfg.RankShowPlusMinus)
 			rank = truncateRanks(rank + 1) - 1;
    		endlevel_current_rank = rank;
@@ -1570,7 +1534,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	if (deathCount == -1)
 		deathPoints = ceil(maxScore / 12); // Round up instead of down for no damage bonus so score can't fall a point short and miss a rank.
 	else
-		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount)));
+		deathPoints = -(maxScore * 0.4 - maxScore * (0.4 / pow(2, deathCount / (parTime / 360))));
 	deathPoints = (int)deathPoints;
 	score += deathPoints;
 
@@ -1623,6 +1587,8 @@ void DoBestRanksScoreGlitz(int level_num)
 	int rank = 0;
 	if (rankPoints >= 0)
 		rank = (int)rankPoints + 1;
+	if (rank > 14)
+		rank = 14;
 	if (!PlayerCfg.RankShowPlusMinus)
 		rank = truncateRanks(rank + 1) - 1;
 	endlevel_current_rank = rank;
@@ -1794,7 +1760,6 @@ typedef struct
 	fix vulcanAmmo; // What it sounds like.
 	// How much robot HP we've had to destroy to this point.
 	double combatTime;
-	double warmStartCombatTime;
 	// Info about the weapon algo currently has equipped.
 	double ammo_usage; // For when using vulcan.
 	double heldWeapons[36]; // Which weapons algo has.
@@ -1840,7 +1805,7 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 			fire_rate = (double)f1_0 / Weapon_info[n].fire_wait;
 			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
-			wall_health = f2fl(Walls[wall_num].hps) + 1; // We do +1 to account for walls still being alive at exactly 0 HP.
+			wall_health = f2fl(Walls[wall_num].hps + 1) - WallAnims[Walls[wall_num].clip_num].num_frames; // For some reason the "real" health of a wall is its hps minus its frame count. Refer to the last line of dxx-redux-ranked commit cb1d724's description.
 			if (!(n > LASER_ID_L4) || n == LASER_ID_L5 || n == LASER_ID_L6) // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rates in theirs.
 				fire_rate = (double)f1_0 / Weapon_info[0].fire_wait;
 			// Assume accuracy is always 100% for walls. They're big and don't move lol.
@@ -1861,33 +1826,35 @@ double calculate_combat_time_wall(partime_calc_state* state, int wall_num, int p
 		if (!(topWeapon > LASER_ID_L4) || topWeapon == LASER_ID_L5 || topWeapon == LASER_ID_L6) {
 			if (!state->hasQuads) {
 				if (!(topWeapon > LASER_ID_L4))
-					printf("Took %.3fs to fight wall %i with quad laser %i\n", lowestCombatTime, wall_num, topWeapon + 1);
+					printf("Took %.3fs to fight wall %i with quad laser %i\n", lowestCombatTime + 1, wall_num, topWeapon + 1);
 				else
-					printf("Took %.3fs to fight wall %i with quad laser %i\n", lowestCombatTime, wall_num, topWeapon - 25);
+					printf("Took %.3fs to fight wall %i with quad laser %i\n", lowestCombatTime + 1, wall_num, topWeapon - 25);
 			}
 			else {
 				if (!(topWeapon > LASER_ID_L4))
-					printf("Took %.3fs to fight wall %i with laser %i\n", lowestCombatTime, wall_num, topWeapon + 1);
+					printf("Took %.3fs to fight wall %i with laser %i\n", lowestCombatTime + 1, wall_num, topWeapon + 1);
 				else
-					printf("Took %.3fs to fight wall %i with laser %i\n", lowestCombatTime, wall_num, topWeapon - 25);
+					printf("Took %.3fs to fight wall %i with laser %i\n", lowestCombatTime + 1, wall_num, topWeapon - 25);
 			}
 		}
+		if (topWeapon == FLARE_ID)
+			printf("Took %.3fs to fight wall %i with flares\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == VULCAN_ID)
-			printf("Took %.3fs to fight wall %i with vulcan, now at %.0f vulcan ammo\n", lowestCombatTime, wall_num, f2fl(state->vulcanAmmo));
+			printf("Took %.3fs to fight wall %i with vulcan, now at %.0f vulcan ammo\n", lowestCombatTime + 1, wall_num, f2fl(state->vulcanAmmo));
 		if (topWeapon == SPREADFIRE_ID)
-			printf("Took %.3fs to fight wall %i with spreadfire\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with spreadfire\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == PLASMA_ID)
-			printf("Took %.3fs to fight wall %i with plasma\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with plasma\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == FUSION_ID)
-			printf("Took %.3fs to fight wall %i with fusion\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with fusion\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == GAUSS_ID)
-			printf("Took %.3fs to fight wall %i with gauss, now at %.0f vulcan ammo\n", lowestCombatTime, wall_num, f2fl(state->vulcanAmmo));
+			printf("Took %.3fs to fight wall %i with gauss, now at %.0f vulcan ammo\n", lowestCombatTime + 1, wall_num, f2fl(state->vulcanAmmo));
 		if (topWeapon == HELIX_ID)
-			printf("Took %.3fs to fight wall %i with helix\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with helix\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == PHOENIX_ID)
-			printf("Took %.3fs to fight wall %i with phoenix\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with phoenix\n", lowestCombatTime + 1, wall_num);
 		if (topWeapon == OMEGA_ID)
-			printf("Took %.3fs to fight wall %i with omega\n", lowestCombatTime, wall_num);
+			printf("Took %.3fs to fight wall %i with omega\n", lowestCombatTime + 1, wall_num);
 	}
 	return lowestCombatTime + 1; // Give an extra second per wall to wait for the explosion to go down. Flying through it causes great damage.
 }
@@ -1918,8 +1885,6 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		if (obj->type == OBJ_CNTRLCEN) // For some reason reactors have a speed of 120??? They don't actually move tho so mark it down as 0.
 			enemy_max_speed = 0;
 	}
-	if (robInfo->thief)
-		enemy_behavior = AIB_RUN_FROM; // We'll mark thieves down as running enemies, since that's typically what they do.
 	double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
 	double enemy_weapon_speed = f2fl(Weapon_info[robInfo->weapon_type].speed[Difficulty_level]);
 	double enemy_weapon_size = 1;
@@ -1939,8 +1904,15 @@ double calculate_weapon_accuracy(partime_calc_state* state, weapon_info* weapon_
 		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
 	else
 		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed;
-	if (enemy_behavior == AIB_RUN_FROM) // We don't want snipe robots to use this, as they actually shoot things.
-		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
+	if (robInfo->thief)
+		optimal_distance += 80 + enemy_max_speed; // Thieves are the worst of both worlds.
+	else {
+		if (enemy_behavior == AIB_RUN_FROM) // We don't want snipe robots to use this, as they actually shoot things.
+			optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
+		if (enemy_behavior == AIB_SNIPE)
+			optimal_distance += enemy_max_speed; // These enemies can back away from you as you shoot. Can't be exact on this or else enemies faster than your weapons will return infinite optimal distance.
+	}
+	optimal_distance = optimal_distance > robInfo->badass ? optimal_distance : robInfo->badass; // Also ensure we avoid their blast radius.
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
 	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation, and that the player is shooting at the middle of the target from directly ahead.
@@ -2092,7 +2064,7 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 		}
 	if (lowestCombatTime == -1)
 		lowestCombatTime = 0; // Prevent a softlock if no primaries work on a given boss.
-	if (topWeapon == VULCAN_ID || topWeapon == GAUSS_ID)
+	if ((topWeapon == VULCAN_ID || topWeapon == GAUSS_ID) && !failsafe)
 		state->vulcanAmmo -= ammoUsed * f1_0;
 	if (isMatcen) {
 		// Now account for RNG ammo drops from matcen bots and their robot spawn.
@@ -2117,6 +2089,8 @@ double calculate_combat_time(partime_calc_state* state, object* obj, robot_info*
 					printf("Took %.3fs to fight robot type %i with laser %i, %.2f accuracy\n", lowestCombatTime, obj->id, topWeapon - 25, topAccuracy);
 			}
 		}
+		if (topWeapon == FLARE_ID)
+			printf("Took %.3fs to fight robot type %i with flares, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 		if (topWeapon == VULCAN_ID) {
 			if (failsafe)
 				printf("Took %.3fs to fight robot type %i with vulcan (FAILSAFE), %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
@@ -2172,6 +2146,8 @@ int robotHasKey(object* obj) // Should cover all the shinanegans level authors c
 }
 
 void robotHasPowerup(partime_calc_state* state, int robotID, double weight) {
+	// The weight parameter is to determine how much of this probability should influence the total.
+	// Since matcens are calculated by the average of all its robots, we have to account for the fact that there's only a certain chance to get the odds from that given one.
 	robot_info* robInfo = &Robot_info[robotID];
 	int weapon_id;
 	int i;
@@ -2471,7 +2447,6 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 				if (unlockWall != -1) {
 					wallInfo->unlockedBy.type = OBJECTIVE_TYPE_TRIGGER;
 					wallInfo->unlockedBy.ID = unlockWall;
-					continue;
 				}
 
 				// So doors opened by the reactor exploding are handled correctly.
@@ -2480,7 +2455,6 @@ void initLockedWalls(partime_calc_state* state, int removeUnlockableWalls)
 						state->numLockedWalls--; // Nevermind about adding it here.
 						state->numReactorWalls++; // We're adding it here instead.
 						reactorInfo->wallID = i;
-						reactorInfo->unlockedBy.type = 1;
 						for (int o = 0; o <= Highest_object_index; o++)
 							if (Objects[o].type == OBJ_CNTRLCEN)
 								reactorInfo->unlockedBy.ID = o;
@@ -2643,7 +2617,7 @@ double calculate_path_length_partime(partime_calc_state* state, point_seg* path,
 	return pathLength; // We still need pathLength, despite now adding to movementTime directly, because individual paths need compared.
 }
 
-int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int typeThreeCheck)
+int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID)
 {
 	int unlocked = 1;
 	for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
@@ -2656,20 +2630,7 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 				unlocked = (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) ||
 					currentObjectiveType == OBJECTIVE_TYPE_WALL ||
 					(currentObjectiveType == OBJECTIVE_TYPE_OBJECT && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))) &&
-					check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
-	if (!typeThreeCheck) { // If we're deciding whether to continue in find_nearest_objective_partime, we only want the wall facing Algo to be checked so wall type objectives don't always fail.
-		// Also check the other side, so Algo doesn't get stuck in the milk closet on Vertigo 19. Oh, or others I guess.
-		wall_num = findConnectedWallNum(wall_num);
-		for (int i = 0; i < Ranking.numCurrentlyLockedWalls; i++)
-			if (Ranking.currentlyLockedWalls[i] == wall_num)
-				if ((Current_level_num > 0 && Ranking.mergeLevels & Walls[wall_num].keys) || (Current_level_num < 0 && Ranking.secretMergeLevels & Walls[wall_num].keys))
-					unlocked = 1;
-				else
-					unlocked = (((currentObjectiveType == OBJECTIVE_TYPE_TRIGGER && Walls[currentObjectiveID].type == WALL_OVERLAY) ||
-						currentObjectiveType == OBJECTIVE_TYPE_WALL ||
-						(currentObjectiveType == OBJECTIVE_TYPE_OBJECT && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))) &&
-						check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
-	}
+					check_transparency_partime(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum));
 	return unlocked;
 }
 
@@ -2696,7 +2657,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 		player_path_length = create_path_partime(start_seg, objectiveSegnum, path_start, path_count, state, objective);
 		// If we're shooting the unlockable side of a one-sided locked wall, make sure we have the keys needed to unlock it first.
 		// Also CAN ignore this if it's a transparent door but I'm not too worried about this.
-		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID, 1))
+		if (objective.type == OBJECTIVE_TYPE_WALL && !thisWallUnlocked(objective.ID, OBJECTIVE_TYPE_WALL, objective.ID))
 			continue;
 		if (!player_path_length)
 			continue;
@@ -2724,7 +2685,7 @@ partime_objective find_nearest_objective_partime(partime_calc_state* state, int 
 			wall_num = Segments[Point_segs[i].segnum].sides[side_num].wall_num;
 			for (int w = 0; w < Ranking.numCurrentlyLockedWalls; w++) {
 				if (Ranking.currentlyLockedWalls[w] == wall_num)
-					if (((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type == WALL_OVERLAY) || nearestObjective.type == OBJECTIVE_TYPE_WALL || !state->isSegmentAccessible[objectiveSegnum]) && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
+					if (((nearestObjective.type == OBJECTIVE_TYPE_TRIGGER && Walls[nearestObjective.ID].type == WALL_OVERLAY) || nearestObjective.type == OBJECTIVE_TYPE_WALL || !state->isSegmentAccessible[objectiveSegnum]) && check_transparency_partime(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
 						if (Ranking.parTimeStateSegnum == -1)
 							Ranking.parTimeStateSegnum = Walls[wall_num].segnum;
 			}
@@ -2861,6 +2822,8 @@ void examine_path_partime(partime_calc_state* state, point_seg* path, int path_c
 			}
 		}
 		// If there's ammo in this segment, collect it.
+		// Technically this will be a little inaccurate when Algo hits the ammo cap, because ammo powerups in D2 have a "capicity" that gets used partially until it's gone, to prevent being wasted.
+		// I don't mind this though, as Algo hitting the ammo cap typically means the level has far more than plenty to last it the entire time.
 		for (int objNum = 0; objNum <= Highest_object_index; objNum++) {
 			if (Objects[objNum].type == OBJ_POWERUP && (Objects[objNum].id == POW_VULCAN_AMMO || (Objects[objNum].id == POW_VULCAN_WEAPON && !state->heldWeapons[VULCAN_ID]) || (Objects[objNum].id == POW_GAUSS_WEAPON && !state->heldWeapons[GAUSS_ID])) && Objects[objNum].segnum == path[i].segnum) {
 				// ...make sure we didn't already get this one
@@ -2886,6 +2849,11 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 	int i;
 	if (objective.type == OBJECTIVE_TYPE_OBJECT) { // We don't fight triggers.
 		object* obj = &Objects[objective.ID];
+		if (obj->type == OBJ_HOSTAGE)
+			if (Current_level_num > 0)
+				Ranking.maxScore += HOSTAGE_SCORE;
+			else
+				Ranking.secretMaxScore += HOSTAGE_SCORE;
 		if (obj->type == OBJ_POWERUP) {
 			weapon_id = 0;
 			if (obj->id == POW_VULCAN_WEAPON)
@@ -2932,20 +2900,38 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 					double afterburnerMultipliers[5] = { 1.2, 1.15, 1.11, 1.08, 1.05 };
 					state->afterburnerMultiplier = afterburnerMultipliers[Difficulty_level];
 				}
+				if (obj->id == POW_EXTRA_LIFE)
+					if (Current_level_num > 0)
+						Ranking.maxScore += 10000;
+					else
+						Ranking.secretMaxScore += 10000;
 			}
 		}
 		if (obj->type == OBJ_ROBOT || obj->type == OBJ_CNTRLCEN) { // We don't fight keys, hostages or weapons.
 			robot_info* robInfo = &Robot_info[obj->id];
 			double combatTime = 0;
 			double fightTime;
-			if (obj->type == OBJ_CNTRLCEN)
+			if (obj->type == OBJ_CNTRLCEN) {
 				combatTime += calculate_combat_time(state, obj, robInfo, 1, 0);
+				if (Current_level_num > 0)
+					Ranking.maxScore += CONTROL_CEN_SCORE;
+				else
+					Ranking.secretMaxScore += CONTROL_CEN_SCORE;
+			}
 			else {
 				combatTime += calculate_combat_time(state, obj, robInfo, 1, 0);
+				if (Current_level_num > 0)
+					Ranking.maxScore += robInfo->score_value;
+				else
+					Ranking.secretMaxScore += robInfo->score_value;
 				if (obj->contains_type == OBJ_ROBOT && obj->contains_count) {
 					robInfo = &Robot_info[obj->contains_id];
 					fightTime = calculate_combat_time(state, obj, robInfo, 0, 0) * obj->contains_count;
 					combatTime += fightTime;
+					if (Current_level_num > 0)
+						Ranking.maxScore += robInfo->score_value * obj->contains_count;
+					else
+						Ranking.secretMaxScore += robInfo->score_value * obj->contains_count;
 					printf("Took %.3fs to fight %i of robot type %i\n", fightTime, obj->contains_count, obj->contains_id);
 				}
 				else if (robInfo->contains_type == OBJ_ROBOT) {
@@ -2958,6 +2944,7 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 			double teleportDistance = 0;
 			short Boss_path_length = 0;
 			state->combatTime += combatTime;
+			robInfo = &Robot_info[obj->id]; // So bosses that contain robots get teleport time.
 			if (robInfo->boss_flag > 0) { // Bosses have special abilities that take additional time to counteract. Boss levels are unfair without this.
 				if (Boss_teleports[robInfo->boss_flag]) {
 					int num_teleports = combatTime / 8; // Bosses teleport on an eight second timer, meaning you can only get two seconds of damage in at a time before they move away.
@@ -3028,6 +3015,11 @@ void respond_to_objective_partime(partime_calc_state* state, partime_objective o
 					}
 					if (obj->contains_id == POW_VULCAN_AMMO)
 						state->vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
+					if (obj->contains_id == POW_EXTRA_LIFE)
+						if (Current_level_num > 0)
+							Ranking.maxScore += 10000;
+						else
+							Ranking.secretMaxScore += 10000;
 				}
 			}
 			else
@@ -3084,6 +3076,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	state.heldWeapons[0] = 0;
 	for (i = 1; i < 36; i++)
 		state.heldWeapons[i] = 1;
+	state.heldWeapons[FLARE_ID] = 0;
 	// Quads and afterburner work the same.
 	state.hasQuads = 1;
 	state.hasAfterburner = 1;
@@ -3091,14 +3084,18 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	state.afterburnerMultiplier = 1;
 	state.thiefKeys = 0;
 	state.matcenTime = 0;
-	
+	if (Current_level_num > 0)
+		Ranking.maxScore = 0;
+	else
+		Ranking.secretMaxScore = 0;
+
 	// Calculate start time.
 	timer_update();
 	start_timer_value = timer_query();
-	
+
 	// Populate the locked walls list.
 	initLockedWalls(&state, 1);
-	
+
 	for (i = 0; i <= Highest_segment_index; i++) // Iterate through every side of every segment, measuring their sizes.
 		for (int s = 0; s < 6; s++)
 			if (Segments[i].children[s] > -1) { // Don't measure closed sides. We can't go through them anyway.
@@ -3115,10 +3112,10 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				Ranking.parTimeSideSizes[i][s] = ConsoleObject->size * 2; // If a side is closed, mark it down as big enough.
 	for (i = 0; i <= Highest_segment_index; i++) // Lay out the map for where the "inaccessible" territory is so we can mark objectives within it as such.
 		state.isSegmentAccessible[i] = determineSegmentAccessibility(&state, i);
-	
+
 	initLockedWalls(&state, 0);
 	state.doneListSize = 0; // So locked walls can be removed correctly.
-	
+
 	// Initialize all matcens to 3 lives. On Insane, this counter won't decrement.
 	for (i = 0; i < Num_robot_centers; i++)
 		state.matcenLives[i] = 3;
@@ -3188,12 +3185,12 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 							i = Num_triggers + 1; // Only add one exit.
 						}
 		}
-			
+
 		while (state.toDoListSize > 0) {
 			// Find which object on the to-do list is the closest, ignoring the reactor/boss if it's not the only thing left.
 			partime_objective nearestObjective =
 				find_nearest_objective_partime(&state, state.segnum, state.toDoList, state.toDoListSize, &path_start, &path_count, &pathLength);
-			
+
 			if (nearestObjective.type == OBJECTIVE_TYPE_INVALID) {
 				// This should only happen if there are no reachable objectives left in the list.
 				// If that happens, we're done with this phase.
@@ -3218,7 +3215,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					}
 				break;
 			}
-			
+
 			// Mark this objective as done.
 			removeObjectiveFromList(state.toDoList, &state.toDoListSize, nearestObjective);
 			addObjectiveToList(state.doneList, &state.doneListSize, nearestObjective, 1);
@@ -3229,7 +3226,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 						if (Ranking.currentlyLockedWalls[w] == adjacent_wall_num)
 							removeLockedWallFromList(w);
 				}
-		
+
 			// Track resource consumption and robot HP destroyed.
 			// If there's no path and we're doing straight line distance, we have no idea what we'd
 			// be crossing through, so tracking resources for the path would be meaningless.
@@ -3285,6 +3282,16 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				state.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
 		}
 		Ranking.parTimeLoops++;
+	}
+	
+	// To account for time and skill bonuses being equal to this, as well as hostage bonus.
+	if (Current_level_num > 0) {
+		Ranking.maxScore *= 3;
+		Ranking.maxScore += Players[Player_num].hostages_level * 7500;
+	}
+	else {
+		Ranking.secretMaxScore *= 3;
+		Ranking.secretMaxScore += Ranking.hostages_secret_level * 7500;
 	}
 	
 	// Calculate end time.
@@ -3412,7 +3419,6 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		Ranking.secretlevel_time = 0;
 		Ranking.secretExcludePoints = 0;
 		Ranking.secretRankScore = 0;
-		Ranking.secretMaxScore = 0;
 		Ranking.secretMissedRngSpawn = 0;
 		Ranking.secretlast_score = Players[Player_num].score;
 		Ranking.secret_hostages_on_board = 0;
@@ -3421,60 +3427,21 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 			RestartLevel.updateRestartStuff = 1; // If we quickload into a normal level, then go into a secret level and back out to the next level, restarting will give default loadout without this.
 		Ranking.hostages_secret_level = 0;
 		Ranking.fromBestRanksButton = 0; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
-		Ranking.num_secret_thief_points = 0;
 		Ranking.secretMergeLevels = 0;
 		Ranking.secretNoDamage = 1;
 
 		int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
-		int highestBossScore = 0;
-		int bossScore;
-		Ranking.secretMaxScore = 0;
 		for (i = 0; i <= Highest_object_index; i++) {
-			if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag) { // Look at every boss, adding only the highest point value.
-				bossScore = Robot_info[Objects[i].id].score_value;
-				if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) // So points in infinite robot drop loops aren't counted past the parent bot.
-					bossScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-				if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
-					bossScore += Objects[i].contains_count * 10000;
-				if (bossScore > highestBossScore) {
-					highestBossScore = bossScore;
-					Ranking.secretMaxScore = Robot_info[Objects[i].id].score_value;
-				}
-			}
-		}
-		for (i = 0; i <= Highest_object_index; i++) {
-			// It has been decided that thieves (and robots within them) will not count toward max score. They're just too annoying and unfun to kill, but will give you a considerable point advantage if you manage to take one down quickly.
-			// However, we can't do that here. We have to let them slide for now so the "remains" counter stays accurate. Let's instead count them, then use that number to subtract the points when the level's over.
-			if (Objects[i].type == OBJ_ROBOT && !Robot_info[Objects[i].id].boss_flag) { // Ignore bosses, we already decided which one to count before.
-				Ranking.secretMaxScore += Robot_info[Objects[i].id].score_value;
-				if (Robot_info[Objects[i].id].thief)
-					Ranking.num_secret_thief_points += Robot_info[Objects[i].id].score_value;
-				if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) { // So points in infinite robot drop loops aren't counted past the parent bot.
-					Ranking.secretMaxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-					if (Robot_info[Objects[i].contains_id].thief || Robot_info[Objects[i].id].thief) // If the parent is a thief, exclude it and its children. If the children are thieves, exclude just them.
-						Ranking.num_secret_thief_points += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-				}
-				if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
-					Ranking.secretMaxScore += Objects[i].contains_count * 10000;
-			}
-			else if (Robot_info[Objects[i].id].boss_flag)
+			if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag)
 				isRankable = 1; // A boss is present, this level is beatable.
-			if (Objects[i].type == OBJ_CNTRLCEN) {
-				Ranking.secretMaxScore += CONTROL_CEN_SCORE;
+			if (Objects[i].type == OBJ_CNTRLCEN)
 				isRankable = 1; // A reactor is present, this level is beatable.
-			}
-			if (Objects[i].type == OBJ_HOSTAGE) {
-				Ranking.secretMaxScore += HOSTAGE_SCORE;
+			if (Objects[i].type == OBJ_HOSTAGE)
 				Ranking.hostages_secret_level++;
-			}
-			if (Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_EXTRA_LIFE)
-				Ranking.secretMaxScore += 10000;
 		}
-		Ranking.secretMaxScore = (int)(Ranking.secretMaxScore * 3);
-		for (i = 0; i <= Num_triggers; i++) {
+		for (i = 0; i <= Num_triggers; i++)
 			if (Triggers[i].type == TT_EXIT)
-				isRankable = 1; // A level-ending exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
-		}
+				isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 		Ranking.secretAlreadyBeaten = 0;
 		calculateParTime();
 		//if (Ranking.mergeLevels)
@@ -3817,8 +3784,7 @@ void AdvanceLevel(int secret_flag)
 			// END NMN
 
 			StartNewLevel(Next_level_num);
-			if (checkForWarmStart()) // Don't consider the player to be warm starting unless they actually have more than the default loadout.
-				Ranking.warmStart = 1;
+			Ranking.warmStart = checkForWarmStart(); // Don't consider the player to be warm starting unless they actually have more than the default loadout.
 		}
 	}
 }
@@ -4267,7 +4233,6 @@ void StartNewLevel(int level_num)
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
 	Ranking.fromBestRanksButton = 0; // So the result screen knows it's not just viewing record details.
-	Ranking.num_thief_points = 0;
 	Ranking.mergeLevels = 0;
 	Ranking.noDamage = 1;
 	if (RestartLevel.updateRestartStuff) {
@@ -4301,52 +4266,16 @@ void StartNewLevel(int level_num)
 
 	RestartLevel.isResults = 0;
 
-	// For D2, we have to recalculate max score every restart, or else restarting on levels with thieves will make it keep changing and mess up the scoring.
 	int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
-	int highestBossScore = 0;
-	int bossScore;
-	Ranking.maxScore = 0;
 	for (i = 0; i <= Highest_object_index; i++) {
-		if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag) { // Look at every boss, adding only the highest point value.
-			bossScore = Robot_info[Objects[i].id].score_value;
-			if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) // So points in infinite robot drop loops aren't counted past the parent bot.
-				bossScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-			if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
-				bossScore += Objects[i].contains_count * 10000;
-			if (bossScore > highestBossScore) {
-				highestBossScore = bossScore;
-				Ranking.maxScore = Robot_info[Objects[i].id].score_value;
-			}
-		}
+			if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag)
+				isRankable = 1; // A boss is present, this level is beatable.
+			if (Objects[i].type == OBJ_CNTRLCEN)
+				isRankable = 1; // A reactor is present, this level is beatable.
 	}
-	for (i = 0; i <= Highest_object_index; i++) {
-		// It has been decided that thieves (and robots within them) will not count toward max score (AKA they won't be required for ranks). They're just too annoying and unfun to kill, but will give you a considerable point advantage if you manage to take one down quickly.
-		// However, we can't do that here. We have to let them slide for now so the "remains" counter stays accurate. Let's instead count them, then use that number to subtract the points when the level's over.
-		if (Objects[i].type == OBJ_ROBOT) {
-			if (!Robot_info[Objects[i].id].boss_flag) // Ignore bosses for score. We already decided which one to count before.
-				Ranking.maxScore += Robot_info[Objects[i].id].score_value;
-			if (Robot_info[Objects[i].id].thief)
-				Ranking.num_thief_points += Robot_info[Objects[i].id].score_value;
-			if (Objects[i].contains_type == OBJ_ROBOT && ((Objects[i].id != Robot_info[Objects[i].id].contains_id) || (Objects[i].id != Robot_info[Objects[i].contains_id].contains_id))) { // So points in infinite robot drop loops aren't counted past the parent bot.
-				Ranking.maxScore += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-				if (Robot_info[Objects[i].contains_id].thief || Robot_info[Objects[i].id].thief) // If the parent is a thief, exclude it and its children. If the children are thieves, exclude just them.
-					Ranking.num_thief_points += Robot_info[Objects[i].contains_id].score_value * Objects[i].contains_count;
-			}
-			if (Objects[i].contains_type == OBJ_POWERUP && Objects[i].contains_id == POW_EXTRA_LIFE)
-				Ranking.maxScore += Objects[i].contains_count * 10000;
-		}
-		else if (Robot_info[Objects[i].id].boss_flag)
-			isRankable = 1; // A boss is present, this level is beatable.
-		if (Objects[i].type == OBJ_CNTRLCEN) {
-			Ranking.maxScore += CONTROL_CEN_SCORE;
-			isRankable = 1; // A reactor is present, this level is beatable.
-		}
-		if (Objects[i].type == OBJ_HOSTAGE)
-			Ranking.maxScore += HOSTAGE_SCORE;
-		if (Objects[i].type == OBJ_POWERUP && Objects[i].id == POW_EXTRA_LIFE)
-			Ranking.maxScore += 10000;
-	}
-	Ranking.maxScore = (int)(Ranking.maxScore * 3);
+	for (i = 0; i <= Num_triggers; i++)
+		if (Triggers[i].type == TT_EXIT)
+			isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 	for (i = 0; i <= Num_triggers; i++) {
 		if (Triggers[i].type == TT_EXIT)
 			isRankable = 1; // A level-ending exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be somewhere unreachable, but who would put an exit there?

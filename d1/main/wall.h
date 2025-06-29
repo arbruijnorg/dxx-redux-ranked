@@ -276,6 +276,7 @@ void wall_read_n_swap(wall *w, int n, int swap, PHYSFS_file *fp);
 extern void wall_write(wall *w, short version, PHYSFS_file *fp);
 void wall_close_door_num(int door_num);
 extern int check_transparency(segment* seg, int side);
+extern int check_transparency_partime(segment* seg, int side);
 
 #endif
 

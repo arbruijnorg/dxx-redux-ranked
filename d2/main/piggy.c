@@ -107,7 +107,7 @@ int Piggy_bitmap_cache_size = 0;
 int Piggy_bitmap_cache_next = 0;
 ubyte * Piggy_bitmap_cache_data = NULL;
 static int GameBitmapOffset[MAX_BITMAP_FILES];
-static ubyte GameBitmapFlags[MAX_BITMAP_FILES];
+ubyte GameBitmapFlags[MAX_BITMAP_FILES];
 ushort GameBitmapXlat[MAX_BITMAP_FILES];
 
 #define PIGGY_BUFFER_SIZE (2400*1024)

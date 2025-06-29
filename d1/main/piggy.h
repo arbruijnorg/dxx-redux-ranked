@@ -92,6 +92,7 @@ void piggy_load_level_data();
 
 extern grs_bitmap GameBitmaps[MAX_BITMAP_FILES];
 extern grs_bitmap* RankBitmaps[15];
+extern ubyte GameBitmapFlags[MAX_BITMAP_FILES];
 extern void piggy_bitmap_page_in( bitmap_index bmp );
 extern void piggy_bitmap_page_out_all();
 

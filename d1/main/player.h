@@ -137,9 +137,9 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int        rank;                       // Stores the rank determined in calculateRank.
 	double     missedRngSpawn;             // Tracks the points from randomly-dropped robots that were ignored by the player, so they're subtracted at the end.
 	int        alreadyBeaten;              // Tracks whether the current level has been beaten before, so points remaining and par time HUD elements are not shown on a new level.
-	int		   fromBestRanksButton;        // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregates and allow record deleting. 0 means no, 1 means yes.
+	int		   fromBestRanksButton;        // Tracks whether the mission list was accessed from the best ranks button for not, to know whether to show aggregate ranks and allow record deleting. 0 means no, 1 means yes.
 	int        startingLevel;              // I hate making a ranking variable for this, but endlevel_handler doesn't support a level_num parameter due to the way it's called, so I have to use this for when levels are started from the record details screen.
-	int        lastSelectedItem;           // So the best ranks listbox doesn't keep putting you back at level 1 when you're retrying stuff.
+	int        lastSelectedItem;           // So the best ranks listbox doesn't keep putting you back at level 1 when you're retrying stuff. (Edit: This was back when the restart level button didn't exist, so it's a lot less important now but still a bit useful.)
 	int        missionRanks[MAX_MISSIONS]; // A struct for the aggregate ranks on the missions list because the userdata field for the list is already used by something.
 	int        warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
 	double     freezeTimer;                // Tells levels' in-game timer whether it should be frozen or not (this is in D1 to keep par time text from turning red during the exit cutscene).
