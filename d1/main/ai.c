@@ -1425,17 +1425,17 @@ int ai_door_is_openable(object* objp, segment* segp, int sidenum, int currentObj
 		int	wall_num = segp->sides[sidenum].wall_num;
 
 		// First off, make sure the ship is big enough to get through this gap.
-		if (Ranking.parTimeSideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
+		if (ParTime.sideSizes[segnum][sidenum] < ConsoleObject->size * 2) {
 			//printf("Segment %i side %i is too small to pass through with a gap of only %.2f units!\n", segnum, sidenum, f2fl(Ranking.parTimeSideSizes[segnum][sidenum]));
-			return (currentObjectiveType == 3);
+			return (currentObjectiveType == 3 || (currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag))));
 		}
 
 		// If this is an inaccessible objective we're pathing to, always allow Algo through transparent walls.
 		// Shoutout to LOTW Operation Resq for making Algo phase through the yellow door, or the transparency check may not have made it in.
-		if (objectiveInaccessible && currentObjectiveType > -1 && check_transparency(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
+		if (objectiveInaccessible && currentObjectiveType > -1 && check_transparency_partime(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
 			return 1;
 		else
-			return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID);
+			return thisWallUnlocked(wall_num, currentObjectiveType, currentObjectiveID, 0);
 	}
 
 	if ((objp->id == ROBOT_BRAIN) || (objp->ctype.ai_info.behavior == AIB_RUN_FROM)) {

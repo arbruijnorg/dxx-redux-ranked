@@ -144,16 +144,6 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int        warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
 	double     freezeTimer;                // Tells levels' in-game timer whether it should be frozen or not (this is in D1 to keep par time text from turning red during the exit cutscene).
 	int        noDamage;                   // A new bonus I had to add. Thanks Marvin... 4/22/2025
-
-	// Below are the variables from the par time algorithm that are better off globally stored for the sake of convenience or ease of access by code.
-	// I hate how I had to put so many things here, but I would have to change countless function parameters if I tried to put as many things in state as possible. I've already done that enough as it is.
-	int        currentlyLockedWalls[MAX_WALLS];
-	int        numCurrentlyLockedWalls;
-	int        parTimeUnlockIDs[MAX_WALLS];
-	int        parTimeUnlockTypes[MAX_WALLS];
-	int        parTimeLoops;
-	int   	   parTimeSideSizes[MAX_SEGMENTS][6]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
-	int        parTimeStateSegnum;
 } __pack__ ranking;
 
 typedef struct restartLevel { // Recreate and store certain info from player to be restored when the restart button is hit, so the player is properly reset.

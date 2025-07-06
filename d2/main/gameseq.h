@@ -32,12 +32,53 @@ COPYRIGHT 1993-1999 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 
 #define LEVEL_NAME_LEN 36       //make sure this is multiple of 4!
 
+typedef struct
+{
+	int type;
+	int ID;
+} partime_objective;
+
+typedef struct parTime {
+	double movementTime;
+	double movementTimeNoAB;
+	partime_objective toDoList[MAX_OBJECTS + MAX_WALLS];
+	int toDoListSize;
+	partime_objective doneList[MAX_OBJECTS + MAX_WALLS];
+	int doneListSize;
+	vms_vector lastPosition; // Tracks the last place algo went to within the same segment.
+	int matcenLives[20]; // We need to track how many times we trip matcens, since each one can only be tripped three times.
+	// Time spent clearing matcens.
+	double matcenTime;
+	fix vulcanAmmo; // What it sounds like.
+	// How much robot HP we've had to destroy to this point.
+	double combatTime;
+	// Info about the weapon algo currently has equipped.
+	double ammo_usage; // For when using vulcan.
+	double heldWeapons[36]; // Which weapons algo has.
+	int laser_level; // It's possible to make things work without this, but just tracking laser level directly makes things a lot easier.
+	double pathObstructionTime; // Amount of time spent dealing with walls or matcens on the way to an objective (basically an Abyss 1.0 hotfix for the 32k HP wall let's be real lol).
+	double shortestPathObstructionTime;
+	int hasQuads;
+	int segnum; // What segment Algo is in.
+	ubyte isSegmentAccessible[MAX_SEGMENTS];
+	int loops; // Which stage of the par time calculation process are we on?
+	int typeThreeWalls[MAX_WALLS];
+	int numTypeThreeWalls;
+	int typeThreeUnlockIDs[MAX_WALLS];
+	int sideSizes[MAX_SEGMENTS][MAX_SIDES_PER_SEGMENT]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
+	int warpBackPoint;
+	double hasAfterburner;
+	double afterburnerMultiplier;
+	ubyte thiefKeys;
+} __pack__ parTime;
+
 // Current_level_num starts at 1 for the first level
 // -1,-2,-3 are secret levels
 // 0 means not a real level loaded
 extern int Current_level_num, Next_level_num;
 extern char Current_level_name[LEVEL_NAME_LEN];
 extern obj_position Player_init[MAX_PLAYERS];
+extern parTime ParTime; // Par time algorithm variables.
 
 
 // This is the highest level the player has ever reached
@@ -107,8 +148,7 @@ extern void DoEndLevelScoreGlitz(int network);
 extern void DoEndSecretLevelScoreGlitz();
 extern void DoBestRanksScoreGlitz(int level_num, int warm_start);
 
-// Check if a wall is unlocked/accessible in par time.
-extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID);
+extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int warpBackPointCheck);
 
 // stuff for multiplayer
 extern int NumNetPlayerPositions;

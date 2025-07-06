@@ -115,7 +115,7 @@ int check_transparency_partime(segment* seg, int side) // This version checks an
 	if (GameBitmaps[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index].bm_flags & BM_FLAG_SUPER_TRANSPARENT)
 		return 1;
 	else
-		if (GameBitmapFlags[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index] & BM_FLAG_TRANSPARENT)
+		if (GameBitmapFlags[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index] & BM_FLAG_SUPER_TRANSPARENT)
 			return 1;
 		else
 			return 0;
