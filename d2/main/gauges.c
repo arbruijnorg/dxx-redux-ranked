@@ -1107,9 +1107,9 @@ void hud_show_energy(void)
 		gr_set_curfont( GAME_FONT );
 		gr_set_fontcolor(BM_XRGB(0,31,0),-1 );
 		if (Game_mode & GM_MULTI)
-		     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*5)),"%s: %i", TXT_ENERGY, f2ir(Players[pnum].energy));
+		     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*5)),"%s: %i", TXT_ENERGY, f2i(Players[pnum].energy));
 		else
-		     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-LINE_SPACING),"%s: %i", TXT_ENERGY, f2ir(Players[pnum].energy));
+		     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-LINE_SPACING),"%s: %i", TXT_ENERGY, f2i(Players[pnum].energy));
 	}
 
 	if (Newdemo_state == ND_STATE_RECORDING)
@@ -1502,9 +1502,9 @@ void hud_show_shield(void)
 
 		if ( Players[pnum].shields >= 0 )	{
 			if (Game_mode & GM_MULTI)
-			     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*6)),"%s: %i", TXT_SHIELD, f2ir(Players[pnum].shields));
+			     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*6)),"%s: %i", TXT_SHIELD, f2i(Players[pnum].shields));
 			else
-			     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*2)),"%s: %i", TXT_SHIELD, f2ir(Players[pnum].shields));
+			     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*2)),"%s: %i", TXT_SHIELD, f2i(Players[pnum].shields));
 		} else {
 			if (Game_mode & GM_MULTI)
 			     gr_printf(FSPACX(1), (grd_curcanv->cv_bitmap.bm_h-(LINE_SPACING*6)),"%s: 0", TXT_SHIELD );

@@ -149,6 +149,7 @@ extern void DoEndSecretLevelScoreGlitz();
 extern void DoBestRanksScoreGlitz(int level_num, int warm_start);
 
 extern int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int warpBackPointCheck);
+extern int check_gap_size(int seg, int side);
 
 // stuff for multiplayer
 extern int NumNetPlayerPositions;

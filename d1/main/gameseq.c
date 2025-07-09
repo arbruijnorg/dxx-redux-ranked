@@ -779,7 +779,7 @@ int calculateRank(int level_num, int update_warm_start_status)
 	PHYSFS_close(fp);
 	double maxScore = levelPoints * 3;
 	maxScore = (int)maxScore;
-	double skillPoints = (int)(playerPoints * (difficulty / 4));
+	double skillPoints = ceil((playerPoints * (difficulty / 4)));
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
 		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
@@ -969,7 +969,7 @@ void DoEndLevelScoreGlitz(int network)
 		skill_points2 = Ranking.rankScore * ((double)Difficulty_level / 4);
 	}
 	skill_points -= skill_points % 100;
-	skill_points2 = (int)skill_points2;
+	skill_points2 = ceil(skill_points2); // Round this up so you can't theoretically miss a rank by a point on levels or difficulties with weird scoring.
 
 	shield_points = f2i(Players[Player_num].shields) * 10 * (Difficulty_level + 1);
 	energy_points = f2i(Players[Player_num].energy) * 5 * (Difficulty_level + 1);
@@ -1062,7 +1062,7 @@ void DoEndLevelScoreGlitz(int network)
 		endlevel_current_rank = rank;
 		if (cheats.enabled) {
 			strcpy(m_str[c++], "\n\n\n");
-			sprintf(m_str[c++], "   Cheated, no save!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
+			sprintf(m_str[c++], "   Cheated, score not saved!   "); // Don't show vanilla score when cheating, as players already know it'll always be zero.
 		}
 		else {
 			PHYSFS_File* fp;
@@ -1249,8 +1249,7 @@ void DoBestRanksScoreGlitz(int level_num)
 	PHYSFS_close(fp);
 	double maxScore = levelPoints * 3;
 	maxScore = (int)maxScore;
-	double skillPoints = playerPoints * (difficulty / 4);
-	skillPoints = (int)skillPoints;
+	double skillPoints = ceil(playerPoints * (difficulty / 4));
 	double timePoints = (maxScore / 1.5) / pow(2, secondsTaken / parTime);
 	if (secondsTaken < parTime)
 		timePoints = (maxScore / 2.4) * (1 - (secondsTaken / parTime) * 0.2);
@@ -1921,6 +1920,8 @@ double calculate_combat_time_wall(int wall_num, int pathFinal) // Tell algo to u
 			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
 			wall_health = f2fl(Walls[wall_num].hps + 1) - WallAnims[Walls[wall_num].clip_num].num_frames; // For some reason the "real" health of a wall is its hps minus its frame count. Refer to the last line of dxx-redux-ranked commit cb1d724's description.
+			if (wall_health < f2fl(1)) // So wall health isn't considered negative after subtracting frames.
+				wall_health = f2fl(1);
 			// Assume accuracy is always 100% for walls. They're big and don't move lol.
 			int shots = ceil(wall_health / damage); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
 			if (f2fl(ParTime.vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this wall before using vulcan.
@@ -1988,6 +1989,9 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 		else
 			enemy_weapon_size = f2fl(Weapon_info[robInfo->weapon_type].blob_size);
 	double enemy_attack_type = robInfo->attack_type;
+	// Technically doing player splash radius and adding that to dodge_distance later would be consistent, but it would be unfair to the player in certain cases which we don't want.
+	double enemy_splash_radius = f2fl(Weapon_info[robInfo->weapon_type].damage_radius);
+	double weapon_homing_flag = weapon_info->homing_flag;
 	double enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
 
 	// Next, find the "optimal distance" for fighting the given enemy with the given weapon. This is the distance where the enemy's fire can be dodged off of pure reaction time, without any prediction.
@@ -1997,9 +2001,9 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	if (enemy_attack_type) // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
 		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
 	else
-		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed;
+		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed + enemy_splash_radius; // Missiles are dangerous and need to be kept further away from.
 	if (enemy_runs) // We don't want snipe robots to use this, as they actually shoot things.
-		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
+		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values. Don't add splash damage here.
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
 	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation, and that the player is shooting at the middle of the target from directly ahead.
@@ -2014,7 +2018,27 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 		projectile_offsets[LASER_ID_L3] *= 1.5;
 		projectile_offsets[LASER_ID_L4] *= 1.5;
 	}
-	double dodge_distance = projectile_offsets[weapon_id] + projectile_size + enemy_size;
+	
+	double dodge_requirement = projectile_offsets[weapon_id] + projectile_size + enemy_size;
+	double dodge_time = optimal_distance / projectile_speed;
+	double dodge_distance = 0;
+	// For running bots, we use a simple multiplication, but for everyone else, we have to account for how they dodge. They start at their evade speed, then slow down over time. Always using evade speed as a flat rate causes Algo to underestimate, and always using max speed does the opposite.
+	double drag_multiplier = f2fl(65536 - robInfo->drag);
+	double enemy_evade_speed = (robInfo->evade_speed[Difficulty_level] + 0.5) * 32; // The + 0.5 comes from move_around_player, where HP percentage is added to evade_speed. HP is assumed to degrade linearly here, so we add the average of all HP values: 0.5.
+	if (!robInfo->evade_speed)
+		enemy_evade_speed = 0; // Undo the + 0.5 if the initial value was 0, as per move_around_player.
+	enemy_evade_speed /= 64; // We want speed per physics tick, not per second.
+	if (enemy_runs) // Mine layers always move at a set speed; they don't try to dodge.
+		dodge_distance = enemy_max_speed * dodge_time;
+	else {
+		int num_frames = dodge_time * 64;
+		for (int i = 0; i <= num_frames; i++) {
+			dodge_distance += enemy_evade_speed;
+			enemy_evade_speed *= drag_multiplier;
+			if (enemy_evade_speed > enemy_max_speed / 64) // Robots traveling faster than their max speed receive an additional drag. This is crucial to prevent underestimation.
+				enemy_evade_speed *= 0.75;
+		}
+	}
 
 	// Now we reduce accuracy over distance for spreading weapons. Since that's also hard coded, we can just apply enemy size based multipliers per weapon ID.
 	// At a certain distance, projectiles for Vulcan and Spreadfire will start missing from drifting so far off course.
@@ -2031,22 +2055,17 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	if (enemy_size < projectile_offsets[weapon_id] - projectile_size)
 		accuracy_multiplier *= 0.5;
 
-	double accuracy;
-	if (enemy_max_speed)
-		if (optimal_distance > 80) // Enemies can't dodge something until it's within 80 units of them (Source: ai.c line 830), but we can't cap optimal_distance itself at that because it'll make spread penalty too lenient.
-			accuracy = ((dodge_distance / enemy_max_speed) / (80 / projectile_speed));
-		else
-			accuracy = ((dodge_distance / enemy_max_speed) / (optimal_distance / projectile_speed));
-	else
-		return accuracy_multiplier; // If the enemy doesn't move in the relevant way, guarantee all hits (assuming efficient size).
+	double accuracy = dodge_requirement / dodge_distance;
+	if (weapon_homing_flag)
+		accuracy = (accuracy / 2) + 0.5; // Buff player accuracy if their weapon has homing.
+	if (enemy_weapon_homing_flag)
+		accuracy /= 2; // Conversely, do the opposite if the enemy's weapon has homing.
+	// We want the enemy's check to be last so both having homing still has a net negative effect. Homing enemies are hard to avoid and take extra time to kill.
+	// We also want the cap to 100 accuracy to come after the homing stuff so boss fight times don't explode out of control.
 	if (accuracy * accuracy_multiplier > 1) // Accuracy can't be greater than 100%.
 		return 1;
-	else if (weapon_info->homing_flag)
-		return (0.5 + accuracy / 2) * accuracy_multiplier; // Buff player accuracy if their weapon has homing.
 	else
 		return accuracy * accuracy_multiplier;
-	// Enemies evade less and less linearly as their health goes down (Source: ai.c line 997), so we SHOULD return an average of 100% and the starting acc always instead of just with homing...
-	// Gonna be honest though, I'm actually not sure about that HP part for D2, and high difficulty times are too harsh if we do it that way. Also the average thing is a lazy approach anyway.
 }
 
 double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int isMatcen) // Tell algo to use the weapon that's fastest for the current enemy.
@@ -2515,6 +2534,22 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 	return unlocked;
 }
 
+int check_gap_size(int seg, int side) // Returns 1 if the gap can be fit through by the player, else returns 0.
+{
+	if (ParTime.sideSizes[seg][side] >= ConsoleObject->size * 2)
+		return 1;
+
+	// Each side has five adjacent sides: Above, below, left, right, and across. The only one we don't wanna check is the one directly across, as it's not connected to the original.
+	// Since sidenums are always laid out the same, we know which one that is based on the original side.
+	int skipSides[MAX_SIDES_PER_SEGMENT] = { 2, 3, 0, 1, 5, 4 };
+	int skip = skipSides[side];
+	int num_closed = 0;
+	for (int i = 0; i < MAX_SIDES_PER_SEGMENT; i++)
+		if (i != side && i != skip && Segments[seg].children[i] == -1) // Also skip the original side.
+			num_closed++;
+	return (num_closed < 4);
+}
+
 partime_objective find_nearest_objective_partime(int start_seg, point_seg** path_start, int* path_count, double* path_length)
 {
 	double pathLength;
@@ -2570,7 +2605,8 @@ partime_objective find_nearest_objective_partime(int start_seg, point_seg** path
 					check_transparency_partime(&Segments[Walls[wall_num].segnum], Walls[wall_num].sidenum))
 					if (ParTime.warpBackPoint == -1)
 						ParTime.warpBackPoint = Walls[wall_num].segnum;
-			if (ParTime.sideSizes[Point_segs[i].segnum][side_num] < ConsoleObject->size * 2 && (nearestObjective.type == OBJECTIVE_TYPE_WALL || (Objects[nearestObjective.ID].type == OBJ_CNTRLCEN || (Objects[nearestObjective.ID].type == OBJ_ROBOT && Robot_info[Objects[nearestObjective.ID].id].boss_flag))) || !ParTime.isSegmentAccessible[objectiveSegnum]))
+			side_num = find_connecting_side(Point_segs[i + 1].segnum, Point_segs[i].segnum);
+			if (!check_gap_size(Point_segs[i + 1].segnum, side_num) && (nearestObjective.type == OBJECTIVE_TYPE_WALL || (Objects[nearestObjective.ID].type == OBJ_CNTRLCEN || (Objects[nearestObjective.ID].type == OBJ_ROBOT && Robot_info[Objects[nearestObjective.ID].id].boss_flag))) || !ParTime.isSegmentAccessible[objectiveSegnum])
 				if (ParTime.warpBackPoint == -1)
 					ParTime.warpBackPoint = Point_segs[i].segnum;
 			if (ParTime.warpBackPoint > -1)
@@ -2579,15 +2615,14 @@ partime_objective find_nearest_objective_partime(int start_seg, point_seg** path
 		if (ParTime.warpBackPoint == -1) {
 			ParTime.segnum = objectiveSegnum;
 			ParTime.lastPosition = getObjectivePosition(nearestObjective);
-			return nearestObjective;
 		}
 		else {
 			ParTime.segnum = ParTime.warpBackPoint;
 			vms_vector segmentCenter;
 			compute_segment_center(&segmentCenter, &Segments[ParTime.segnum]);
 			ParTime.lastPosition = segmentCenter;
-			return nearestObjective;
 		}
+		return nearestObjective;
 	}
 	else {
 		// No reachable objectives in list.
@@ -2678,6 +2713,8 @@ void examine_path_partime(point_seg* path, int path_count)
 									matcenTime += averageRobotTime * (Difficulty_level + 3);
 									ParTime.matcenLives[segp->matcen_num]--;
 									ParTime.vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
+									if (ParTime.vulcanAmmo > STARTING_VULCAN_AMMO * 4) // Vulcan ammo can exceed 32768 and overflow if not capped properly. Prevent this from happening.
+										ParTime.vulcanAmmo = STARTING_VULCAN_AMMO * 4;
 									if (matcenTime > 0)
 										printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), ParTime.matcenLives[segp->matcen_num]);
 									totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.

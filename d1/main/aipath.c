@@ -39,6 +39,7 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "player.h"
 #include "fireball.h"
 #include "game.h"
+#include "gameseq.h"
 
 void validate_all_paths(void);
 void ai_path_set_orient_and_vel(object *objp, vms_vector *goal_point);
@@ -183,6 +184,8 @@ int create_path_points(object *objp, int start_seg, int end_seg, point_seg *pseg
 			if (random_flag)
 				snum = random_xlate[sidenum];
 
+			if (check_gap_size(cur_seg, snum) || (currentObjectiveType == 3 ||
+				(currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))))
 			if ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, objectiveInaccessible, cur_seg))) {
 				int	this_seg = segp->children[snum];
 

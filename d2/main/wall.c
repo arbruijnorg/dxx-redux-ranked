@@ -115,23 +115,15 @@ int check_transparency( segment * seg, int side )
 
 int check_transparency_partime(segment* seg, int side) // This version checks anything that may be paged out (Hydrobiologic Theater fix).
 {
-	if ((seg->sides[side].tmap_num2 & 0x3FFF) == 0) {
-		if (GameBitmaps[Textures[seg->sides[side].tmap_num].index].bm_flags & BM_FLAG_TRANSPARENT)
-			return 1;
-		else
-			if (GameBitmapFlags[Textures[seg->sides[side].tmap_num].index] & BM_FLAG_TRANSPARENT)
-				return 1;
-			else
-				return 0;
-	}
-
-	if (GameBitmaps[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index].bm_flags & BM_FLAG_SUPER_TRANSPARENT)
-		return 1;
-	else
-		if (GameBitmapFlags[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index] & BM_FLAG_SUPER_TRANSPARENT)
+	if ((seg->sides[side].tmap_num2 & 0x3FFF) == 0)
+		if (GameBitmapFlags[Textures[seg->sides[side].tmap_num].index] & BM_FLAG_TRANSPARENT)
 			return 1;
 		else
 			return 0;
+	if (GameBitmapFlags[Textures[seg->sides[side].tmap_num2 & 0x3FFF].index] & BM_FLAG_SUPER_TRANSPARENT)
+		return 1;
+	else
+		return 0;
 }
 
 //-----------------------------------------------------------------
