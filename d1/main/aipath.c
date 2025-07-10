@@ -185,22 +185,22 @@ int create_path_points(object *objp, int start_seg, int end_seg, point_seg *pseg
 				snum = random_xlate[sidenum];
 
 			if (check_gap_size(cur_seg, snum) || (currentObjectiveType == 3 ||
-				(currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))))
-			if ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, objectiveInaccessible, cur_seg))) {
-				int	this_seg = segp->children[snum];
+			(currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))))
+				if ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, objectiveInaccessible, cur_seg))) {
+					int	this_seg = segp->children[snum];
 
-				if (!visited[this_seg]) {
-					seg_queue[qtail].start = cur_seg;
-					seg_queue[qtail].end = this_seg;
-					visited[this_seg] = 1;
-					depth[qtail++] = cur_depth+1;
-					if (depth[qtail-1] == max_depth) {
-						end_seg = seg_queue[qtail-1].end;
-						goto cpp_done1;
+					if (!visited[this_seg]) {
+						seg_queue[qtail].start = cur_seg;
+						seg_queue[qtail].end = this_seg;
+						visited[this_seg] = 1;
+						depth[qtail++] = cur_depth+1;
+						if (depth[qtail-1] == max_depth) {
+							end_seg = seg_queue[qtail-1].end;
+							goto cpp_done1;
+						}
 					}
-				}
 
-			}
+				}
 		}	//	for (sidenum...
 
 		if (qtail <= 0)

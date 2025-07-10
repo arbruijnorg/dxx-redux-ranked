@@ -343,45 +343,45 @@ if ((objp->type == OBJ_ROBOT) && (objp->ctype.ai_info.behavior == AIB_RUN_FROM))
 				snum = random_xlate[sidenum];
 
 			if (check_gap_size(cur_seg, snum) || ((currentObjectiveType == 2 && Walls[currentObjectiveID].type != WALL_OPEN) ||
-				currentObjectiveType == 3 ||
-				(currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))))
-			if (IS_CHILD(segp->children[snum]) && ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, objectiveInaccessible, cur_seg)))) {
-				int			this_seg = segp->children[snum];
-				Assert(this_seg != -1);
-				if (((cur_seg == avoid_seg) || (this_seg == avoid_seg)) && (ConsoleObject->segnum == avoid_seg)) {
-					vms_vector	center_point;
-
-					fvi_query	fq;
-					fvi_info		hit_data;
-					int			hit_type;
+			currentObjectiveType == 3 ||
+			(currentObjectiveType == 1 && (Objects[currentObjectiveID].type == OBJ_CNTRLCEN || (Objects[currentObjectiveID].type == OBJ_ROBOT && Robot_info[Objects[currentObjectiveID].id].boss_flag)))))
+				if (IS_CHILD(segp->children[snum]) && ((WALL_IS_DOORWAY(segp, snum) & WID_FLY_FLAG) || (ai_door_is_openable(objp, segp, snum, currentObjectiveType, currentObjectiveID, objectiveInaccessible, cur_seg)))) {
+					int			this_seg = segp->children[snum];
+					Assert(this_seg != -1);
+					if (((cur_seg == avoid_seg) || (this_seg == avoid_seg)) && (ConsoleObject->segnum == avoid_seg)) {
+						vms_vector	center_point;
 	
-					compute_center_point_on_side(&center_point, segp, snum);
+						fvi_query	fq;
+						fvi_info		hit_data;
+						int			hit_type;
+	
+						compute_center_point_on_side(&center_point, segp, snum);
 
-					fq.p0						= &objp->pos;
-					fq.startseg				= objp->segnum;
-					fq.p1						= &center_point;
-					fq.rad					= objp->size;
-					fq.thisobjnum			= objp-Objects;
-					fq.ignore_obj_list	= NULL;
-					fq.flags					= 0;
+						fq.p0						= &objp->pos;
+						fq.startseg				= objp->segnum;
+						fq.p1						= &center_point;
+						fq.rad					= objp->size;
+						fq.thisobjnum			= objp-Objects;
+						fq.ignore_obj_list	= NULL;
+						fq.flags					= 0;
 
-					hit_type = find_vector_intersection(&fq, &hit_data);
-					if (hit_type != HIT_NONE) {
-						goto dont_add;
+						hit_type = find_vector_intersection(&fq, &hit_data);
+						if (hit_type != HIT_NONE) {
+							goto dont_add;
+						}
 					}
-				}
 
-				if (!visited[this_seg]) {
-					seg_queue[qtail].start = cur_seg;
-					seg_queue[qtail].end = this_seg;
-					visited[this_seg] = 1;
-					depth[qtail++] = cur_depth+1;
-					if (depth[qtail-1] == max_depth) {
-						end_seg = seg_queue[qtail-1].end;
-						goto cpp_done1;
-					}	// end if (depth[...
-				}	// end if (!visited...
-			}	// if (WALL_IS_DOORWAY(...
+					if (!visited[this_seg]) {
+						seg_queue[qtail].start = cur_seg;
+						seg_queue[qtail].end = this_seg;
+						visited[this_seg] = 1;
+						depth[qtail++] = cur_depth+1;
+						if (depth[qtail-1] == max_depth) {
+							end_seg = seg_queue[qtail-1].end;
+							goto cpp_done1;
+						}	// end if (depth[...
+					}	// end if (!visited...
+				}	// if (WALL_IS_DOORWAY(...
 dont_add: ;
 		}	//	for (sidenum...
 
