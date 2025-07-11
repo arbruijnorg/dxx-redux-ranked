@@ -2366,9 +2366,9 @@ void initLockedWalls(int removeUnlockableWalls)
 	for (i = 0; i < Num_walls; i++) {
 		foundUnlock = 0;
 		// Is it opened by a key?
-		if (Walls[i].keys > 1)
+		if (Walls[i].type == WALL_DOOR && Walls[i].keys > 1)
 			foundUnlock = findKeyObjectID(Walls[i].keys, removeUnlockableWalls, 0);
-		if (Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED) {
+		if ((Walls[i].type == WALL_DOOR && Walls[i].flags & WALL_DOOR_LOCKED) || Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED) {
 			// ...or is it opened by a trigger?
 			for (int t = 0; t < Num_triggers; t++) {
 				if (Triggers[t].flags & TRIGGER_CONTROL_DOORS) {
@@ -2487,12 +2487,12 @@ double calculate_path_length_partime(point_seg* path, int path_count, partime_ob
 int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int warpBackPointCheck) // Does what the name says.
 {
 	int unlocked = 1;
-	if (Walls[wall_num].keys > 1) {
+	if (Walls[wall_num].type == WALL_DOOR && Walls[wall_num].keys > 1) {
 		unlocked = findKeyObjectID(Walls[wall_num].keys, 0, 1);
 		if (unlocked)
 			return 1;
 	}
-	if (Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].type == WALL_CLOSED) {
+	if ((Walls[wall_num].type == WALL_DOOR && Walls[wall_num].flags & WALL_DOOR_LOCKED) || Walls[wall_num].type == WALL_CLOSED) {
 		unlocked = 0;
 		for (int t = 0; t < Num_triggers; t++) {
 			if (Triggers[t].flags & TRIGGER_CONTROL_DOORS) {
@@ -3006,7 +3006,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 						if (Walls[j].trigger == i) {
 							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
 							addObjectiveToList(objective, 0);
-							i = Num_triggers + 1; // Only add one exit.
 						}
 			
 		while (ParTime.toDoListSize > 0) {
@@ -3058,6 +3057,8 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			}
 			else
 				ParTime.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
+			if (ParTime.loops == 3) // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
+				break;
 		}
 		ParTime.loops++;
 	}
