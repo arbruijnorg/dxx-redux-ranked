@@ -1038,7 +1038,7 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 			return ret;
 		}
 	}
-	if (Ranking.fromBestRanksButton) {
+	if (Ranking.fromBestRanksButton == 1) {
 		switch (event->type) {
 		case EVENT_NEWMENU_SELECTED:
 			if (Ranking.startingLevel > Current_mission->last_level) {
@@ -2364,9 +2364,9 @@ void initLockedWalls(int removeUnlockableWalls)
 	for (i = 0; i < Num_walls; i++) {
 		foundUnlock = 0;
 		// Is it opened by a key?
-		if (Walls[i].keys > 1)
+		if (Walls[i].type == WALL_DOOR && Walls[i].keys > 1)
 			foundUnlock = findKeyObjectID(Walls[i].keys, removeUnlockableWalls, 0);
-		if (Walls[i].flags & WALL_DOOR_LOCKED || Walls[i].type == WALL_CLOSED || Walls[i].type == WALL_CLOAKED) {
+		if ((Walls[i].type == WALL_DOOR && Walls[i].flags & WALL_DOOR_LOCKED) || Walls[i].type == WALL_CLOSED || Walls[i].type == WALL_CLOAKED) {
 			// ...or is it opened by a trigger?
 			for (int t = 0; t < Num_triggers; t++) {
 				if (Triggers[t].type == TT_OPEN_DOOR || Triggers[t].type == TT_OPEN_WALL || Triggers[t].type == TT_UNLOCK_DOOR || Triggers[t].type == TT_ILLUSORY_WALL) {
@@ -2485,12 +2485,12 @@ double calculate_path_length_partime(point_seg* path, int path_count, partime_ob
 int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiveID, int warpBackPointCheck) // Does what the name says.
 {
 	int unlocked = 1;
-	if (Walls[wall_num].keys > 1) {
+	if (Walls[wall_num].type == WALL_DOOR && Walls[wall_num].keys > 1) {
 		unlocked = findKeyObjectID(Walls[wall_num].keys, 0, 1);
 		if (unlocked)
 			return 1;
 	}
-	if (Walls[wall_num].flags & WALL_DOOR_LOCKED || Walls[wall_num].type == WALL_CLOSED || Walls[wall_num].type == WALL_CLOAKED) {
+	if ((Walls[wall_num].type == WALL_DOOR && Walls[wall_num].flags & WALL_DOOR_LOCKED) || Walls[wall_num].type == WALL_CLOSED || Walls[wall_num].type == WALL_CLOAKED) {
 		unlocked = 0;
 		for (int t = 0; t < Num_triggers; t++) {
 			if (Triggers[t].type == TT_OPEN_DOOR || Triggers[t].type == TT_OPEN_WALL || Triggers[t].type == TT_UNLOCK_DOOR || Triggers[t].type == TT_ILLUSORY_WALL) {
@@ -2962,7 +2962,8 @@ int determineSegmentAccessibility(int segnum)
 	short player_path_length = 0;
 	create_path_points(objp, objp->segnum, segnum, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, -1, -1, 0);
 	if (Point_segs[player_path_length - 1].segnum != segnum) { // The segment is inaccessible if Algo doesn't end up at it when given the rules established by initLockedWalls.
-		create_path_points(objp, Secret_return_segment, segnum, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, -1, -1, 0); // Try again from secret return seg.
+		if (Current_level_num > 0) // Secret levels don't have secret return segments.
+			create_path_points(objp, Secret_return_segment, segnum, Point_segs_free_ptr, &player_path_length, MAX_POINT_SEGS, 0, 0, -1, -1, -1, 0); // Try again from secret return seg.
 		if (Point_segs[player_path_length - 1].segnum != segnum)
 			return 0;
 	}
@@ -3048,14 +3049,13 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					addObjectiveToList(objective, 0);
 				}
 			}
-			if (Current_level_num > 0 && Ranking.mergeLevels || Current_level_num < 0 && Ranking.secretMergeLevels) // If these are merged levels, route to secret level entrances as well.
+			if (Current_level_num > 0 && ParTime.mergeLevels || Current_level_num < 0 && ParTime.secretMergeLevels) // If these are merged levels, route to secret level entrances as well.
 				for (i = 0; i <= Num_triggers; i++)
 					if (Triggers[i].type == TT_SECRET_EXIT)
 						for (j = 0; j <= Num_walls; j++)
 							if (Walls[j].trigger == i) {
 								partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
 								addObjectiveToList(objective, 0);
-								i = Num_triggers + 1; // Only add one exit.
 							}
 		}
 		if (ParTime.loops == 1) {
@@ -3101,7 +3101,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 						if (Walls[j].trigger == i) {
 							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
 							addObjectiveToList(objective, 0);
-							i = Num_triggers + 1; // Only add one exit.
 						}
 		}
 
@@ -3116,7 +3115,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				// Just to be sure though, make one last ditch effort to find objectives. It might save Algo from impending doom.
 				// Teleport it to any accessible segments Algo hasn't visited yet, and try to find the nearest objective again. This should take care of Obsidian level 1 and levels like it.
 				// In D2, however, we prioritize the secret level return segment.
-				if (!ParTime.loops) // Only do this on the first loop before reactor is destroyed, as you can't come back from the secret level after it blows.
+				if (!ParTime.loops && Current_level_num > 0) // Only do this on the first loop before reactor is destroyed, as you can't come back from the secret level after it blows. Also secret levels still don't have secret return segments.
 					for (i = 0; i < Num_triggers; i++) {
 						if (Triggers[i].type == TT_SECRET_EXIT) {
 							ParTime.segnum = Secret_return_segment;
@@ -3192,6 +3191,8 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			}
 			else
 				ParTime.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
+			if (ParTime.loops == 3) // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
+				break;
 		}
 		ParTime.loops++;
 	}
@@ -3338,8 +3339,8 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		if (Ranking.quickload)
 			RestartLevel.updateRestartStuff = 1; // If we quickload into a normal level, then go into a secret level and back out to the next level, restarting will give default loadout without this.
 		Ranking.hostages_secret_level = 0;
-		Ranking.fromBestRanksButton = 0; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
-		Ranking.secretMergeLevels = 0;
+		Ranking.fromBestRanksButton = 2; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
+		ParTime.secretMergeLevels = 0;
 		Ranking.secretNoDamage = 1;
 
 		int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
@@ -3356,9 +3357,9 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 				isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 		Ranking.secretAlreadyBeaten = 0;
 		calculateParTime();
-		//if (Ranking.mergeLevels)
+		//if (ParTime.mergeLevels)
 			//Ranking.parTime += Ranking.secretParTime;
-		//if (Ranking.secretMergeLevels)
+		//if (ParTime.secretMergeLevels)
 			//Ranking.secretParTime += Ranking.parTime;
 		if (calculateRank(Current_mission->last_level - level_num, 0) > 0)
 			Ranking.secretAlreadyBeaten = 1;
@@ -4144,8 +4145,8 @@ void StartNewLevel(int level_num)
 	Ranking.missedRngSpawn = 0;
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
-	Ranking.fromBestRanksButton = 0; // So the result screen knows it's not just viewing record details.
-	Ranking.mergeLevels = 0;
+	Ranking.fromBestRanksButton = 2; // So the result screen knows it's not just viewing record details.
+	ParTime.mergeLevels = 0;
 	Ranking.noDamage = 1;
 	if (RestartLevel.updateRestartStuff) {
 		RestartLevel.primary_weapon = Players[Player_num].primary_weapon;

@@ -916,7 +916,7 @@ int endlevel_handler(newmenu* menu, d_event* event, void* userdata) {
 			return ret;
 		}
 	}
-	if (Ranking.fromBestRanksButton) {
+	if (Ranking.fromBestRanksButton == 1) {
 		switch (event->type) {
 		case EVENT_NEWMENU_SELECTED:
 			if (!do_difficulty_menu())
@@ -3099,7 +3099,7 @@ void StartNewLevel(int level_num)
 	Ranking.missedRngSpawn = 0;
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
-	Ranking.fromBestRanksButton = 0; // So the result screen knows it's not just viewing record details.
+	Ranking.fromBestRanksButton = 2; // So the result screen knows it's not just viewing record details.
 	Ranking.noDamage = 1;
 	if (RestartLevel.updateRestartStuff) {
 		RestartLevel.primary_weapon = Players[Player_num].primary_weapon;

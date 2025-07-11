@@ -155,7 +155,6 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	int     warmStart;                  // If the player enters a level with anything non-default, this becomes 1. If this is 1 when a new record is set, the score will be marked as warm started, and won't be visible if their display is disabled.
 	int     cheated;                    // I went to level 3, turned on cheats, entered S1, then when I exited S1 the cheats disabled themselves and my score counted... alright, fixing that.
 	double  freezeTimer;                // Tells normal levels' in-game timer whether it should be frozen or not.
-	ubyte   mergeLevels;                // Tells the par time algorithm whether to combine par times in main/secret levels that depend on each other so the one with the finish isn't incomplete.
 	int     noDamage;                   // A new bonus I had to add. Thanks Marvin... 4/22/2025
 
 	// Below are the ranking mod variables used for secret levels. Since we can play them in the middle of a normal one, we have to distinguish between them so results don't overlap.
@@ -172,7 +171,6 @@ typedef struct ranking { // This struct contains variables for the ranking syste
 	double  hostages_secret_level;      // Secret equivalent of Players[Player_num].hostages_level.
 	double  secretMissedRngSpawn;
 	int     secretAlreadyBeaten;
-	ubyte   secretMergeLevels;
 	int     secretNoDamage;
 } __pack__ ranking;
 

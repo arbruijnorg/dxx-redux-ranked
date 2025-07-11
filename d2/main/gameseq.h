@@ -70,6 +70,8 @@ typedef struct parTime {
 	double hasAfterburner;
 	double afterburnerMultiplier;
 	ubyte thiefKeys;
+	ubyte mergeLevels; // Tells the par time algorithm whether to combine par times in main/secret levels that depend on each other so the one with the finish isn't incomplete.
+	ubyte   secretMergeLevels;
 } __pack__ parTime;
 
 // Current_level_num starts at 1 for the first level
