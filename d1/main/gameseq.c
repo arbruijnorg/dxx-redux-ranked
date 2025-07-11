@@ -2919,12 +2919,13 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	ParTime.vulcanAmmo = 0;
 	ParTime.matcenTime = 0;
 	Ranking.maxScore = 0;
+	Ranking.isRankable = 0;
 	
 	// Calculate start time.
 	timer_update();
 	start_timer_value = timer_query();
 	
-	ParTime.loops = 2;
+	ParTime.loops = 2; // So the accessibility check doesn't trip up on reactor stuff. Putting this line in D2 or taking it from D1 breaks the algorithm, and I don't know why because it should be nearly identical between games, so I'm gonna fearfully leave this.
 	// Populate the locked walls list.
 	initLockedWalls(1);
 		
@@ -3004,7 +3005,15 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				if (Triggers[i].flags == TRIGGER_EXIT || Triggers[i].flags == TRIGGER_SECRET_EXIT)
 					for (j = 0; j <= Num_walls; j++)
 						if (Walls[j].trigger == i) {
-							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
+							partime_objective objective;
+							if (findConnectedWallNum(j) != -1) {
+								objective.type = OBJECTIVE_TYPE_TRIGGER;
+								objective.ID = findConnectedWallNum(j);
+							}
+							else {
+								objective.type = OBJECTIVE_TYPE_TRIGGER;
+								objective.ID = j;
+							}
 							addObjectiveToList(objective, 0);
 						}
 			
@@ -3057,8 +3066,12 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			}
 			else
 				ParTime.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
-			if (ParTime.loops == 3) // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
-				break;
+			if (ParTime.loops == 1) // An accessible reactor or boss gives us a result screen.
+				Ranking.isRankable = 1;
+			if (ParTime.loops == 3) {
+				Ranking.isRankable = 1; // An accessible exit trigger gives us a result screen.
+				break; // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
+			}
 		}
 		ParTime.loops++;
 	}
@@ -3120,54 +3133,44 @@ void StartNewLevel(int level_num)
 	StartNewLevelSub(level_num, 1, 0);
 
 	RestartLevel.isResults = 0;
-	int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
-	for (i = 0; i <= Highest_object_index; i++) {
-		if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag)
-			isRankable = 1; // A boss is present, this level is beatable.
-		if (Objects[i].type == OBJ_CNTRLCEN)
-			isRankable = 1; // A reactor is present, this level is beatable.
-	}
-	for (i = 0; i <= Num_triggers; i++)
-		if (Triggers[i].flags & TRIGGER_EXIT || Triggers[i].flags & TRIGGER_SECRET_EXIT)
-			isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
-	if (!RestartLevel.restarts) // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
+	if (!RestartLevel.restarts) { // Don't calculate par time if we're restarting. We already have that information and it's not changing. This will reduce restart load times slightly.
 		calculateParTime();
-	if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
-		PHYSFS_File* temp;
-		char filename[256];
-		char temp_filename[256];
-		if (Current_level_num > 0)
-			sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num);
-		else
-			sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
-		sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
-		time_t timeOfScore = time(NULL);
-		temp = PHYSFS_openWrite(temp_filename);
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "%i\n", Difficulty_level);
-		PHYSFSX_printf(temp, "-1\n");
-		PHYSFSX_printf(temp, "0\n");
-		PHYSFSX_printf(temp, "%s\n", Current_level_name);
-		PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
-		PHYSFSX_printf(temp, "0");
-		PHYSFS_close(temp);
-		PHYSFS_delete(filename);
-		PHYSFSX_rename(temp_filename, filename);
+		if (!Ranking.isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
+			PHYSFS_File* temp;
+			char filename[256];
+			char temp_filename[256];
+			if (Current_level_num > 0)
+				sprintf(filename, "ranks/%s/%s/level%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num);
+			else
+				sprintf(filename, "ranks/%s/%s/levelS%i.hi", Players[Player_num].callsign, Current_mission->filename, Current_level_num * -1);
+			sprintf(temp_filename, "ranks/%s/%s/temp.hi", Players[Player_num].callsign, Current_mission->filename);
+			time_t timeOfScore = time(NULL);
+			temp = PHYSFS_openWrite(temp_filename);
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "%i\n", Difficulty_level);
+			PHYSFSX_printf(temp, "-1\n");
+			PHYSFSX_printf(temp, "0\n");
+			PHYSFSX_printf(temp, "%s\n", Current_level_name);
+			PHYSFSX_printf(temp, "%s\n", ctime(&timeOfScore));
+			PHYSFSX_printf(temp, "0");
+			PHYSFS_close(temp);
+			PHYSFS_delete(filename);
+			PHYSFSX_rename(temp_filename, filename);
+		}
+
 	}
 	else {
 		char message[256];
-		if (RestartLevel.restarts) {
-			if (RestartLevel.restarts == 1)
-				sprintf(message, "1 restart and counting...");
-			else
-				sprintf(message, "%i restarts and counting...", RestartLevel.restarts);
-			powerup_basic(-10, -10, -10, 0, message);
-		}
+		if (RestartLevel.restarts == 1)
+			sprintf(message, "1 restart and counting...");
+		else
+			sprintf(message, "%i restarts and counting...", RestartLevel.restarts);
+		powerup_basic(-10, -10, -10, 0, message);
 	}
 	Ranking.alreadyBeaten = 0;
 	if (level_num > 0) {

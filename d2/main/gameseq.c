@@ -3054,7 +3054,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					if (Triggers[i].type == TT_SECRET_EXIT)
 						for (j = 0; j <= Num_walls; j++)
 							if (Walls[j].trigger == i) {
-								partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
+								partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, findConnectedWallNum(j) };
 								addObjectiveToList(objective, 0);
 							}
 		}
@@ -3099,7 +3099,15 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				if (Triggers[i].type == TT_EXIT || Triggers[i].type == TT_SECRET_EXIT)
 					for (j = 0; j <= Num_walls; j++)
 						if (Walls[j].trigger == i) {
-							partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, j };
+							partime_objective objective;
+							if (findConnectedWallNum(j) != -1) {
+								objective.type = OBJECTIVE_TYPE_TRIGGER;
+								objective.ID = findConnectedWallNum(j);
+							}
+							else {
+							objective.type = OBJECTIVE_TYPE_TRIGGER;
+							objective.ID = j;
+							}
 							addObjectiveToList(objective, 0);
 						}
 		}
@@ -3191,8 +3199,16 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			}
 			else
 				ParTime.segnum = lastSegnum; // find_nearest_objective_partime just tried to set Algo's segnum to something, but it shouldn't be in this case, so force it back.
-			if (ParTime.loops == 3) // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
-				break;
+			if (ParTime.loops == 1) // An accessible reactor or boss gives us a result screen.
+				Ranking.isRankable = 1;
+			if (ParTime.loops == 3) {
+				int wall_num = findConnectedWallNum(nearestObjective.ID);
+				if (wall_num == -1)
+					wall_num = nearestObjective.ID;
+				if (Triggers[Walls[wall_num].trigger].type == TT_EXIT)
+					Ranking.isRankable = 1; // An accessible exit trigger gives us a result screen. NOT a secret exit, as those only give us results when a reactor or boss is killed, which already sets isRankable to 1.
+				break; // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
+			}
 		}
 		ParTime.loops++;
 	}
@@ -3343,18 +3359,6 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		ParTime.secretMergeLevels = 0;
 		Ranking.secretNoDamage = 1;
 
-		int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
-		for (i = 0; i <= Highest_object_index; i++) {
-			if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag)
-				isRankable = 1; // A boss is present, this level is beatable.
-			if (Objects[i].type == OBJ_CNTRLCEN)
-				isRankable = 1; // A reactor is present, this level is beatable.
-			if (Objects[i].type == OBJ_HOSTAGE)
-				Ranking.hostages_secret_level++;
-		}
-		for (i = 0; i <= Num_triggers; i++)
-			if (Triggers[i].type == TT_EXIT)
-				isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
 		Ranking.secretAlreadyBeaten = 0;
 		calculateParTime();
 		//if (ParTime.mergeLevels)
@@ -3363,7 +3367,7 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 			//Ranking.secretParTime += Ranking.parTime;
 		if (calculateRank(Current_mission->last_level - level_num, 0) > 0)
 			Ranking.secretAlreadyBeaten = 1;
-		if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
+		if (!Ranking.isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
 			PHYSFS_File* temp;
 			char filename[256];
 			char temp_filename[256];
@@ -4179,20 +4183,6 @@ void StartNewLevel(int level_num)
 
 	RestartLevel.isResults = 0;
 
-	int i, isRankable = 0; // We need to check if this level is beatable, since some secret levels in D2 are meant to be part of a base one.
-	for (i = 0; i <= Highest_object_index; i++) {
-			if (Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].boss_flag)
-				isRankable = 1; // A boss is present, this level is beatable.
-			if (Objects[i].type == OBJ_CNTRLCEN)
-				isRankable = 1; // A reactor is present, this level is beatable.
-	}
-	for (i = 0; i <= Num_triggers; i++)
-		if (Triggers[i].type == TT_EXIT)
-			isRankable = 1; // An exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be behind unreachable, but who would put an exit there?
-	for (i = 0; i <= Num_triggers; i++) {
-		if (Triggers[i].type == TT_EXIT)
-			isRankable = 1; // A level-ending exit is present, this level is beatable. Technically the level could still be unbeatable because the exit could be somewhere unreachable, but who would put an exit there?
-	}
 	if (RestartLevel.restarts) {
 		const char message[256];
 		if (RestartLevel.restarts == 1)
@@ -4203,7 +4193,7 @@ void StartNewLevel(int level_num)
 	}
 	else {
 		calculateParTime();
-		if (!isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
+		if (!Ranking.isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
 			PHYSFS_File* temp;
 			char filename[256];
 			char temp_filename[256];
