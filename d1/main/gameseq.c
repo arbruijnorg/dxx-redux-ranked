@@ -1917,7 +1917,7 @@ double calculate_combat_time_wall(int wall_num, int pathFinal) // Tell algo to u
 			fire_rate = (double)f1_0 / Weapon_info[n].fire_wait;
 			if (!(n > LASER_ID_L4)) // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rate and energy usage in theirs.
 				fire_rate = (double)f1_0 / Weapon_info[0].fire_wait;
-			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 13; // The 13 is to scale with the ammo counter.
+			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
 			wall_health = f2fl(Walls[wall_num].hps + 1) - WallAnims[Walls[wall_num].clip_num].num_frames; // For some reason the "real" health of a wall is its hps minus its frame count. Refer to the last line of dxx-redux-ranked commit cb1d724's description.
 			if (wall_health < f2fl(1)) // So wall health isn't considered negative after subtracting frames.
@@ -1992,7 +1992,7 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	// Technically doing player splash radius and adding that to dodge_distance later would be consistent, but it would be unfair to the player in certain cases which we don't want.
 	double enemy_splash_radius = f2fl(Weapon_info[robInfo->weapon_type].damage_radius);
 	double weapon_homing_flag = weapon_info->homing_flag;
-	double enemy_weapon_homing_flag = Weapon_info[robInfo->weapon_type].homing_flag;
+	double enemy_weapon_homing_flag = (Weapon_info[robInfo->weapon_type].homing_flag || robInfo->weapon_type == SMART_ID); // Smart missiles have homing capabilities.
 
 	// Next, find the "optimal distance" for fighting the given enemy with the given weapon. This is the distance where the enemy's fire can be dodged off of pure reaction time, without any prediction.
 	// Once the player's ship can start moving 250ms (avg human reaction time) after the enemy shoots, and get far enough out of the way for the enemy's shots to miss, it's at the optimal distance.
@@ -2001,9 +2001,11 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	if (enemy_attack_type) // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
 		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
 	else
-		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed + enemy_splash_radius; // Missiles are dangerous and need to be kept further away from.
+		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed + enemy_splash_radius; // Stay further away from bots with splash attacks.
 	if (enemy_runs) // We don't want snipe robots to use this, as they actually shoot things.
 		optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values. Don't add splash damage here.
+	if (Weapon_info[robInfo->weapon_type].bounce)
+		optimal_distance *= 2; // Dodge it from one way, then dodge it from the other. Bouncers suck.
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
 	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation, and that the player is shooting at the middle of the target from directly ahead.
@@ -2023,7 +2025,7 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	double dodge_time = optimal_distance / projectile_speed;
 	double dodge_distance = 0;
 	// For running bots, we use a simple multiplication, but for everyone else, we have to account for how they dodge. They start at their evade speed, then slow down over time. Always using evade speed as a flat rate causes Algo to underestimate, and always using max speed does the opposite.
-	double drag_multiplier = f2fl(65536 - robInfo->drag);
+	double drag_multiplier = 1 - f2fl(robInfo->drag);
 	double enemy_evade_speed = (robInfo->evade_speed[Difficulty_level] + 0.5) * 32; // The + 0.5 comes from move_around_player, where HP percentage is added to evade_speed. HP is assumed to degrade linearly here, so we add the average of all HP values: 0.5.
 	if (!robInfo->evade_speed)
 		enemy_evade_speed = 0; // Undo the + 0.5 if the initial value was 0, as per move_around_player.
@@ -2056,15 +2058,14 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 		accuracy_multiplier *= 0.5;
 
 	double accuracy = dodge_requirement / dodge_distance;
+	if (accuracy > 1)
+		accuracy = 1; // Accuracy can't be greater than 100%.
 	if (weapon_homing_flag)
-		accuracy = (accuracy / 2) + 0.5; // Buff player accuracy if their weapon has homing.
+		accuracy = accuracy / 2 + 0.5; // Buff player accuracy if their weapon has homing.
 	if (enemy_weapon_homing_flag)
-		accuracy /= 2; // Conversely, do the opposite if the enemy's weapon has homing.
+		accuracy /= 2; // Conversely, do the opposite if the enemy's weapon has homing. This isn't meant to be a simple cut in half. It's the average of acc and 0, while the other is average of acc and 100.
 	// We want the enemy's check to be last so both having homing still has a net negative effect. Homing enemies are hard to avoid and take extra time to kill.
-	// We also want the cap to 100 accuracy to come after the homing stuff so boss fight times don't explode out of control.
-	if (accuracy * accuracy_multiplier > 1) // Accuracy can't be greater than 100%.
-		return 1;
-	else
+	// We also want the cap of 100 accuracy to come before the homing stuff so accuracy above 100% doesn't cause player homing to NERF it instead of buff it, and so ALL homing enemies, even easy to hit ones, get an acc nerf.
 		return accuracy * accuracy_multiplier;
 }
 
@@ -2091,7 +2092,7 @@ double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int
 				gunpoints = 3;
 			double damage = f2fl(weapon_info->strength[Difficulty_level]) * gunpoints;
 			double fire_rate = (double)f1_0 / weapon_info->fire_wait;
-			double ammo_usage = f2fl(weapon_info->ammo_usage) * 13; // The 13 is to scale with the ammo counter.
+			double ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
 			double splash_radius = f2fl(weapon_info->damage_radius);
 			double enemy_health = f2fl(robInfo->strength + 1); // We do +1 to account for robots still being alive at exactly 0 HP.
 			double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
@@ -2143,7 +2144,7 @@ double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int
 		if (topWeapon == FLARE_ID)
 			printf("Took %.3fs to fight robot type %i with flares, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 		if (topWeapon == VULCAN_ID)
-			printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy, now at %.0f vulcan ammo\n", lowestCombatTime, obj->id, topAccuracy, f2fl(ParTime.vulcanAmmo));
+			printf("Took %.3fs to fight robot type %i with vulcan, %.2f accuracy, now at %.0f vulcan ammo\n", lowestCombatTime, obj->id, topAccuracy, f2fl((int)ParTime.vulcanAmmo));
 		if (topWeapon == SPREADFIRE_ID)
 			printf("Took %.3fs to fight robot type %i with spreadfire, %.2f accuracy\n", lowestCombatTime, obj->id, topAccuracy);
 		if (topWeapon == PLASMA_ID)
@@ -2902,7 +2903,6 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	int lastSegnum = ConsoleObject->segnum; // So the printf showing paths to and from segments works.
 	int i;
 	int j;
-	ParTime.loops = 0; // How many times the pathmaking process has repeated. This determines what toDoList is populated with, to make sure things are gone to in the right order.
 	double pathLength; // Store create_path_partime's result in pathLength to compare to current shortest.
 	double matcenTime = 0; // Debug variable to see how much time matcens are adding to the par time.
 	point_seg* path_start; // The current path we are looking at (this is a pointer into somewhere in Point_segs).
@@ -2925,7 +2925,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	timer_update();
 	start_timer_value = timer_query();
 	
-	ParTime.loops = 2; // So the accessibility check doesn't trip up on reactor stuff. Putting this line in D2 or taking it from D1 breaks the algorithm, and I don't know why because it should be nearly identical between games, so I'm gonna fearfully leave this.
+	ParTime.loops = 2; // So the accessibility check doesn't trip up on reactor stuff.
 	// Populate the locked walls list.
 	initLockedWalls(1);
 		
@@ -2948,7 +2948,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	
 	initLockedWalls(0);
 	ParTime.doneListSize = 0; // So locked walls can be detected correctly.
-	ParTime.loops = 0;
+	ParTime.loops = 0; // How many times the pathmaking process has repeated. This determines what toDoList is populated with, to make sure things are gone to in the right order.
 	
 	// Initialize all matcens to 3 lives.
 	for (i = 0; i < Num_robot_centers; i++)

@@ -188,7 +188,7 @@ int pick_up_energy(void)
 		Players[Player_num].energy += boost;
 		if (Players[Player_num].energy > MAX_ENERGY)
 			Players[Player_num].energy = MAX_ENERGY;
-		powerup_basic(15,15,7, ENERGY_SCORE, "%s %s %d",TXT_ENERGY,TXT_BOOSTED_TO,f2ir(Players[Player_num].energy));
+		powerup_basic(15,15,7, ENERGY_SCORE, "%s %s %d",TXT_ENERGY,TXT_BOOSTED_TO,f2i(Players[Player_num].energy));
 		used=1;
 
 		if (Game_mode & GM_MULTI)
@@ -292,7 +292,7 @@ int do_powerup(object *obj)
 				Players[Player_num].shields += boost;
 				if (Players[Player_num].shields > MAX_SHIELDS)
 					Players[Player_num].shields = MAX_SHIELDS;
-				powerup_basic(0, 0, 15, SHIELD_SCORE, "%s %s %d",TXT_SHIELD,TXT_BOOSTED_TO,f2ir(Players[Player_num].shields));
+				powerup_basic(0, 0, 15, SHIELD_SCORE, "%s %s %d",TXT_SHIELD,TXT_BOOSTED_TO,f2i(Players[Player_num].shields));
 				if (Game_mode & GM_MULTI && PlayerCfg.MultiMessages)
 					con_printf(CON_NORMAL, "You picked up %.1f shields, shields now %.1f\n", f2fl(boost), f2fl(Players[Player_num].shields));
 				used=1;
