@@ -1868,21 +1868,28 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	// Once the player's ship can start moving 250ms (avg human reaction time) after the enemy shoots, and get far enough out of the way for the enemy's shots to miss, it's at the optimal distance.
 	// Any closer, and the player is put in too much danger. Any further, and the player faces potential accuracy loss due to the enemy having more time to dodge themselves.
 	double optimal_distance;
-	if (enemy_attack_type) // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
+	if (enemy_attack_type) { // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
 		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
+		enemy_weapon_homing_flag = 0; // These bots can't actually shoot homing things at you, even if the weapon they would've had otherwise is.
+	}
 	else
-		optimal_distance = (((player_size + enemy_weapon_size * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed + enemy_splash_radius; // Stay further away from bots with splash attacks.
+		optimal_distance = (((player_size + enemy_weapon_size + enemy_splash_radius * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed; // Stay further away from bots with splash attacks.
+	if (!Weapon_info[weapon_id].matter)
+		enemy_weapon_homing_flag = robInfo->energy_blobs; // Enemies can release homing blobs if hit with an energy weapon!
 	if (robInfo->thief)
 		optimal_distance += 80 + enemy_max_speed; // Thieves are the worst of both worlds.
 	else {
-		if (enemy_behavior == AIB_RUN_FROM) // We don't want snipe robots to use this, as they actually shoot things.
-			optimal_distance = 80; // In the case of enemies that run from you, we'll use the maximum enemy dodge distance because it returns healthy chase time values.
+		if (enemy_behavior == AIB_RUN_FROM) { // We don't want snipe robots to use this, as they actually shoot things.
+			optimal_distance = 80; // In the case of enemies that run from you, we'll use the supposed maximum enemy dodge distance because it returns healthy chase time values.	
+			enemy_weapon_homing_flag = 0; // These bots can't actually shoot homing things at you, even if the weapon they would've had otherwise is.
+		}
 		if (enemy_behavior == AIB_SNIPE)
 			optimal_distance += enemy_max_speed; // These enemies can back away from you as you shoot. Can't be exact on this or else enemies faster than your weapons will return infinite optimal distance.
 	}
 	if (Weapon_info[robInfo->weapon_type].bounce || Weapon_info[robInfo->weapon_type2].bounce)
 		optimal_distance *= 2; // Dodge it from one way, then dodge it from the other. Bouncers suck.
 	optimal_distance = optimal_distance > robInfo->badass ? optimal_distance : robInfo->badass; // Also ensure we avoid their blast radius.
+	optimal_distance = optimal_distance > Weapon_info[weapon_id].damage_radius ? optimal_distance : Weapon_info[weapon_id].damage_radius; // Don't stay close enough to get damaged by our own weapon!
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
 	// For simplicity, we assume enemies face longways and dodge sideways relative to player rotation, and that the player is shooting at the middle of the target from directly ahead.
@@ -2302,7 +2309,9 @@ int findKeyObjectID(int keyType, int dontCheckAccessibility, int unlockCheck)
 		Int3();
 		return 0;
 	}
-
+	int powerupID2 = pow(2, powerupID - 3); // Translate the POW_KEY macros to KEY flags for door walls.
+	if (ParTime.missingKeys & powerupID2 && unlockCheck)
+		return 1; // Allow Algo through colored doors whose keys are missing from the level. This prevents softlocks on certain edge case levels.
 	for (int i = 0; i <= Highest_object_index; i++) {
 		if ((Objects[i].type == OBJ_POWERUP && Objects[i].id == powerupID) || robotHasKey(&Objects[i]) == powerupID) {
 			partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
@@ -2312,6 +2321,8 @@ int findKeyObjectID(int keyType, int dontCheckAccessibility, int unlockCheck)
 						foundKey = 1;
 			}
 			else {
+				if (dontCheckAccessibility && ParTime.missingKeys & powerupID2)
+					ParTime.missingKeys -= powerupID2;
 				if (dontCheckAccessibility || ParTime.isSegmentAccessible[Objects[i].segnum]) { // Make sure the key or the robot that contains it can be physically flown to by the player.
 					foundKey = 1;
 					if (dontCheckAccessibility)
@@ -2322,7 +2333,6 @@ int findKeyObjectID(int keyType, int dontCheckAccessibility, int unlockCheck)
 			}
 		}
 	}
-
 	return foundKey;
 }
 
@@ -2354,6 +2364,16 @@ void removeObjectiveFromList(partime_objective objective)
 void initLockedWalls(int removeUnlockableWalls)
 {
 	int i;
+	if (removeUnlockableWalls) // Only count keys as missing if there's even a door of that color to unlock. Without this, levels using less than three key colors could break.
+		for (i = 0; i < Num_walls; i++)
+			if (Walls[i].type == WALL_DOOR) {
+				if (Walls[i].keys & KEY_BLUE && !(ParTime.missingKeys & KEY_BLUE))
+					ParTime.missingKeys |= KEY_BLUE;
+				if (Walls[i].keys & KEY_GOLD && !(ParTime.missingKeys & KEY_GOLD))
+					ParTime.missingKeys |= KEY_GOLD;
+				if (Walls[i].keys & KEY_RED && !(ParTime.missingKeys & KEY_RED))
+					ParTime.missingKeys |= KEY_RED;
+			}
 	int foundUnlock;
 	ParTime.numTypeThreeWalls = 0;
 	for (i = 0; i < Num_walls; i++) {
@@ -2998,6 +3018,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 	ParTime.afterburnerMultiplier = 1;
 	ParTime.thiefKeys = 0;
 	ParTime.matcenTime = 0;
+	ParTime.missingKeys = 0;
 	if (Current_level_num > 0)
 		Ranking.maxScore = 0;
 	else
@@ -3045,7 +3066,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 					addObjectiveToList(objective, 0);
 				}
 			}
-			if (Current_level_num > 0 && ParTime.mergeLevels || Current_level_num < 0 && ParTime.secretMergeLevels) // If these are merged levels, route to secret level entrances as well.
+			if (ParTime.missingKeys) // If there are missing keys, path to secret exit portals as well. The keys are probably there.
 				for (i = 0; i <= Num_triggers; i++)
 					if (Triggers[i].type == TT_SECRET_EXIT)
 						for (j = 0; j <= Num_walls; j++)
@@ -3083,6 +3104,9 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 						}
 					}
 				}
+				for (int n = 0; n < ParTime.doneListSize; n++) // Don't get the boss if we already had to get him due to key stuff (LOTW The Pit).
+					if (ParTime.doneList[n].type == OBJECTIVE_TYPE_OBJECT && ParTime.doneList[n].ID == targetedBossID)
+						targetedBossID = -1;
 				if (targetedBossID > -1) { // If a level doesn't have a reactor OR boss, don't add the non-existent boss to the to-do list.
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, targetedBossID };
 					addObjectiveToList(objective, 0);
@@ -3352,15 +3376,10 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 			RestartLevel.updateRestartStuff = 1; // If we quickload into a normal level, then go into a secret level and back out to the next level, restarting will give default loadout without this.
 		Ranking.hostages_secret_level = 0;
 		Ranking.fromBestRanksButton = 2; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
-		ParTime.secretMergeLevels = 0;
 		Ranking.secretNoDamage = 1;
 
 		Ranking.secretAlreadyBeaten = 0;
 		calculateParTime();
-		//if (ParTime.mergeLevels)
-			//Ranking.parTime += Ranking.secretParTime;
-		//if (ParTime.secretMergeLevels)
-			//Ranking.secretParTime += Ranking.parTime;
 		if (calculateRank(Current_mission->last_level - level_num, 0) > 0)
 			Ranking.secretAlreadyBeaten = 1;
 		if (!Ranking.isRankable) { // If this level is not beatable, mark the level as beaten with zero points and an X-rank, so the mission can have an aggregate rank.
@@ -3618,6 +3637,9 @@ int checkForWarmStart()
 {
 	// First, check for too much shields, energy, concussion missiles, vulcan ammo or laser level. Also check for quads.
 	if (f2fl(Players[Player_num].shields) > 100 || f2fl(Players[Player_num].energy) > 100 || Players[Player_num].secondary_ammo[CONCUSSION_INDEX] > 7 - Difficulty_level || Players[Player_num].primary_ammo[VULCAN_INDEX] || Players[Player_num].laser_level || Players[Player_num].flags & PLAYER_FLAGS_QUAD_LASERS)
+		return 1;
+	// In D2, we have to check for accessories.
+	if (Players[Player_num].flags & PLAYER_FLAGS_HEADLIGHT || Players[Player_num].flags & PLAYER_FLAGS_AMMO_RACK || Players[Player_num].flags & PLAYER_FLAGS_MAP_ALL || Players[Player_num].flags & PLAYER_FLAGS_CONVERTER || Players[Player_num].flags & PLAYER_FLAGS_AFTERBURNER)
 		return 1;
 	// Next, check for the presence of any weapon besides lasers.
 	for (int i = 1; i < 10; i++)
@@ -4146,7 +4168,6 @@ void StartNewLevel(int level_num)
 	Ranking.quickload = 0;
 	Ranking.level_time = 0; // Set this to 0 despite it going unused until set to time_level, so we can save a variable when telling the in-game timer which time variable to display.
 	Ranking.fromBestRanksButton = 2; // So the result screen knows it's not just viewing record details.
-	ParTime.mergeLevels = 0;
 	Ranking.noDamage = 1;
 	if (RestartLevel.updateRestartStuff) {
 		RestartLevel.primary_weapon = Players[Player_num].primary_weapon;

@@ -65,6 +65,7 @@ typedef struct parTime {
 	int typeThreeUnlockIDs[MAX_WALLS];
 	int sideSizes[MAX_SEGMENTS][MAX_SIDES_PER_SEGMENT]; // So we can cache this and avoid having millions upon millions of vm_vec_dist calls in par time.
 	int warpBackPoint;
+	int missingKeys; // Tells Also which keys are missing from a level, allowing it to go through cooresponding colored doors to prevent softlocks.
 } __pack__ parTime;
 
 
