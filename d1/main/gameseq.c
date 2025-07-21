@@ -2392,12 +2392,16 @@ void initLockedWalls(int removeUnlockableWalls)
 			for (int t = 0; t < Num_triggers; t++) {
 				if (Triggers[t].flags & TRIGGER_CONTROL_DOORS) {
 					partime_objective objective;
+					objective.type = OBJECTIVE_TYPE_INVALID;
+					objective.ID = 0;
 					for (int w = 0; w < Num_walls; w++)
 						if (Walls[w].trigger == t) {
 							objective.type = OBJECTIVE_TYPE_TRIGGER;
 							objective.ID = w;
 							break;
 						}
+					if (!objective.type)
+						break; // No wall was found. We have an orphaned trigger, skip it. (Obsidian 4 fix)
 					for (int l = 0; l < Triggers[t].num_links; l++) {
 						int connectedWallNum = findConnectedWallNum(i);
 						if ((Triggers[t].seg[l] == Walls[i].segnum && Triggers[t].side[l] == Walls[i].sidenum) || (Triggers[t].seg[l] == Walls[connectedWallNum].segnum && Triggers[t].side[l] == Walls[connectedWallNum].sidenum)) {
@@ -2516,12 +2520,16 @@ int thisWallUnlocked(int wall_num, int currentObjectiveType, int currentObjectiv
 		for (int t = 0; t < Num_triggers; t++) {
 			if (Triggers[t].flags & TRIGGER_CONTROL_DOORS) {
 				partime_objective objective;
+				objective.type = OBJECTIVE_TYPE_INVALID;
+				objective.ID = 0;
 				for (int w = 0; w < Num_walls; w++)
 					if (Walls[w].trigger == t) {
 						objective.type = OBJECTIVE_TYPE_TRIGGER;
 						objective.ID = w;
 						break;
 					}
+				if (!objective.type)
+					break; // No wall was found. We have an orphaned trigger, skip it. (Obsidian 4 fix)
 				for (int l = 0; l < Triggers[t].num_links; l++) {
 					int connectedWallNum = findConnectedWallNum(wall_num);
 					if ((Triggers[t].seg[l] == Walls[wall_num].segnum && Triggers[t].side[l] == Walls[wall_num].sidenum) || (Triggers[t].seg[l] == Walls[connectedWallNum].segnum && Triggers[t].side[l] == Walls[connectedWallNum].sidenum))
@@ -2618,6 +2626,9 @@ partime_objective find_nearest_objective_partime(int start_seg, point_seg** path
 		for (i = 0; i < player_path_length - 1; i++) {
 			side_num = find_connecting_side(Point_segs[i].segnum, Point_segs[i + 1].segnum);
 			wall_num = Segments[Point_segs[i].segnum].sides[side_num].wall_num;
+			if (!ParTime.isSegmentAccessible[Point_segs[i + 1].segnum])
+				if (ParTime.warpBackPoint == -1)
+					ParTime.warpBackPoint = Point_segs[i].segnum;
 			if (!thisWallUnlocked(wall_num, nearestObjective.type, nearestObjective.ID, 1))
 				if ((nearestObjective.type == OBJECTIVE_TYPE_WALL ||
 					(nearestObjective.type == OBJECTIVE_TYPE_OBJECT && (Objects[nearestObjective.ID].type == OBJ_CNTRLCEN || (Objects[nearestObjective.ID].type == OBJ_ROBOT && Robot_info[Objects[nearestObjective.ID].id].boss_flag)))) &&
@@ -2977,7 +2988,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 		// Collect our objectives at this stage...
 		if (ParTime.loops == 0) {
 			for (i = 0; i <= Highest_object_index; i++) { // Populate the to-do list with all robots, hostages, weapons, and laser powerups. Ignore robots not worth over zero, as the player isn't gonna go for those. This should never happen, but it's just a failsafe.
-				if ((Objects[i].type == OBJ_ROBOT && Robot_info[Objects[i].id].score_value > 0 && !Robot_info[Objects[i].id].boss_flag) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON))) {
+				if ((Objects[i].type == OBJ_ROBOT && !Robot_info[Objects[i].id].boss_flag) || Objects[i].type == OBJ_HOSTAGE || (Objects[i].type == OBJ_POWERUP && (Objects[i].id == POW_EXTRA_LIFE || Objects[i].id == POW_LASER || Objects[i].id == POW_QUAD_FIRE || Objects[i].id == POW_VULCAN_WEAPON || Objects[i].id == POW_SPREADFIRE_WEAPON || Objects[i].id == POW_PLASMA_WEAPON || Objects[i].id == POW_FUSION_WEAPON))) {
 					partime_objective objective = { OBJECTIVE_TYPE_OBJECT, i };
 					addObjectiveToList(objective, 0);
 				}

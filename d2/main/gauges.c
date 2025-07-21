@@ -764,7 +764,7 @@ void hud_show_pointsleftinlevel()
 {
 	double pointsleftinlevel = 0;
 	for (int i = 0; i <= Highest_object_index; i++) {
-		if (Objects[i].type == OBJ_ROBOT && !Objects[i].matcen_creator && Robot_info[Objects[i].id].score_value > 0 && !(Objects[i].flags & OF_EXPLODING))
+		if (Objects[i].type == OBJ_ROBOT && !Objects[i].matcen_creator && !(Objects[i].flags & OF_EXPLODING))
 			pointsleftinlevel += Robot_info[Objects[i].id].score_value;
 		if (Objects[i].type == OBJ_CNTRLCEN && !Control_center_destroyed)
 				pointsleftinlevel += CONTROL_CEN_SCORE;
