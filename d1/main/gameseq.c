@@ -1917,20 +1917,20 @@ double calculate_combat_time_wall(int wall_num, int pathFinal) // Tell algo to u
 			fire_rate = (double)f1_0 / Weapon_info[n].fire_wait;
 			if (!(n > LASER_ID_L4)) // For some reason, the game always uses laser 1's weapon data, even though other levels have a different fire rate and energy usage in theirs.
 				fire_rate = (double)f1_0 / Weapon_info[0].fire_wait;
-			ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
+			ammo_usage = Weapon_info[n].ammo_usage * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
 			splash_radius = f2fl(Weapon_info[n].damage_radius);
 			wall_health = f2fl(Walls[wall_num].hps + 1) - WallAnims[Walls[wall_num].clip_num].num_frames; // For some reason the "real" health of a wall is its hps minus its frame count. Refer to the last line of dxx-redux-ranked commit cb1d724's description.
 			if (wall_health < f2fl(1)) // So wall health isn't considered negative after subtracting frames.
 				wall_health = f2fl(1);
 			// Assume accuracy is always 100% for walls. They're big and don't move lol.
 			int shots = ceil(wall_health / damage); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
-			if (f2fl(ParTime.vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this wall before using vulcan.
+			if (f2fl(ParTime.vulcanAmmo) >= shots * ammo_usage) // Make sure we have enough ammo for this wall before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
 				thisWeaponCombatTime = INFINITY; // Make vulcan's time infinite so algo won't use it without ammo.
 			if (thisWeaponCombatTime <= lowestCombatTime || lowestCombatTime == -1) { // If it should be used, update algo's weapon stats to the new one's for use in combat time calculation.
 				lowestCombatTime = thisWeaponCombatTime;
-				ammoUsed = shots * ammo_usage * f1_0;
+				ammoUsed = shots * ammo_usage;
 				topWeapon = n;
 			}
 		}
@@ -1992,24 +1992,23 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	// Technically doing player splash radius and adding that to dodge_distance later would be consistent, but it would be unfair to the player in certain cases which we don't want.
 	double enemy_splash_radius = f2fl(Weapon_info[robInfo->weapon_type].damage_radius);
 	double weapon_homing_flag = weapon_info->homing_flag;
-	double enemy_weapon_homing_flag = (Weapon_info[robInfo->weapon_type].homing_flag || robInfo->weapon_type == SMART_ID); // Smart missiles have homing capabilities.
+	double enemy_weapon_homing_flag = (Weapon_info[robInfo->weapon_type].homing_flag); // Smart missiles have homing capabilities, but are significantly weaker than actual homing weapons.
 
 	// Next, find the "optimal distance" for fighting the given enemy with the given weapon. This is the distance where the enemy's fire can be dodged off of pure reaction time, without any prediction.
 	// Once the player's ship can start moving 250ms (avg human reaction time) after the enemy shoots, and get far enough out of the way for the enemy's shots to miss, it's at the optimal distance.
 	// Any closer, and the player is put in too much danger. Any further, and the player faces potential accuracy loss due to the enemy having more time to dodge themselves.
 	double optimal_distance;
+	double player_dodge_distance = player_size + enemy_weapon_size > enemy_splash_radius ? player_size + enemy_weapon_size : enemy_splash_radius; // Stay further away from bots with splash attacks.
 	if (enemy_attack_type) { // In the case of enemies that don't shoot at you, the optimal distance depends on their speed, as generally you wanna stand further back the quicker they can approach you.
 		optimal_distance = enemy_max_speed / 4; // The /4 is in reference to the 250ms benchmark from earlier. When they start charging you, you've gotta react and start backing up.
 		enemy_weapon_homing_flag = 0; // These bots can't actually shoot homing things at you, even if the weapon they would've had otherwise is.
 	}
 	else
-		optimal_distance = (((player_size + enemy_weapon_size + enemy_splash_radius * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed; // Stay further away from bots with splash attacks.
+		optimal_distance = (((player_dodge_distance * F1_0) / SHIP_MOVE_SPEED) + 0.25) * enemy_weapon_speed;
 	if (enemy_runs) { // We don't want snipe robots to use this, as they actually shoot things.
 		optimal_distance = 80; // In the case of enemies that run from you, we'll use the supposed maximum enemy dodge distance because it returns healthy chase time values. Don't add splash damage here.
 		enemy_weapon_homing_flag = 0; // These bots can't actually shoot homing things at you, even if the weapon they would've had otherwise is.
 	}
-	if (Weapon_info[robInfo->weapon_type].bounce)
-		optimal_distance *= 2; // Dodge it from one way, then dodge it from the other. Bouncers suck.
 	optimal_distance = optimal_distance > Weapon_info[weapon_id].damage_radius ? optimal_distance : Weapon_info[weapon_id].damage_radius; // Don't stay close enough to get damaged by our own weapon!
 
 	// Next, figure out how well the enemy will dodge a player attack of this weapon coming from the optimal distance away, then base accuracy off of that.
@@ -2062,16 +2061,14 @@ double calculate_weapon_accuracy(weapon_info* weapon_info, int weapon_id, object
 	if (enemy_size < projectile_offsets[weapon_id] - projectile_size)
 		accuracy_multiplier *= 0.5;
 
-	double accuracy = dodge_requirement / dodge_distance;
-	if (accuracy > 1)
+	double accuracy = dodge_requirement / dodge_distance; // Estimated accuracy will be the factor by which a robot successfully dodges a player attack in the above simulation, with the homing adjustments and multiplier slapped on top.
+	if (accuracy > 1) // Do this first so homing enemies always give a substantial time increase.
 		accuracy = 1; // Accuracy can't be greater than 100%.
 	if (weapon_homing_flag)
-		accuracy = accuracy / 2 + 0.5; // Buff player accuracy if their weapon has homing.
-	if (enemy_weapon_homing_flag)
-		accuracy /= 2; // Conversely, do the opposite if the enemy's weapon has homing. This isn't meant to be a simple cut in half. It's the average of acc and 0, while the other is average of acc and 100.
-	// We want the enemy's check to be last so both having homing still has a net negative effect. Homing enemies are hard to avoid and take extra time to kill.
-	// We also want the cap of 100 accuracy to come before the homing stuff so accuracy above 100% doesn't cause player homing to NERF it instead of buff it, and so ALL homing enemies, even easy to hit ones, get an acc nerf.
-		return accuracy * accuracy_multiplier;
+		accuracy = accuracy / 2 + 0.5; // Buff player accuracy if their weapon has homing. Average of acc and 100 is good enough since enemies are kinda stupid when it comes to dodging homing stuff.
+	if (enemy_weapon_homing_flag) // We want the enemy's check to be last so both having homing still has a net negative effect. Homing enemies are hard to avoid and take extra time to kill.
+		accuracy /= 2; // Conversely, do the opposite if the enemy's weapon has homing: Average of acc and 0.
+	return accuracy * accuracy_multiplier;
 }
 
 double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int isMatcen) // Tell algo to use the weapon that's fastest for the current enemy.
@@ -2097,7 +2094,7 @@ double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int
 				gunpoints = 3;
 			double damage = f2fl(weapon_info->strength[Difficulty_level]) * gunpoints;
 			double fire_rate = (double)f1_0 / weapon_info->fire_wait;
-			double ammo_usage = f2fl(Weapon_info[n].ammo_usage) * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
+			double ammo_usage = Weapon_info[n].ammo_usage * 12.7554168701171875; // To scale with the ammo counter. SaladBadger found out this was the real multiplier after fixed point errors(?), not 13.
 			double splash_radius = f2fl(weapon_info->damage_radius);
 			double enemy_health = f2fl(robInfo->strength + 1); // We do +1 to account for robots still being alive at exactly 0 HP.
 			double enemy_size = f2fl(Polygon_models[robInfo->model_num].rad);
@@ -2116,14 +2113,14 @@ double calculate_combat_time(object* obj, robot_info* robInfo, int isObject, int
 			adjustedRobotHealth /= calculate_weapon_accuracy(weapon_info, n, obj, robInfo, isObject);
 			accuracy = adjustedRobotHealthNoAccuracy / adjustedRobotHealth;
 			int shots = round(ceil(adjustedRobotHealthNoAccuracy / damage) / accuracy); // Split time into shots to reflect how players really fire. A 30 HP robot will take two laser 1 shots to kill, not one and a half.
-			if (f2fl(ParTime.vulcanAmmo) >= shots * ammo_usage * f1_0) // Make sure we have enough ammo for this robot before using vulcan.
+			if (f2fl(ParTime.vulcanAmmo) >= shots * ammo_usage) // Make sure we have enough ammo for this robot before using vulcan.
 				thisWeaponCombatTime = shots / fire_rate;
 			else
 				thisWeaponCombatTime = INFINITY; // Make vulcan's/gauss' time infinite so algo won't use it without ammo.
 			if (thisWeaponCombatTime <= lowestCombatTime || lowestCombatTime == -1) { // If it should be used, update algo's weapon stats to the new one's for use in combat time calculation.
 				lowestCombatTime = thisWeaponCombatTime;
 				ParTime.ammo_usage = shots * ammo_usage;
-				ammoUsed = ammo_usage * shots * f1_0;
+				ammoUsed = ammo_usage * shots;
 				topWeapon = n;
 				topAccuracy = accuracy * 100;
 			}
@@ -2745,6 +2742,8 @@ void examine_path_partime(point_seg* path, int path_count)
 									ParTime.vulcanAmmo -= ((totalAmmoUsage / num_types) * (f1_0 * (Difficulty_level + 3))); // and ammo, as those also change per matcen.
 									if (ParTime.vulcanAmmo > STARTING_VULCAN_AMMO * 4) // Vulcan ammo can exceed 32768 and overflow if not capped properly. Prevent this from happening.
 										ParTime.vulcanAmmo = STARTING_VULCAN_AMMO * 4;
+									if (ParTime.vulcanAmmo < 0) // Just cap vulcan ammo at 0 if it goes negative here. This isn't the right way to handle things, but doing it right would get very complex.
+										ParTime.vulcanAmmo = 0;
 									if (matcenTime > 0)
 										printf("Fought matcen %i at segment %i; lives left: %i\n", segp->matcen_num, getMatcenSegnum(segp->matcen_num), ParTime.matcenLives[segp->matcen_num]);
 									totalMatcenTime += averageRobotTime; // Add up the average fight times of each link so we can add them to the minimum time later.
