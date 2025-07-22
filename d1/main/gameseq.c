@@ -2830,6 +2830,21 @@ void respond_to_objective_partime(partime_objective objective)
 			else {
 				combatTime += calculate_combat_time(obj, robInfo, 1, 0);
 				Ranking.maxScore += robInfo->score_value;
+				double teleportDistance = 0;
+				short Boss_path_length = 0;
+				if (robInfo->boss_flag > 0) { // Bosses have special abilities that take additional time to counteract. Boss levels are unfair without this.
+					int num_teleports = combatTime / 2; // Bosses teleport two seconds after you start damaging them, meaning you can only get two seconds of damage in at a time before they move away.
+					for (i = 0; i < Num_boss_teleport_segs; i++) { // Now we measure the distance between every possible pair of points the boss can teleport between.
+						for (int n = 0; n < Num_boss_teleport_segs; n++) {
+							create_path_points(obj, Boss_teleport_segs[i], Boss_teleport_segs[n], Point_segs_free_ptr, &Boss_path_length, MAX_POINT_SEGS, 0, 0, -1, 0, obj->id, 1); // Assume inaccesibility here so invalid paths don't get super long and drive up teleport time.
+							for (int c = 0; c < Boss_path_length - 1; c++)
+								teleportDistance += vm_vec_dist(&Point_segs[c].point, &Point_segs[c + 1].point);
+						}
+					}
+					double teleportTime = ((teleportDistance / pow(Num_boss_teleport_segs, 2)) * num_teleports) / SHIP_MOVE_SPEED; // Account for the average teleport distance, not highest.
+					ParTime.movementTime += teleportTime;
+					printf("Teleport time: %.3fs\n", teleportTime);
+				}
 				if (obj->contains_type == OBJ_ROBOT && obj->contains_count) {
 					robInfo = &Robot_info[obj->contains_id];
 					fightTime = calculate_combat_time(obj, robInfo, 0, 0) * obj->contains_count;
@@ -2844,23 +2859,7 @@ void respond_to_objective_partime(partime_objective objective)
 					printf("Took %.3fs to fight %i of robot type %i\n", fightTime, assumedOffSpringCount, robInfo->contains_id);
 				}
 			}
-			double teleportDistance = 0;
-			short Boss_path_length = 0;
 			ParTime.combatTime += combatTime;
-			robInfo = &Robot_info[obj->id]; // So bosses that contain robots get teleport time.
-			if (robInfo->boss_flag > 0) { // Bosses have special abilities that take additional time to counteract. Boss levels are unfair without this.
-				int num_teleports = combatTime / 2; // Bosses teleport two seconds after you start damaging them, meaning you can only get two seconds of damage in at a time before they move away.
-				for (i = 0; i < Num_boss_teleport_segs; i++) { // Now we measure the distance between every possible pair of points the boss can teleport between.
-					for (int n = 0; n < Num_boss_teleport_segs; n++) {
-						create_path_points(obj, Boss_teleport_segs[i], Boss_teleport_segs[n], Point_segs_free_ptr, &Boss_path_length, MAX_POINT_SEGS, 0, 0, -1, 0, obj->id, 1); // Assume inaccesibility here so invalid paths don't get super long and drive up teleport time.
-						for (int c = 0; c < Boss_path_length - 1; c++)
-							teleportDistance += vm_vec_dist(&Point_segs[c].point, &Point_segs[c + 1].point);
-					}
-				}
-				double teleportTime = ((teleportDistance / pow(Num_boss_teleport_segs, 2)) * num_teleports) / SHIP_MOVE_SPEED; // Account for the average teleport distance, not highest.
-				ParTime.movementTime += teleportTime;
-				printf("Teleport time: %.3fs\n", teleportTime);
-			}
 			if (obj->contains_type == OBJ_POWERUP) {
 				weapon_id = 0;
 				if (obj->contains_id == POW_VULCAN_WEAPON)
