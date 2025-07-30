@@ -3381,7 +3381,7 @@ void StartNewLevelSecret(int level_num, int page_in_textures)
 		Ranking.secretQuickload = 0;
 		if (Ranking.quickload)
 			RestartLevel.updateRestartStuff = 1; // If we quickload into a normal level, then go into a secret level and back out to the next level, restarting will give default loadout without this.
-		Ranking.hostages_secret_level = 0;
+		Ranking.hostages_secret_level = count_number_of_hostages();
 		Ranking.fromBestRanksButton = 2; // We need this for starting secret levels too, since the normal start can be bypassed with a save.
 		Ranking.secretNoDamage = 1;
 
