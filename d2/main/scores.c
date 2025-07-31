@@ -213,6 +213,7 @@ static inline const char *get_placement_slot_string(const unsigned position)
 
 void scores_maybe_add_player(int abort_flag)
 {
+	Players[Player_num].last_score = Players[Player_num].score; // So pressing R on the high score notification window doesn't take away the last level's points.
 	if (cheats.enabled)
 		Players[Player_num].score = 0;
 	char text1[COOL_MESSAGE_LEN + 10];
