@@ -3034,8 +3034,8 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 		if (ParTime.loops == 3) // Put the exit on the list.
 			for (i = 0; i <= Num_triggers; i++)
 				if (Triggers[i].flags == TRIGGER_EXIT || Triggers[i].flags == TRIGGER_SECRET_EXIT)
-					for (j = 0; j <= Num_walls; j++)
-						if (Walls[j].trigger == i) {
+					for (j = 0; j < Num_walls; j++)
+						if (Walls[j].trigger == i && Walls[j].type != WALL_CLOSED) { // Ignore exit triggers attached to walls we can't pass through.
 							partime_objective objective;
 							if (findConnectedWallNum(j) != -1) {
 								objective.type = OBJECTIVE_TYPE_TRIGGER;
@@ -3100,7 +3100,11 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			if (ParTime.loops == 1) // An accessible reactor or boss gives us a result screen.
 				Ranking.isRankable = 1;
 			if (ParTime.loops == 3) {
-				Ranking.isRankable = 1; // An accessible exit trigger gives us a result screen.
+				int wall_num = findConnectedWallNum(nearestObjective.ID);
+				if (wall_num == -1)
+					wall_num = nearestObjective.ID;
+				if (Triggers[Walls[wall_num].trigger].flags & TRIGGER_EXIT && Walls[wall_num].type != WALL_CLOSED) // Ignore exit triggers attached to walls we can't pass through.
+					Ranking.isRankable = 1; // An accessible exit trigger gives us a result screen.
 				break; // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
 			}
 		}

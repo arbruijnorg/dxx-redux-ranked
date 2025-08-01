@@ -3076,8 +3076,8 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 			if (ParTime.missingKeys) // If there are missing keys, path to secret exit portals as well. The keys are probably there.
 				for (i = 0; i <= Num_triggers; i++)
 					if (Triggers[i].type == TT_SECRET_EXIT)
-						for (j = 0; j <= Num_walls; j++)
-							if (Walls[j].trigger == i) {
+						for (j = 0; j < Num_walls; j++)
+							if (Walls[j].trigger == i && !(Walls[j].type == WALL_CLOSED || Walls[j].type == WALL_CLOAKED)) { // Ignore exit triggers attached to walls we can't pass through.
 								partime_objective objective = { OBJECTIVE_TYPE_TRIGGER, findConnectedWallNum(j) };
 								addObjectiveToList(objective, 0);
 							}
@@ -3124,16 +3124,16 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 		if (ParTime.loops == 3) { // Put the exit on the list.
 			for (i = 0; i <= Num_triggers; i++)
 				if (Triggers[i].type == TT_EXIT || Triggers[i].type == TT_SECRET_EXIT)
-					for (j = 0; j <= Num_walls; j++)
-						if (Walls[j].trigger == i) {
+					for (j = 0; j < Num_walls; j++)
+						if (Walls[j].trigger == i && !(Walls[j].type == WALL_CLOSED || Walls[j].type == WALL_CLOAKED)) { // Ignore exit triggers attached to walls we can't pass through.
 							partime_objective objective;
 							if (findConnectedWallNum(j) != -1) {
 								objective.type = OBJECTIVE_TYPE_TRIGGER;
 								objective.ID = findConnectedWallNum(j);
 							}
 							else {
-							objective.type = OBJECTIVE_TYPE_TRIGGER;
-							objective.ID = j;
+								objective.type = OBJECTIVE_TYPE_TRIGGER;
+								objective.ID = j;
 							}
 							addObjectiveToList(objective, 0);
 						}
@@ -3232,7 +3232,7 @@ void calculateParTime() // Here is where we have an algorithm run a simulated pa
 				int wall_num = findConnectedWallNum(nearestObjective.ID);
 				if (wall_num == -1)
 					wall_num = nearestObjective.ID;
-				if (Triggers[Walls[wall_num].trigger].type == TT_EXIT)
+				if (Triggers[Walls[wall_num].trigger].type == TT_EXIT && !(Walls[wall_num].type == WALL_CLOSED || Walls[wall_num].type == WALL_CLOAKED)) // Ignore exit triggers attached to walls we can't pass through.
 					Ranking.isRankable = 1; // An accessible exit trigger gives us a result screen. NOT a secret exit, as those only give us results when a reactor or boss is killed, which already sets isRankable to 1.
 				break; // Automatically break after one objective during the exits loop. We only wanna get the nearest accessible exit.
 			}
