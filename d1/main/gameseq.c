@@ -2860,41 +2860,43 @@ void respond_to_objective_partime(partime_objective objective)
 				}
 			}
 			ParTime.combatTime += combatTime;
-			if (obj->contains_type == OBJ_POWERUP) {
-				weapon_id = 0;
-				if (obj->contains_id == POW_VULCAN_WEAPON)
-					weapon_id = VULCAN_ID;
-				if (obj->contains_id == POW_SPREADFIRE_WEAPON)
-					weapon_id = SPREADFIRE_ID;
-				if (obj->contains_id == POW_PLASMA_WEAPON)
-					weapon_id = PLASMA_ID;
-				if (obj->contains_id == POW_FUSION_WEAPON)
-					weapon_id = FUSION_ID;
-				if (weapon_id) { // If the powerup we got is a weapon, sets Algo's chance of not having it to 0.
-					if (weapon_id == VULCAN_ID && ParTime.heldWeapons[weapon_id])
-						ParTime.vulcanAmmo += STARTING_VULCAN_AMMO;
-					else
-						ParTime.vulcanAmmo += STARTING_VULCAN_AMMO / 2;
-					ParTime.heldWeapons[weapon_id] = 0;
-				}
-				else {
-					if (obj->contains_id == POW_LASER) {
-						for (i = 0; i < obj->contains_count; i++) {
-							if (ParTime.laser_level < LASER_ID_L4)
-								ParTime.laser_level++;
-							ParTime.heldWeapons[ParTime.laser_level] = 0;
-						}
+			if (ParTime.warpBackPoint == -1) { // Don't get stuff from a robot if you have kill it from a distance (fixes Hydro 17 being unfair).
+				if (obj->contains_type == OBJ_POWERUP) {
+					weapon_id = 0;
+					if (obj->contains_id == POW_VULCAN_WEAPON)
+						weapon_id = VULCAN_ID;
+					if (obj->contains_id == POW_SPREADFIRE_WEAPON)
+						weapon_id = SPREADFIRE_ID;
+					if (obj->contains_id == POW_PLASMA_WEAPON)
+						weapon_id = PLASMA_ID;
+					if (obj->contains_id == POW_FUSION_WEAPON)
+						weapon_id = FUSION_ID;
+					if (weapon_id) { // If the powerup we got is a weapon, sets Algo's chance of not having it to 0.
+						if (weapon_id == VULCAN_ID && ParTime.heldWeapons[weapon_id])
+							ParTime.vulcanAmmo += STARTING_VULCAN_AMMO;
+						else
+							ParTime.vulcanAmmo += STARTING_VULCAN_AMMO / 2;
+						ParTime.heldWeapons[weapon_id] = 0;
 					}
-					if (obj->contains_id == POW_QUAD_FIRE)
-						ParTime.hasQuads = 0;
-					if (obj->contains_id == POW_VULCAN_AMMO)
-						ParTime.vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
-					if (obj->contains_id == POW_EXTRA_LIFE)
-						Ranking.maxScore += 10000 * obj->contains_count;
+					else {
+						if (obj->contains_id == POW_LASER) {
+							for (i = 0; i < obj->contains_count; i++) {
+								if (ParTime.laser_level < LASER_ID_L4)
+									ParTime.laser_level++;
+								ParTime.heldWeapons[ParTime.laser_level] = 0;
+							}
+						}
+						if (obj->contains_id == POW_QUAD_FIRE)
+							ParTime.hasQuads = 0;
+						if (obj->contains_id == POW_VULCAN_AMMO)
+							ParTime.vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
+						if (obj->contains_id == POW_EXTRA_LIFE)
+							Ranking.maxScore += 10000 * obj->contains_count;
+					}
 				}
+				else
+					robotHasPowerup(obj->id, 1);
 			}
-			else
-				robotHasPowerup(obj->id, 1);
 		}
 	}
 }

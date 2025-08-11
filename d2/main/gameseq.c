@@ -2904,66 +2904,68 @@ void respond_to_objective_partime(partime_objective objective)
 				}
 			}
 			ParTime.combatTime += combatTime;
-			if (obj->contains_type == OBJ_POWERUP) {
-				weapon_id = 0;
-				if (obj->contains_id == POW_VULCAN_WEAPON)
-					weapon_id = VULCAN_ID;
-				if (obj->contains_id == POW_SPREADFIRE_WEAPON)
-					weapon_id = SPREADFIRE_ID;
-				if (obj->contains_id == POW_PLASMA_WEAPON)
-					weapon_id = PLASMA_ID;
-				if (obj->contains_id == POW_FUSION_WEAPON)
-					weapon_id = FUSION_ID;
-				if (obj->contains_id == POW_GAUSS_WEAPON)
-					weapon_id = GAUSS_ID;
-				if (obj->contains_id == POW_HELIX_WEAPON)
-					weapon_id = HELIX_ID;
-				if (obj->contains_id == POW_PHOENIX_WEAPON)
-					weapon_id = PHOENIX_ID;
-				if (obj->contains_id == POW_OMEGA_WEAPON)
-					weapon_id = OMEGA_ID;
-				if (weapon_id) { // If the powerup we got is a new weapon, add it to the list of weapons algo has.
-					if ((weapon_id == VULCAN_ID || weapon_id == GAUSS_ID) && ParTime.heldWeapons[weapon_id])
-						ParTime.vulcanAmmo += STARTING_VULCAN_AMMO;
-					else
-						ParTime.vulcanAmmo += STARTING_VULCAN_AMMO / 2;
-					ParTime.heldWeapons[weapon_id] = 0;
-				}
-				else {
-					int i;
-					for (i = 0; i < obj->contains_count; i++) {
-						if (obj->contains_id == POW_LASER)
-							if (ParTime.laser_level < LASER_ID_L4)
-								ParTime.laser_level++;
-						if (obj->contains_id == POW_SUPER_LASER) {
-							if (ParTime.laser_level < LASER_ID_L5)
-								ParTime.laser_level = LASER_ID_L5;
-							else
-								ParTime.laser_level = LASER_ID_L6;
-							ParTime.heldWeapons[1] = 0;
-							ParTime.heldWeapons[2] = 0;
-							ParTime.heldWeapons[3] = 0;
-						}
-						ParTime.heldWeapons[ParTime.laser_level] = 0;
-					}
-					if (obj->contains_id == POW_QUAD_FIRE)
-						ParTime.hasQuads = 0;
-					if (obj->contains_id == POW_AFTERBURNER) {
-						ParTime.hasAfterburner = 0;
-						double afterburnerMultipliers[5] = { 1.2, 1.15, 1.11, 1.08, 1.05 };
-						ParTime.afterburnerMultiplier = afterburnerMultipliers[Difficulty_level];
-					}
-					if (obj->contains_id == POW_VULCAN_AMMO)
-						ParTime.vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
-					if (obj->contains_id == POW_EXTRA_LIFE)
-						if (Current_level_num > 0)
-							Ranking.maxScore += 10000 * obj->contains_count;
+			if (ParTime.warpBackPoint == -1) { // Don't get stuff from a robot if you have kill it from a distance (makes Hydro 17 less unfair).
+				if (obj->contains_type == OBJ_POWERUP) {
+					weapon_id = 0;
+					if (obj->contains_id == POW_VULCAN_WEAPON)
+						weapon_id = VULCAN_ID;
+					if (obj->contains_id == POW_SPREADFIRE_WEAPON)
+						weapon_id = SPREADFIRE_ID;
+					if (obj->contains_id == POW_PLASMA_WEAPON)
+						weapon_id = PLASMA_ID;
+					if (obj->contains_id == POW_FUSION_WEAPON)
+						weapon_id = FUSION_ID;
+					if (obj->contains_id == POW_GAUSS_WEAPON)
+						weapon_id = GAUSS_ID;
+					if (obj->contains_id == POW_HELIX_WEAPON)
+						weapon_id = HELIX_ID;
+					if (obj->contains_id == POW_PHOENIX_WEAPON)
+						weapon_id = PHOENIX_ID;
+					if (obj->contains_id == POW_OMEGA_WEAPON)
+						weapon_id = OMEGA_ID;
+					if (weapon_id) { // If the powerup we got is a new weapon, add it to the list of weapons algo has.
+						if ((weapon_id == VULCAN_ID || weapon_id == GAUSS_ID) && ParTime.heldWeapons[weapon_id])
+							ParTime.vulcanAmmo += STARTING_VULCAN_AMMO;
 						else
-							Ranking.secretMaxScore += 10000 * obj->contains_count;
+							ParTime.vulcanAmmo += STARTING_VULCAN_AMMO / 2;
+						ParTime.heldWeapons[weapon_id] = 0;
+					}
+					else {
+						int i;
+						for (i = 0; i < obj->contains_count; i++) {
+							if (obj->contains_id == POW_LASER)
+								if (ParTime.laser_level < LASER_ID_L4)
+									ParTime.laser_level++;
+							if (obj->contains_id == POW_SUPER_LASER) {
+								if (ParTime.laser_level < LASER_ID_L5)
+									ParTime.laser_level = LASER_ID_L5;
+								else
+									ParTime.laser_level = LASER_ID_L6;
+								ParTime.heldWeapons[1] = 0;
+								ParTime.heldWeapons[2] = 0;
+								ParTime.heldWeapons[3] = 0;
+							}
+							ParTime.heldWeapons[ParTime.laser_level] = 0;
+						}
+						if (obj->contains_id == POW_QUAD_FIRE)
+							ParTime.hasQuads = 0;
+						if (obj->contains_id == POW_AFTERBURNER) {
+							ParTime.hasAfterburner = 0;
+							double afterburnerMultipliers[5] = { 1.2, 1.15, 1.11, 1.08, 1.05 };
+							ParTime.afterburnerMultiplier = afterburnerMultipliers[Difficulty_level];
+						}
+						if (obj->contains_id == POW_VULCAN_AMMO)
+							ParTime.vulcanAmmo += (STARTING_VULCAN_AMMO / 2) * obj->contains_count;
+						if (obj->contains_id == POW_EXTRA_LIFE)
+							if (Current_level_num > 0)
+								Ranking.maxScore += 10000 * obj->contains_count;
+							else
+								Ranking.secretMaxScore += 10000 * obj->contains_count;
+					}
 				}
+				else
+					robotHasPowerup(obj->id, 1); // This is where we automatically give Algo weapons based on probabilities.
 			}
-			else
-				robotHasPowerup(obj->id, 1); // This is where we automatically give Algo weapons based on probabilities.
 		}
 	}
 }
