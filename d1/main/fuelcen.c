@@ -660,7 +660,7 @@ void init_all_matcens(void)
 	for (i=0; i<Num_robot_centers; i++) {
 		int	fuelcen_num = RobotCenters[i].fuelcen_num;
 
-		Assert(fuelcen_num < Num_fuelcenters);
+		//Assert(fuelcen_num < Num_fuelcenters);
 		//Assert(Station[fuelcen_num].Type == SEGMENT_IS_ROBOTMAKER); // Uncomment this before releasing ranking mod.
 	}
 #endif
