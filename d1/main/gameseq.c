@@ -1568,7 +1568,7 @@ int AdvanceLevel(int secret_flag)
 				Next_level_num = Secret_level_table[(-Current_level_num) - 1] + 1;
 			}
 
-			if (PlayerCfg.UsePsxSolarmap && PLAYING_BUILTIN_MISSION)
+			if (PlayerCfg.UsePsxSolarmap)
 				solarmap_show(Next_level_num);
 
 			StartNewLevel(Next_level_num);
