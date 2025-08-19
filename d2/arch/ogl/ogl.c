@@ -1873,7 +1873,7 @@ void ogl_loadranktexture(grs_bitmap* bm, int texfilt, int filter_blueship_wing, 
 		char filename[64];
 		png_data pdata;
 
-		sprintf(filename, /*"textures/"*/ "%s.png", bitmapname);
+		sprintf(filename, "rankicons/%s.png", bitmapname);
 		con_printf(CON_NORMAL, "Loading %s\n", filename);
 		if (read_png(filename, &pdata))
 		{
