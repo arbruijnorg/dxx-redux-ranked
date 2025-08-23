@@ -590,6 +590,7 @@ void drawSolarmapRankImage(int rank)
 
 int drawSmallRankImages(int* ranksList, listbox* lb)
 {
+	int listbox_draw(window *wind, listbox *lb);
 	int rval = listbox_draw(lb->wind, lb);
 
 	for (int i = lb->first_item; i < lb->first_item + LB_ITEMS_ON_SCREEN && i < lb->nitems; i++) {
