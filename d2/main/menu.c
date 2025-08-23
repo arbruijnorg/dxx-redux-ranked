@@ -664,7 +664,7 @@ int ranks_menu_handler(listbox* lb, d_event* event, void* userdata)
 	return 0;
 }
 
-void do_best_ranks_menu()
+int do_best_ranks_menu()
 {
 	int numlines = Current_mission->last_level - Current_mission->last_secret_level;
 	char** list = (char**)malloc(sizeof(char*) * numlines);
@@ -735,6 +735,7 @@ void do_best_ranks_menu()
 	}
 	free(list);
 	free(ranks);
+	return 0;
 }
 
 //returns flag, true means quit menu
